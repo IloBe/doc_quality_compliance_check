@@ -59,5 +59,21 @@ Copilot instructions are in `.github/instructions/`:
 
 ```bash
 AAMAD_ADAPTER=vscode
-ANTHROPIC_API_KEY=<optional>
+ANTHROPIC_API_KEY=<optional – enables LLM document enrichment>
+PERPLEXITY_API_KEY=<optional – enables live regulatory research via /api/v1/research/regulations>
 ```
+
+## MCP Servers
+
+`.vscode/mcp.json` configures the **Perplexity MCP server** for VS Code + Copilot.
+The `@product-mgr` agent uses it for deep regulatory research during Phase 1 (MRD/PRD authoring).
+
+| Server | Tool key | Purpose |
+|--------|----------|---------|
+| `perplexity` | `mcp:perplexity` | Live EU/DE regulation research via Perplexity Sonar Pro |
+
+Install server runtime: `uvx mcp-server-perplexity` (requires `PERPLEXITY_API_KEY` in shell env).
+
+The same Perplexity key powers the backend research service at
+`POST /api/v1/research/regulations` — a static fallback is used when no key is set.
+

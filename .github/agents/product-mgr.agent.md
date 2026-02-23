@@ -7,6 +7,7 @@ tools:
 - search
 - codebase
 - fetch
+- mcp:perplexity
 handoffs:
 - label: → Create Architecture
   agent: system-arch

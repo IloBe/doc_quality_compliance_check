@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from ..core.config import get_settings
 from ..core.logging_config import configure_logging
-from .routes import compliance, documents, reports, templates
+from .routes import compliance, documents, reports, research, templates
 
 logger = structlog.get_logger(__name__)
 
@@ -63,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(compliance.router, prefix=prefix)
     app.include_router(reports.router, prefix=prefix)
     app.include_router(templates.router, prefix=prefix)
+    app.include_router(research.router, prefix=prefix)
 
     @app.get("/health")
     async def health_check() -> dict:

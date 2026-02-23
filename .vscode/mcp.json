@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "perplexity": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-perplexity"],
+      "env": {
+        "PERPLEXITY_API_KEY": "${env:PERPLEXITY_API_KEY}"
+      }
+    }
+  }
+}

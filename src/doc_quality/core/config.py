@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-3-5-sonnet-20241022"
 
+    # AI / Perplexity (used for regulatory research tasks)
+    perplexity_api_key: str = ""
+    perplexity_model: str = "sonar-pro"
+    perplexity_api_base_url: str = "https://api.perplexity.ai"
+
     # Logging
     log_level: str = "INFO"
     log_format: Literal["json", "console"] = "console"
