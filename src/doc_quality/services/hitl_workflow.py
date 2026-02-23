@@ -1,6 +1,6 @@
 """Human-In-The-Loop (HITL) review workflow service."""
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from ..core.logging_config import get_logger
@@ -31,7 +31,7 @@ def create_review(
         reviewer_role=reviewer_role,
         modifications_required=modifications or [],
         comments=comments,
-        approval_date=datetime.utcnow() if status == ReviewStatus.PASSED else None,
+        approval_date=datetime.now(timezone.utc) if status == ReviewStatus.PASSED else None,
     )
     _review_store[review_id] = record
     logger.info("review_created", review_id=review_id, document_id=document_id, status=status)
@@ -54,7 +54,7 @@ def update_review_status(
 
     record.status = new_status
     if new_status == ReviewStatus.PASSED:
-        record.approval_date = datetime.utcnow()
+        record.approval_date = datetime.now(timezone.utc)
 
     logger.info("review_status_updated", review_id=review_id, new_status=new_status)
     return record

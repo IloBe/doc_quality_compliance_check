@@ -1,5 +1,5 @@
 """Pydantic models for generated reports."""
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
@@ -31,6 +31,6 @@ class ReportResult(BaseModel):
     document_id: str
     report_type: ReportType
     report_format: ReportFormat
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     file_path: Optional[str] = None
     summary: str = ""

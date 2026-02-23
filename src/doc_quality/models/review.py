@@ -1,5 +1,5 @@
 """Pydantic models for HITL review workflow."""
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
@@ -36,7 +36,7 @@ class ReviewRecord(BaseModel):
     status: ReviewStatus
     reviewer_name: str
     reviewer_role: str
-    review_date: datetime = Field(default_factory=datetime.utcnow)
+    review_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     modifications_required: list[ModificationRequest] = Field(default_factory=list)
     comments: str = ""
     approval_date: Optional[datetime] = None

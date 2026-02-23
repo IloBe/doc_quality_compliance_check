@@ -12,7 +12,6 @@ def configure_logging(log_level: str = "INFO", log_format: str = "console") -> N
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
-        structlog.stdlib.add_logger_name,
     ]
 
     if log_format == "json":

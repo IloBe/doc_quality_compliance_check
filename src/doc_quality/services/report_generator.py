@@ -1,7 +1,7 @@
 """Report generation service producing PDF and HTML outputs."""
 import io
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -41,7 +41,7 @@ def _build_pdf_document_report(
     story.append(Spacer(1, 0.5 * cm))
     story.append(Paragraph(f"File: {analysis.filename}", styles["Normal"]))
     story.append(Paragraph(f"Document Type: {analysis.document_type.value}", styles["Normal"]))
-    story.append(Paragraph(f"Generated: {datetime.utcnow().isoformat()}", styles["Normal"]))
+    story.append(Paragraph(f"Generated: {datetime.now(timezone.utc).isoformat()}", styles["Normal"]))
     if reviewer_name:
         story.append(Paragraph(f"Reviewer: {reviewer_name}", styles["Normal"]))
     story.append(Spacer(1, 0.5 * cm))
