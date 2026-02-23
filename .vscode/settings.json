@@ -1,0 +1,12 @@
+{
+  "chat.agent.enabled": true,
+  "chat.useAgentsMdFile": true,
+  "chat.includeApplyingInstructions": true,
+  "chat.includeReferencedInstructions": true,
+  "chat.instructionsFilesLocations": [
+    ".github/instructions"
+  ],
+  "chat.agentFilesLocations": [
+    ".github/agents"
+  ]
+}

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doc Quality & Compliance Check</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-inner">
+            <div class="logo">
+                <span class="logo-icon">📋</span>
+                <span class="logo-text">DocQuality</span>
+            </div>
+            <nav class="nav">
+                <a href="#analyze" class="nav-link active">Analyze</a>
+                <a href="#compliance" class="nav-link">Compliance</a>
+                <a href="#templates" class="nav-link">Templates</a>
+                <a href="#reports" class="nav-link">Reports</a>
+            </nav>
+            <div class="header-status" id="apiStatus">
+                <span class="status-dot"></span>
+                <span class="status-text">Connecting...</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="main">
+        <!-- Hero Section -->
+        <section class="hero">
+            <h1>Document Quality &amp; Compliance Check</h1>
+            <p>Automated analysis for arc42, Model Cards, SOPs &mdash; with EU AI Act compliance verification.</p>
+        </section>
+
+        <!-- Stats Bar -->
+        <section class="stats-bar">
+            <div class="stat-item">
+                <span class="stat-value" id="statDocs">—</span>
+                <span class="stat-label">Documents Analyzed</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="statScore">—</span>
+                <span class="stat-label">Avg. Quality Score</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">6</span>
+                <span class="stat-label">Active Templates</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">EU AI Act</span>
+                <span class="stat-label">Compliance Framework</span>
+            </div>
+        </section>
+
+        <!-- Analyze Section -->
+        <section id="analyze" class="section">
+            <h2 class="section-title">Analyze Document</h2>
+            <div class="card-grid">
+                <!-- Text Input Card -->
+                <div class="card">
+                    <h3>📝 Paste Document Text</h3>
+                    <div class="form-group">
+                        <label for="docFilename">Filename</label>
+                        <input type="text" id="docFilename" placeholder="e.g. architecture.md" value="architecture.md">
+                    </div>
+                    <div class="form-group">
+                        <label for="docType">Document Type</label>
+                        <select id="docType">
+                            <option value="">Auto-detect</option>
+                            <option value="arc42">arc42</option>
+                            <option value="model_card">Model Card</option>
+                            <option value="sop">SOP</option>
+                            <option value="requirements">Requirements</option>
+                            <option value="risk_assessment">Risk Assessment</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="docContent">Document Content</label>
+                        <textarea id="docContent" rows="10" placeholder="Paste your document content here..."></textarea>
+                    </div>
+                    <button class="btn btn-primary" id="btnAnalyze" onclick="analyzeText()">
+                        🔍 Analyze Document
+                    </button>
+                </div>
+
+                <!-- Upload Card -->
+                <div class="card">
+                    <h3>📁 Upload File</h3>
+                    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()"
+                         ondragover="handleDragOver(event)" ondrop="handleDrop(event)">
+                        <div class="upload-icon">⬆️</div>
+                        <p>Click or drag &amp; drop your file here</p>
+                        <p class="upload-hint">Supported: .md, .txt, .pdf, .docx (max 50MB)</p>
+                    </div>
+                    <input type="file" id="fileInput" accept=".md,.txt,.pdf,.docx" style="display:none"
+                           onchange="uploadFile(this.files[0])">
+                    <div id="uploadProgress" class="progress-bar hidden">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Result -->
+            <div id="analysisResult" class="result-panel hidden">
+                <div class="result-header">
+                    <h3>Analysis Result</h3>
+                    <span class="result-badge" id="resultBadge"></span>
+                </div>
+                <div class="result-body" id="resultBody"></div>
+            </div>
+        </section>
+
+        <!-- Compliance Section -->
+        <section id="compliance" class="section">
+            <h2 class="section-title">EU AI Act Compliance Check</h2>
+            <div class="card">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="compDomain">Product Domain</label>
+                        <input type="text" id="compDomain" placeholder="e.g. medical devices, finance">
+                    </div>
+                    <div class="form-group">
+                        <label for="compDescription">Product Description</label>
+                        <input type="text" id="compDescription" placeholder="Brief description of the AI system">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="compUsesAI"> Uses AI/ML
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="compIntendedUse">Intended Use</label>
+                        <input type="text" id="compIntendedUse" placeholder="How the AI system is intended to be used">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="compContent">Document Content to Check</label>
+                    <textarea id="compContent" rows="6" placeholder="Paste the document content to check for compliance..."></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="checkCompliance()">⚖️ Check EU AI Act Compliance</button>
+            </div>
+            <div id="complianceResult" class="result-panel hidden"></div>
+        </section>
+
+        <!-- Templates Section -->
+        <section id="templates" class="section">
+            <h2 class="section-title">SOP Templates</h2>
+            <div id="templatesList" class="templates-grid">
+                <div class="loading">Loading templates...</div>
+            </div>
+            <div id="templateContent" class="template-viewer hidden">
+                <div class="template-header">
+                    <h3 id="templateTitle">Template</h3>
+                    <button class="btn btn-secondary" onclick="closeTemplate()">✕ Close</button>
+                </div>
+                <pre id="templateBody" class="template-body"></pre>
+            </div>
+        </section>
+
+        <!-- Reports Section -->
+        <section id="reports" class="section">
+            <h2 class="section-title">Generate Report</h2>
+            <div class="card">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="reportDocId">Document ID</label>
+                        <input type="text" id="reportDocId" placeholder="Enter document ID from analysis">
+                    </div>
+                    <div class="form-group">
+                        <label for="reportType">Report Type</label>
+                        <select id="reportType">
+                            <option value="document_analysis">Document Analysis</option>
+                            <option value="compliance_audit">Compliance Audit</option>
+                            <option value="gap_analysis">Gap Analysis</option>
+                            <option value="full_audit">Full Audit</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="reportFormat">Format</label>
+                        <select id="reportFormat">
+                            <option value="pdf">PDF</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="reviewerName">Reviewer Name (optional)</label>
+                    <input type="text" id="reviewerName" placeholder="e.g. Dr. Jane Smith">
+                </div>
+                <button class="btn btn-primary" onclick="generateReport()">📄 Generate Report</button>
+            </div>
+            <div id="reportResult" class="result-panel hidden"></div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p>Doc Quality &amp; Compliance Check System &mdash; EU AI Act &bull; GDPR &bull; MDR &bull; ISO 9001</p>
+    </footer>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
