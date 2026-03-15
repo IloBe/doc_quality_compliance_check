@@ -308,6 +308,8 @@ The application must:
 
 The system transitions from a legacy tab-based design to a **State-of-the-Art (SOTA) Multi-Page Experience**. The UI follows the **"Focus & Flow"** principle, where each step of the governance process is an isolated, high-intent page. A branded login UI shall exist. The overall stylguide includes a white/blue/green theme, calm layout and a fonts that fits to that style. Goal is to have an app that feels modern, trustworthy, clear, traceable and mood-enhancing.
 
+**Dark Mode:** The application must provide a user-selectable dark mode. Bright mode remains the default. Dark mode must be mood-enhancing, not distracting, and must not override existing default style configs.
+
 **Automated Task Feedback:** For all automated tasks and their results (e.g., LLM/MoE outputs), the UI must provide a simple first evaluation concept: a thumb up/thumb down feedback mechanism. This enables users to quickly rate the quality or accuracy of automated actions, supporting LLM accuracy metrics and continuous improvement.
 
 Proposal:

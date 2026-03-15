@@ -7,6 +7,19 @@
     <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
+        <header>
+            <h1>Doc Quality Compliance Check Demo</h1>
+            <section id="crewStatusBanner" class="status-banner" aria-label="Crew Status">
+                <h2 class="visually-hidden">Crew Status</h2>
+                <span id="crewStatusLabel" aria-live="polite">Crew: idle</span>
+                <span id="crewStatusIndicator" class="status-pill status-idle" aria-label="Status indicator"></span>
+                <span id="crewStatusTimestamp" aria-label="Last updated">Last updated: --</span>
+            </section>
+            <nav aria-label="Demo Controls">
+                <button id="runBtn" onclick="startDemoRun({input: 'test'})" aria-label="Start Crew Run">Run</button>
+                <button id="resetBtn" onclick="resetDemoRun()" aria-label="Reset Crew Run">Reset</button>
+            </nav>
+        </header>
     <header class="header">
         <div class="header-inner">
             <div class="logo">

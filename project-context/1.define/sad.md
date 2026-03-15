@@ -240,7 +240,7 @@ The system is decomposed into five logical layers:
 │           (Modern Multi-Page SOTA UI Experience)             │
 │   [Command Center] [The Bridge] [Artifact Lab] [Audit Log]   │
 │                                                             │
-│   Goal: The multi-page frontend is designed to fulfill trust, clarity, traceability, and speed—while feeling modern and uplifting. The visual style will use a white-blue-green colour palette to evoke trust, calm, and progress. Detailed UI requirements will be clarified later; for now, the mood-enhancing style and UX principles are prioritized.
+│   Goal: The multi-page frontend is designed to fulfill trust, clarity, traceability, and speed—while feeling modern and uplifting. The visual style will use a white-blue-green colour palette to evoke trust, calm, and progress. Dark mode is selectable by user. Detailed UI requirements will be clarified later; for now, the mood-enhancing style and UX principles are prioritized.
 │                                                             │
 │   After login, the first page presents a left navigation pane with the following elements:
 │     - Dashboard
@@ -299,7 +299,7 @@ The system is decomposed into five logical layers:
                               │
                     [Multi-Provider LLM API]
                   (OpenAI, Anthropic, or others)
-                    (optional; graceful fallback)
+                    (may be optional, graceful fallback)
 ```
 
 **Core module responsibilities:**
@@ -759,6 +759,7 @@ All routes are versioned and documented for traceability and audit purposes.
 - CI/CD pipeline setup (Phase 2)
 - Docker image and file storage backend (Phase 2+)
 - Prompt registry for LLM version control (Phase 2)
+- Document/Report artefacts belong to more than one project or product, being part of a general document framework that can be reused by future projects and their products; more expierence of few project requirements are needed (Phase 3+)
 
 ---
 

@@ -1,3 +1,49 @@
+// --- Crew Status Demo Integration ---
+import * as runMockApi from './services/runMockApi.js';
+
+let runState = 'idle'; // idle, running, done, error
+let lastUpdated = null;
+
+window.startDemoRun = function(inputs) {
+    runState = 'running';
+    lastUpdated = new Date();
+    updateCrewStatusUI();
+    runMockApi.startRun(inputs).then(run => {
+        setTimeout(() => {
+            runMockApi.getRunStatus(run.runId).then(status => {
+                runState = status.status;
+                lastUpdated = new Date();
+                updateCrewStatusUI();
+                // Optionally show result in UI
+            });
+        }, 1500); // Simulate async delay
+    }).catch(() => {
+        runState = 'error';
+        lastUpdated = new Date();
+        updateCrewStatusUI();
+        // Optionally show error and Retry button
+    });
+}
+
+window.resetDemoRun = function() {
+    runState = 'idle';
+    lastUpdated = new Date();
+    updateCrewStatusUI();
+    // Optionally reset UI
+}
+
+window.updateCrewStatusUI = function() {
+    const label = document.getElementById('crewStatusLabel');
+    const indicator = document.getElementById('crewStatusIndicator');
+    const timestamp = document.getElementById('crewStatusTimestamp');
+    if (label) label.textContent = `Crew: ${runState}`;
+    if (indicator) indicator.className = `status-pill status-${runState}`;
+    if (timestamp) timestamp.textContent = `Last updated: ${lastUpdated ? lastUpdated.toLocaleTimeString() : '--'}`;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    updateCrewStatusUI();
+});
 /**
  * Doc Quality & Compliance Check — Frontend Application
  * Communicates with the FastAPI backend at /api/v1

@@ -1,8 +1,8 @@
 # Frontend Implementation Documentation — Doc Quality Compliance Check
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.1.0  
-**Date:** 2025-02-23  
+**Version:** 0.3.0  
+**Date:** 2026-3-15  
 **Author persona:** `@frontend-eng`  
 **AAMAD phase:** 2.build  
 
@@ -18,7 +18,7 @@ The frontend is a single-page application built with **vanilla HTML5, CSS3, and 
 
 ## Section 1 – File Structure
 
-```
+```Python
 frontend/
 ├── index.html          — Single HTML file: all four section tabs + modals
 ├── css/
@@ -228,28 +228,112 @@ async function viewTemplate(templateId) {
 The modal displays raw markdown content in a `<pre>` element. A "Download" button constructs a `Blob` from the content and triggers a browser download.
 
 ### 3.4 Reports Tab (`#reports`)
+**Stats Bar (Backend-powered):**
 
-**Purpose:** Generate a PDF audit report combining document analysis and compliance check results.
+Leverages backend PostgreSQL database to display real-time statistics:
+
+```html
+<div id="statsBar">
+  <h3>Statistics</h3>
+  <ul>
+    <li>Total Documents Analyzed: <span id="totalDocs">0</span></li>
+    <li>Average Compliance Score: <span id="avgScore">0.0</span></li>
+    <li>Reports by Risk Classification:
+      <ul>
+        <li>Low Risk: <span id="lowRiskCount">0</span></li>
+        <li>Medium Risk: <span id="mediumRiskCount">0</span></li>
+        <li>High Risk: <span id="highRiskCount">0</span></li>
+      </ul>
+    </li>
+  </ul>
+</div>
+```
+
+**Example JS fetch (stub):**
+```javascript
+async function updateStatsBar() {
+  const response = await fetch(`${API_BASE}/stats/overview`);
+  const stats = await response.json();
+  document.getElementById('totalDocs').textContent = stats.totalDocs;
+  document.getElementById('avgScore').textContent = stats.avgScore.toFixed(2);
+  document.getElementById('lowRiskCount').textContent = stats.lowRisk;
+  document.getElementById('mediumRiskCount').textContent = stats.mediumRisk;
+  document.getElementById('highRiskCount').textContent = stats.highRisk;
+}
+// Call updateStatsBar() on page load
+```
+
+**Purpose:** Generate a PDF audit report combining document analysis, compliance check results, and a traceable HITL review record, fully aligned with regulatory and audit requirements.
 
 **Generate form:**
 ```html
 <input id="reportDocId" placeholder="Document Analysis ID (auto-filled)" />
 <input id="reportComplianceId" placeholder="Compliance Check ID (optional)" />
-<input id="reportReviewer" placeholder="Reviewer name (optional)" />
-<button onclick="generateReport()">📄 Generate PDF Report</button>
+<input id="reportReviewer" placeholder="Reviewer name (required for traceability)" />
+<input id="reviewerRole" placeholder="Reviewer role (QM Lead, Riskmanager, Auditor, etc.)" />
+<input id="reviewActionDate" placeholder="Action Date (auto-filled)" />
+<button onclick="generateReport()">📄 Generate PDF Audit Report</button>
 ```
 
-**HITL Review form:**
+**HITL Review form (Mandatory, with role separation and closed-loop fixes):**
 ```html
 <input id="reviewDocId" placeholder="Document ID" />
-<input id="reviewerName" placeholder="Your name" />
-<input id="reviewerRole" placeholder="Your role (e.g. QM Lead)" />
+<input id="reviewerName" placeholder="Your name (required)" />
+<input id="reviewerRole" placeholder="Your role (QM Lead, Riskmanager, Auditor, etc.)" />
+<input id="reviewActionDate" placeholder="Action Date (auto-filled)" />
 <select id="reviewVerdict">
   <option value="pass">✅ Pass</option>
   <option value="modifications_needed">🔄 Modifications Needed</option>
 </select>
-<textarea id="reviewComments" placeholder="Overall comments..."></textarea>
-<button onclick="submitReview()">Submit Review</button>
+<textarea id="reviewComments" placeholder="Overall comments... (required for traceability)"></textarea>
+<input id="modificationRequest" placeholder="Modification Request (if needed)" />
+<input id="modificationFix" placeholder="Fix Description (if applicable)" />
+<input id="approverName" placeholder="Approver name (if required for high risk)" />
+<input id="approverRole" placeholder="Approver role (Riskmanager, QM Admin, etc.)" />
+<button onclick="submitReview()">Submit Review Record</button>
+```
+
+**Audit Trail (Mandatory):**
+```html
+<div id="auditTrail">
+  <h3>Audit Trail</h3>
+  <table>
+    <thead>
+      <tr><th>Action</th><th>Date</th><th>User</th><th>Role</th><th>Details</th></tr>
+    </thead>
+    <tbody id="auditTrailRows">
+      <!-- Populated with review, modification, approval, and fix records -->
+    </tbody>
+  </table>
+</div>
+```
+
+**Model Selection & Cost Control UI:**
+```html
+<div id="modelCostControl">
+  <h3>Model Selection & Cost Control</h3>
+  <select id="modelType">
+    <option value="llm">LLM</option>
+    <option value="vlm">vLM</option>
+    <option value="moe">MoE</option>
+    <option value="classical">Classical ML</option>
+  </select>
+  <input id="modelName" placeholder="Model Name" />
+  <input id="modelQuota" placeholder="Usage Quota" />
+  <input id="modelCost" placeholder="Cost Estimate" />
+  <button onclick="logModelUsage()">Log Model Usage</button>
+</div>
+```
+
+**Risk Management Documentation UI:**
+```html
+<div id="riskManagement">
+  <h3>Risk Management Documentation</h3>
+  <input id="riskType" placeholder="Risk Type (e.g. FMEA, RMF)" />
+  <input id="riskManager" placeholder="Riskmanager name (required for high risk)" />
+  <textarea id="riskDescription" placeholder="Risk Description"></textarea>
+  <button onclick="submitRiskDoc()">Submit Risk Management Record</button>
+</div>
 ```
 
 **Download button:**
@@ -279,6 +363,23 @@ async function downloadReport(reportId) {
 ## Section 4 – CSS Design (`frontend/css/styles.css`)
 
 ### 4.1 Design Tokens (CSS Custom Properties)
+/* Additional Design Tokens for Dark Mode (user-selectable, not default) */
+:root[data-theme="dark"] {
+  --primary: #1a6a8a;
+  --primary-dark: #12344a;
+  --secondary: #6C2A4C;
+  --success: #218c5c;
+  --warning: #b37c12;
+  --danger: #b33c3c;
+  --bg: #181A1B;
+  --surface: #232526;
+  --border: #2C2F34;
+  --text: #E0E0E0;
+  --text-muted: #A0A0A0;
+  --radius: 8px;
+  --shadow: 0 2px 8px rgba(0,0,0,0.16);
+  --shadow-lg: 0 4px 20px rgba(0,0,0,0.24);
+}
 
 ```css
 :root {
@@ -465,6 +566,409 @@ Template downloads are handled client-side using the `Blob` API. No separate dow
 
 ---
 
+## Section 7 - Phase 0 “Happy Path” Demos (User Acceptance Tests)
+
+### Mocked Service Endpoints for Testing
+
+For acceptance tests and unit tests, the frontend uses promise-based mocked endpoints provided in `frontend/js/services/mockApi.js`. These functions return stable, predictable mock data for all key flows (document analysis, compliance check, template loading, report generation, stats, review submission).
+
+This approach enables:
+- Reliable happy path demos
+- Isolated unit tests in the tests directory
+- Seamless transition to real CrewAI backend endpoints
+
+Mocked endpoints match the real API shape, so swapping to production services is straightforward.
+
+These demos illustrate the main user acceptance scenarios for the app, validating core governance and compliance flows:
+
+### 7.1 **Bridge Run → Artifact Lab → governed SOP draft → export draft PDF**
+  - User initiates a Bridge Run, generates an artifact in Artifact Lab, drafts a governed SOP, and exports a draft PDF.
+
+### 7.2 **Locking**
+  - User A edits SOP; User B sees read-only mode with a lock chip and cannot edit the document concurrently.
+
+### 7.3 **Exports registry**
+  - User finds an existing Ready export in the registry and avoids redundant export actions.
+
+### 7.4 **Workflow**
+  - User requests review, comments are added in Workflow, document is approved, and an approved PDF is exported.
+
+### 7.5 **Audit Trail**
+  - Run created, artifact updated, and export created events are logged and searchable in the audit trail.
+
+---
+
+## Section 8 - Phase 0 Simplification Checklist
+
+- [x] Projects contain exactly **one** Product (Phase 0).
+- [x] Bridge Run targets exactly **one** Product (Phase 0).
+- [x] Each governed Document/Artifact belongs to exactly **one** Product.
+- [x] Open is **read-only** by default; Edit requires **exclusive lock**.
+- [x] Exit/Sign out is **blocked** while operations are running.
+- [x] Org-wide Exports page shows **Ready-only** exports, inheriting document permissions.
+- [x] Draft/In Review exports show **DRAFT** watermark + banner.
+
+---
+
+## Section 9 - Additional UX Spec Proposal for Phase 0 MVP
+
+### 9.1 Multi-Page & Deep-Link Routing (Phase 0)
+
+Regarding Focus&Flow of the SOTA multi-page app, each high-intent user step must be an isolated page/route.
+Each Document Hub tab must map to a dedicated route for direct linking and navigation:
+
+- `/doc/:id/content` — Document content view
+- `/doc/:id/workflow` — Workflow/comments view
+- `/doc/:id/links` — Document links view
+- `/doc/:id/exports` — Export history for document
+- `/doc/:id/help` — Contextual help for document
+
+Navigation should update the browser URL and allow direct access to each page/tab.
+
+### 9.2 Provenance Chip (Bridge Run)
+
+Artifacts affected by a Bridge Run must display a provenance chip near the top of the page:
+
+- “Generated/updated by Bridge Run #…” chip on artifacts affected by Bridge.
+- Chip should include Run ID and timestamp
+- Displayed in metadata strip or header of artifact/document views
+
+This makes provenance explicit and traceable for compliance.
+
+### 9.3 Stable IDs Top of Page
+- All artifact and document views must display stable identifiers (Doc ID, Version, Run ID) near the top of the page for traceability.
+- Default to **read-only** viewing for artifacts as one aspect of being trustworthy, calm and traceable.
+
+### 9.4 Performance & Responsiveness
+- All long-running actions (PDF export, Excel import, ingestion jobs) run as **background operations** with visible progress.
+- UI must remain usable while operations run (users can continue reading/editing other unlocked documents).
+
+### 9.5 Strict Color Semantics & Layout
+UI must follow strict color rules:
+- **Blue:** primary actions + navigation
+  - Examples: Start Bridge Run, Edit, Request review, Export PDF
+- **Green:** success/completion only
+  - Examples: Approved, Export Ready, Run Completed, Checks Passed
+- **Amber:** attention / needs action / warnings
+  - Examples: Needs revision, Missing required sections, Validation warnings
+- **Red:** errors/blocked only
+  - Examples: Export failed, Import failed, Permission denied
+- **Surfaces & Layout:**
+  - Backgrounds: white/off-white; subtle gray borders for structure.
+  - Cards: light elevation (minimal shadow), rounded corners (subtle).
+  - Tables: crisp borders, high readability, no heavy styling.
+  - No glassmorphism.
+
+Rule: Do not use green for navigation or “normal” states. Do not use red for “busy” states.
+
+### 9.6 Typography Hierarchy
+- Primary font: modern sans-serif (e.g., Inter / Open Sans).
+- Clear hierarchy: H1/H2/H3 + body + captions.
+- Monospace optional only for IDs/codes (Doc ID, Run ID).
+
+### 9.7 Micro-interactions (Mood-enhancing, not distracting)
+- Autosave state changes: “Saving…” → “Saved HH:MM”
+- Lock chips animate subtly on acquisition/release.
+- Operations indicator animates during work; never flashes or “jumps”.
+
+### 9.8 Global App Shell (After Login)
+
+#### 9.8.1 Top Bar (Persistent)
+**Must include:**
+- Project selector (Phase 0: informational; Projects contain exactly 1 Product)
+- Global search (Doc ID/title)
+- Operations indicator (ring + badge + drawer)
+- Help (opens contextual help drawer)
+- Focus mode toggle (collapse chrome; “minimize equivalent”)
+- Fullscreen toggle (“maximize equivalent”)
+- User menu:
+  - Exit to login
+  - Sign out
+
+#### 9.8.2 Sidebar Navigation
+Sidebar Navigation (Persistent)
+- Dashboard
+- Bridge (Runs)
+- Artifact Lab
+- Auditor Vault
+- Documents
+- SOPs
+- Forms & Records
+- Risk (RMF / FMEA)
+- Architecture (arc42)
+- Reviews
+- Exports (Org-wide registry; Ready-only)
+- Audit Trail
+- Help
+- Admin
+
+#### 9.8.3 Operations & Exit Blocking
+- Exit to login / Sign out MUST be blocked while any operation is running.
+- If user attempts exit:
+  - Show blocking modal: “Please wait—operations in progress”
+  - List running operations with progress bar or stepper
+  - Buttons:
+    - “Open Operations”
+    - “Keep working”
+- Busy states use neutral/blue styling (not red).
+
+### 9.9 Security, Authentication, Authorization (UX)
+
+#### 9.9.1 Login (`/login`)
+- Branded, calm page (no app shell visible).
+- Only authenticated users can access app shell routes.
+
+#### 9.9.2 Authorization
+- Restricted actions should be disabled with tooltips rather than hidden (Phase 0).
+- Permissions apply consistently to:
+  - document view/edit
+  - exports visibility
+  - workflow approvals
+
+###  9.10 Concurrency & Locking (Scalability Requirement)
+
+#### 9.10.1 Read vs Edit
+- **Readable:** allowed for permitted users even if locked.
+- **Editable:** only if unlocked OR locked by the current user.
+
+#### 9.10.2 Lock Acquisition
+- Documents open in read-only mode by default.
+- Clicking **Edit** requests an exclusive lock.
+- If lock denied:
+  - remain read-only
+  - show banner: “Read-only — locked by {User} since {Time}”
+  - disable Edit with tooltip
+
+#### 9.10.3 Lock Safety
+- Locks are server-enforced with TTL + heartbeat renewal.
+- If lock expires, editor switches to read-only and offers “Reacquire lock”.
+
+#### 9.10.4 Lock Display
+- All list rows show lock chip when locked (e.g., “Locked by Alex”).
+- Document header shows lock chip + tooltip with timestamp.
+
+### 9.11 Export System (PDF Required)
+
+#### 9.11.1 Export Types (Phase 0)
+- PDF export required for:
+  - SOP
+  - Forms/Records templates
+  - RMF
+  - FMEA
+  - arc42
+
+Optional (Phase 0):
+- Excel export for FMEA (recommended if Excel import exists).
+
+#### 9.11.2 Draft Export Watermark
+- If document status is **Draft** or **In Review**, PDF MUST be watermarked:
+  - Large diagonal repeated “DRAFT”
+  - Header banner text: “DRAFT — Not approved”
+- Approved exports have no watermark.
+
+#### 9.11.3 Export Surfaces
+1) **Per-document Exports page** (`/doc/:id/exports`)
+   - shows only exports for that document
+2) **Top-bar Exports/Operations drawer**
+   - personal view: queued/running + recently ready jobs
+3) **Sidebar Exports registry page** (`/exports`)
+   - org-wide view of **Ready exports only**
+
+#### 9.11.4 Exports Registry (Org-wide)
+- Shows Ready exports only.
+- Search/filter by:
+  - Project, Product
+  - Doc type
+  - Export type
+  - Date range
+  - Source status (Draft/Approved)
+- Exports inherit document permissions (no leakage).
+
+#### 9.11.5 Redundancy Prevention
+- When user clicks Export PDF:
+  - if a Ready export exists for same **document version** and same **source status** (Draft vs Approved),
+  - prompt to reuse:
+    - Open existing export
+    - Export anyway
+    - Cancel
+
+### 9.12 Core Pages — Phase 0 Requirements
+
+#### 9.12.1 Dashboard (Command Center) — `/dashboard`
+**Must include:**
+- Primary CTA: “Start New Bridge Run”
+- Quick create: SOP, Form/Record, RMF, FMEA, arc42
+- Tiles:
+  - runs needing attention
+  - my reviews
+  - high-risk flags (from FMEA/RMF)
+  - recent documents
+  - latest Ready exports (filtered by project)
+
+**Session restore:**
+- Banner offering restore with explicit timestamp.
+
+#### 9.12.2 Bridge (Orchestration & Intake) — `/bridge`, `/bridge/new`, `/bridge/runs/:runId`
+##### Phase 0 Simplification
+- One Project contains exactly one Product.
+- One Bridge Run targets exactly one Product.
+- Stepper: Intake → Classification → Result (Branching deferred).
+
+**Intake**
+- Upload/select inputs (regulatory PDFs, QM docs, technical reports).
+- Show ingestion progress in Operations drawer.
+
+**Classification**
+- Verdict card (High/Limited/Minimal)
+- “Why?” explanation with citations
+- Right panel: “Steps & evidence” run log (not chain-of-thought)
+
+**Result**
+- Next actions:
+  - Open Artifact Lab
+  - Open Auditor Vault
+
+#### 9.12.3 Artifact Lab (Generation / Push) — `/artifact-lab/:runId`
+**Layout**
+- Left: artifact list for run (SOP/RMF/FMEA/arc42/Forms)
+- Center: type-aware editor workspace
+- Right: citations panel + “Ask the Author” overlay (suggestions only)
+
+**Governance**
+- Artifacts open read-only by default.
+- Edit requires lock.
+- Generated changes are proposed/accepted (no silent edits).
+
+**Export**
+- Export actions enqueue jobs → Exports tab + registry.
+
+#### 9.12.4 Auditor Vault (Compliance Check / Pull) — `/auditor-vault/:runId`
+**Phase 0 View**
+- Side-by-side comparison:
+  - artifact section or FMEA subset
+  - obligations/excerpts from inputs
+- Gap list table (no heatmap in Phase 0)
+  - obligation
+  - evidence status
+  - linked artifact
+  - action: open artifact / create task / request revision
+
+**Verdict Controls**
+- Approve run outcome
+- Request revision
+- Escalate (Phase 0 can create a task for a role)
+
+#### 9.12.5 Audit Trail — `/audit-trail` and run-specific views
+**Global**
+- Timeline list + filters: project/product/run/doc/date
+- Events captured (Phase 0):
+  - run started/completed
+  - classification saved
+  - artifact created/updated by run
+  - user accepted/rejected suggestion
+  - export ready/failed
+  - workflow transitions
+  - lock override events (if enabled)
+
+### 9.13 Governance Documents (QMS) — Lists + Document Hub
+
+#### 9.13.1 Lists
+Routes:
+- `/documents`, `/sops`, `/forms`, `/risk/rmf`, `/risk/fmea`, `/architecture`
+
+**List row requirements**
+- Doc ID, Title, Type, Product, Status, Lock chip, Updated at/by
+- Actions:
+  - Open (always)
+  - Edit (disabled if locked by other; tooltip)
+
+#### 9.13.2 Document Hub Header (All doc types)
+- Breadcrumb
+- Title
+- Metadata strip:
+  - Doc ID (copy)
+  - Type chip
+  - Product chip
+  - Status chip
+  - Version
+  - Lock chip
+- Actions:
+  - Edit (lock)
+  - Export PDF (enqueue)
+  - Overflow menu
+
+#### 9.13.3 Document Hub Pages (Routes)
+- Content: `/doc/:id/content`
+- Workflow (comments live here): `/doc/:id/workflow`
+- Links: `/doc/:id/links`
+- Exports (per-doc): `/doc/:id/exports`
+- Help: `/doc/:id/help`
+
+#### 9.13.4 Workflow Page (All doc types)
+- Status: Draft → In Review → Approved
+- Request review, Approve, Request changes (role-based)
+- Comments & threads live only here (Phase 0)
+
+#### 9.13.5 Links Page
+- Outgoing + incoming links
+- Link picker search by Doc ID/title
+
+#### 9.13.6 Help (Tab + Drawer)
+- Help page includes recommended wording snippets (copy).
+- Contextual help drawer opens from section/field icons in Content.
+
+### 9.14 Admin (Phase 0 Minimum)
+
+#### 9.14.1 Products
+- SOP autonumbering rule per product (prefix + digits + next number preview)
+- Forms autonumbering rule per product (prefix + digits + next number preview)
+
+#### 9.14.2 Risk Scales (Per Product)
+- Severity scale editor (labels + definitions)
+- Probability scale editor (labels + definitions)
+- Scale version displayed (used by FMEA + exports)
+
+### 9.15 Make Crew Status Obvious
+
+UI requirement: Crew status must be clearly visible and legible.
+
+- Status banner: Show a banner at the top with current crew status and a short label (e.g., “Crew: running”, “Crew: done”, “Crew: idle”).
+- Status indicator: Include a small colored pill or icon next to the label (gray for idle, blue for running, green for done, red for error) to make state legible at a glance.
+- Last updated: Display a “last updated” timestamp near the status label so users can tell stubs are working and the UI is responsive.
+- Consistent phrasing: Use the same wording for statuses in the banner, buttons, and inline messages to reduce cognitive load and avoid mismatches.
+
+### 9.17 Future Work (Backlog, beyond Phase 0)
+
+#### 9.17.1 Topic List
+- Projects containing multiple Products (true 1-to-many)
+- Bridge Runs targeting multiple Products
+- Branching step with multiple workflow paths
+- Gap heatmap matrix visualization
+- Provenance search by model/tool + reproducibility repository
+- Cryptographically signed compliance certificates
+- Row-level locking for FMEA
+- Advanced notifications (unlock requests, export ready push, etc.)
+- Audit bundles / packaged exports
+
+#### 9.17.2 Engineering-ready backlog epics (suggested)
+- Epic A: App shell + auth + project selector + navigation
+- Epic B: Document model + product autonumbering + list pages
+- Epic C: Document hub routing (content/workflow/links/exports/help)
+- Epic D: Lock service (server-enforced TTL + heartbeat) + UI chips/banners
+- Epic E: Export pipeline (server jobs) + DRAFT watermark + per-doc exports + org registry
+- Epic F: Bridge run intake + classification + run log + citations scaffold
+- Epic G: Artifact Lab (type-aware editors scaffold) + “suggestion” accept/reject
+- Epic H: Auditor Vault (side-by-side + gap list + tasks)
+- Epic I: Audit Trail (timeline + filters)
+
+### 9.18 Definition-of-Done and Route Map of Tasks (additional build .md files)
+Notes aligned to repo’s build docs:
+- Frontend is intended to be **Next.js + Tailwind** (per `.cursor/agents/frontend-eng.md` in the repo).
+- Backend is **FastAPI Python 3.12** and serves `frontend/` as static in MVP (per `project-context/2.build/setup.md`).
+- File upload uses `multipart/form-data` and must not manually set `Content-Type` (per `project-context/2.build/integration.md`).
+
+---
+
 ## Sources
 
 - MDN Web Docs — Fetch API, https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API
@@ -478,33 +982,40 @@ Template downloads are handled client-side using the `Blob` API. No separate dow
 
 ## Assumptions
 
-1. The frontend is served by the FastAPI `StaticFiles` mount — no separate web server (nginx, etc.) is needed for development.
-2. All API calls use relative URLs (`/api/v1/...`) — this works because frontend and API share the same origin.
+1. The frontend is served by FastAPI `StaticFiles` — no separate web server needed for development.
+2. All API calls use relative URLs (`/api/v1/...`) — frontend and API share the same origin.
 3. JavaScript runs in modern browsers (ES2020+) — no polyfills or transpilation required.
-4. The `document_id` and `compliance_check_id` fields auto-populate the Reports tab form after each analysis — this is a session-level convenience, not persistence.
-5. Template download uses the Blob API (available in all modern browsers); no fallback for IE is required.
-6. The stats bar (docs analyzed, avg score) resets on page refresh — this is intentional for MVP; persistent stats require backend database storage (Phase 2).
+4. The Reports tab form auto-populates `document_id`, `compliance_check_id`, and reviewer/session fields after each analysis; additional HITL and audit fields are now included for traceability.
+5. Template download uses the Blob API (modern browsers only); no fallback for legacy browsers is required.
+6. The stats bar (docs analyzed, avg score, risk classification) is now backend-powered and persists across sessions; real-time statistics are fetched from PostgreSQL.
+7. Authentication/login UI is a stub for Phase 0; only authenticated users can access app shell routes.
+8. Locking, exclusive edit, and exit blocking modal are enforced in the UI; open is read-only by default, edit requires exclusive lock, and exit/sign out is blocked during operations.
+9. Sidebar navigation and top bar features are documented and must be implemented for persistent navigation and app shell functionality.
+10. UI follows strict color semantics and typography hierarchy as specified; micro-interactions and tooltips are used for disabled actions and lock states.
 
 ---
 
 ## Open Questions
 
-1. **Dark mode:** Should a CSS `prefers-color-scheme: dark` media query be added? (Low effort, high user value)
-2. **Mobile navigation:** Currently the nav links are hidden on mobile (`display: none`). Should a hamburger menu be added?
-3. **Form validation:** Currently form validation is minimal (empty string check). Should HTML5 `required` attributes and constraint validation be added?
-4. **Accessibility:** Are ARIA labels and keyboard navigation implemented? (Current status: not systematically; candidate for Phase 2 accessibility audit)
-5. **Session persistence:** Should `localStorage` be used to persist the last analysis result across page refreshes?
+1. **Mobile navigation:** Sidebar and top bar navigation are now required; should a hamburger menu or drawer be added for mobile?
+2. **Form validation:** Should HTML5 `required` attributes and constraint validation be added for all forms, including HITL review, audit, and login?
+3. **Accessibility:** Are ARIA labels and keyboard navigation implemented for new sidebar, top bar, and modal components? (Phase 2 candidate)
+4. **Session persistence:** Should `localStorage` be used to persist stats, last analysis, and user session across page refreshes?
+5. **Authentication:** Should login UI be expanded beyond stub, and should session management be handled client-side or via backend?
+6. **Locking:** Should lock status and chips be updated in real time (e.g., via WebSocket), and should lock expiry/reacquire be user-notified?
+7. **Audit Trail:** Should audit events be filterable/searchable by user, doc, run, and operation type in the UI?
+8. **Export registry:** Should export redundancy prevention prompt be expanded to cover all export types and statuses?
 
 ---
 
 ## Audit
 
-```
+```Python
 persona=frontend-eng
 action=develop-fe
-timestamp=2025-02-23
+timestamp=2026-3-15
 adapter=AAMAD-vscode
 artifact=project-context/2.build/frontend.md
-version=0.1.0
+version=0.3.0
 status=complete
 ```
