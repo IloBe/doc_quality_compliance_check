@@ -1,8 +1,8 @@
 # System Architecture Document (SAD) — Doc Quality Compliance Check
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.1.0  
-**Date:** 2025-02-23  
+**Version:** 0.7.0  
+**Date:** 2026-03-15  
 **Author persona:** `@system-arch`  
 **Standard:** ISO/IEC/IEEE 42010:2022 — Architecture Description  
 **AAMAD phase:** 1.define  
@@ -47,10 +47,155 @@ EU AI Act Art. 11 + Annex IV require that high-risk AI providers draw up technic
 ### 1.4 HITL as a Mandatory Design Constraint
 
 Human-In-The-Loop review is treated as a **first-class architectural component**, not a UI affordance. This means:
-- All AI-generated assessments produce a `ReviewRecord` object, not just a free-form result
-- Review verdicts (`pass` | `modifications_needed`) are persisted with timestamps
-- Modification requests are structured objects (`ModificationRequest`) with section, description, and priority — not free text
+- All AI-generated assessments produce a `ReviewRecord` object, not just a free-form result.
+- **Traceability of Actions:** Every review, modification request, and fix must be stored with a specific **Action Date** and the **Identity (Name/ID)** of the person performing the task.
+- Review verdicts (`pass` | `modifications_needed`) are persisted with timestamps and reviewer metadata.
+- **Closed-Loop Fixes:** Modification requests are linked to specific remediations, creating an auditable trail of "Issue -> Request -> Fix -> Re-approval".
+- **Role Rules:**
+  1. Implementer and reviewer must not be the same person.
+  2. High risk products or high risk complaints require a third person for approval.
+  3. All HITL participants are part of the QM department; for high risk products/issues, a certified Riskmanager should be responsible for risk management and approval.
+  4. For high risk aspects, top management must be informed; by law, they hold main responsibility for QM and governance.
+  5. For technical SW documents (e.g., arc42), internal review shall be performed by the development department (Senior SW engineers, SW architects, SW testers, DevOps, etc.), depending on the document's focus. After internal approval it will be send to the QM department for additional review necessary for being auditable.
 - The audit trail of review decisions is itself a compliance artefact for EU AI Act Art. 14
+
+### 1.5 Risk Management Documentation Requirements
+
+The system must support two distinct types of risk management documentation:
+
+- **General Risk Management Record (Company-wide):**
+  - Follows the structure of Table 1 (Riskmanagement File).
+  - Covers topics such as risk management process, responsibilities, staff qualifications, risk management plan, intended use, hazardous situations, risk assessments, risk mitigations, completeness, assessed total risk, risk management report, and post-market phase.
+  - Links to other documents required for audits and certification.
+
+- **Product-Specific Risk Management Record:**
+  - Follows the structure of Table 2 (Documentation of specific Product Risk-Handling).
+  - Tracks risk analysis and mitigation for each product, including severity, probability, risk mitigation, verification, and new risks.
+  - Supports traceability for high-risk products as required by EU AI Act and notified body audits.
+
+Both document types must be:
+- Created, updated, and approved via HITL workflow (with timestamps and responsible person).
+- Linked to technical templates (e.g., arc42) and QM-specific documentation.
+- Ready for external audits and ISO certification.
+
+#### Risk Document Handling Process (EU AI Act Alignment)
+
+References: [EU AI Act Article 9](https://artificialintelligenceact.eu/article-9-risk-management-system/), [Article 11](https://artificialintelligenceact.eu/article-11-technical-documentation/), [Annex IV](https://artificialintelligenceact.eu/annex-iv/), [Article 14](https://artificialintelligenceact.eu/article-14-human-oversight/)
+
+1. **Ownership**
+   - **Company-wide Risk Management Record:** Owned and maintained by the QM department (Quality Manager or certified Riskmanager).
+   - **Product-specific Risk Management Record:** Owned by the product team (Product Owner, QM, and certified Riskmanager for high-risk products).
+
+2. **Linking**
+   - Each product-specific risk record must reference the company-wide risk management record for context and compliance alignment.
+   - All risk records link to supporting documents (SOPs, audit reports, technical templates).
+
+3. **Updating**
+   - Updates are initiated by the responsible owner (QM or Product Owner).
+   - All changes are versioned, timestamped, and attributed to the editor.
+   - For high-risk products/issues, updates require review and approval by a certified Riskmanager.
+
+4. **Approval**
+   - Standard risk records: Approval by QM or Product Owner.
+   - High-risk records: Approval by certified Riskmanager and notification to top management.
+   - All approvals are logged with date, approver identity, and linked evidence.
+
+5. **Traceability**
+   - Every action (create, update, approve) is recorded in the audit trail.
+   - All records are stored in PostgreSQL with links to related documents and version history.
+   - For high-risk, escalation and notification to top management is mandatory.
+
+| Document Type | Owner | Reviewer/Approver | Traceability |
+|---------------|-------|-------------------|--------------|
+| Company-wide Risk Record | QM / Riskmanager | QM / Riskmanager | Audit trail, version history |
+| Product-specific Risk Record | Product Owner / QM | QM / Riskmanager (high-risk) | Audit trail, version history, links to company-wide record |
+| High-risk Product/Issue | Product Owner / QM / Riskmanager | Riskmanager, Top Management | Audit trail, version history, escalation log |
+
+### 1.6 Security Requirements
+
+The system must address the following security requirements:
+
+1. **OWASP Top 10 AI Security:**
+   - All relevant OWASP Top 10 AI security risks must be mitigated (e.g., prompt injection, insecure model usage, data leakage, supply chain vulnerabilities).
+   - Security controls and input validation must be implemented at API boundaries and agent interfaces.
+
+2. **Secure Execution Environment:**
+   - All agents must run in a sandboxed environment to prevent unauthorized access and privilege escalation.
+   - The application must be deployed in a secure infrastructure (e.g., containerized, restricted network access).
+
+3. **User Authentication & Authorization:**
+   - The system must enforce user authentication and role-based authorization for all access to sensitive features and data.
+   - Audit logs must record user actions for traceability.
+
+4. **Testing Before Release:**
+   - All releases must pass unit tests, integration tests, and user acceptance tests before deployment.
+   - Test coverage and results must be documented and reviewed as part of the release process.
+
+#### Security Requirements Implementation & Review Process
+
+1. **Implementation**
+   - **SW Engineers:** Implement security controls (OWASP Top 10, input validation, sandboxing, authentication/authorization) in application code.
+   - **Test Engineers:** Develop and execute unit tests, integration tests, and user acceptance tests focused on security features.
+
+2. **Review**
+   - **Security Reviewer:** Reviews test results, code, and configurations for compliance with security requirements and standards.
+   - **DevOps Engineer:** Validates integration and deployment security, ensures sandboxing and secure infrastructure, reviews logs and audit trails.
+
+3. **Traceability**
+   - All security-related tasks and reviews are documented and auditable.
+   - Release is approved only after successful review and test completion.
+
+| Task | Responsible | Reviewer |
+|------|-------------|----------|
+| Security controls implementation | SW Engineer | Security Reviewer |
+| Security testing (unit/integration/UAT) | Test Engineer | Security Reviewer |
+| Integration & deployment security | DevOps Engineer | Security Reviewer, DevOps |
+
+### 1.7 Hybrid Agentic Decision Framework
+
+The system architecture supports a hybrid agentic decision framework combining automated agents and HITL (Human-In-The-Loop) roles for compliance-critical workflows. This ensures both efficiency and regulatory traceability, especially for high-risk and audit-sensitive operations.
+
+#### Framework Overview
+- **Automated Agents:**
+  - Execute routine compliance checks, document analysis, and risk scoring using AI models (FastAPI, Pydantic, structlog). Inform app user or defined QM person about this routine compliance checks, document analysis and risk scoring. For MVP, a list of clickable topics on a 'History View' page is enough getting information about automated work.
+  - Operate within defined boundaries, with all actions logged and versioned.
+  - Trigger HITL review gates for unclear, ambiguous, high-risk, or regulatory-sensitive cases. Don't hallucinate.
+
+- **HITL Roles:**
+  - Review, approve, and override agent decisions for compliance, risk, and security documentation.
+  - Responsible for final approval of high-risk actions, risk document updates, and regulatory submissions.
+  - All HITL actions are logged with timestamps, identity, and evidence links.
+
+- **Escalation and Notification:**
+  - High-risk or unresolved cases are escalated to certified Riskmanager and product management which have to inform top management.
+  - Escalation logs are maintained for audit and traceability.
+
+#### Decision Flow
+1. **Routine Operation:**
+   - Automated agents process documents and flag issues.
+   - Low-risk issues are auto-resolved and logged.
+   - If low-risk issue is unclear, trigger HITL process. Don't hallucinate.
+2. **Ambiguous/High-Risk Case:**
+   - Agent triggers HITL review gate.
+   - HITL reviews, approves, or escalates as needed.
+3. **Escalation:**
+   - Certified Riskmanager/top management review and approve.
+   - All actions recorded in audit trail.
+
+#### Traceability and Compliance
+- All agentic and HITL actions are versioned and auditable.
+- Framework aligns with EU AI Act Article 14 (Human Oversight), ISO 25010, and ISO 42010.
+- HITL review gates are configurable per workflow and risk level.
+- Audit logs are stored in PostgreSQL and linked to relevant documents.
+
+#### Table: Agentic vs HITL Roles
+| Workflow Step | Automated Agent | HITL Role | Escalation |
+|---------------|-----------------|-----------|------------|
+| Routine Compliance Check | Yes | Optional | No |
+| Risk Document Update | Yes | Yes | Yes (high-risk) |
+| Security Review | Yes | Yes | Yes (critical) |
+| Regulatory Submission | No | Yes | Yes |
+| Audit Trail Logging | Yes | Yes | Yes |
 
 ---
 
@@ -76,9 +221,30 @@ The system is decomposed into five logical layers:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                  Presentation Layer                          │
-│           Frontend (HTML5 / CSS3 / Vanilla JS)              │
-│   [Document Tab] [Compliance Tab] [Templates] [Reports]      │
-│         fetch() → /api/v1/* endpoints                       │
+│           (Modern Multi-Page SOTA UI Experience)             │
+│   [Command Center] [The Bridge] [Artifact Lab] [Audit Log]   │
+│                                                             │
+│   Goal: The multi-page frontend is designed to fulfill trust, clarity, traceability, and speed—while feeling modern and uplifting. The visual style will use a white-blue-green colour palette to evoke trust, calm, and progress. Detailed UI requirements will be clarified later; for now, the mood-enhancing style and UX principles are prioritized.
+│                                                             │
+│   After login, the first page presents a left navigation pane with the following elements:
+│     - Dashboard
+│     - Documents (all types, powerful filtering)
+│         - Authors (especially from SW development) are responsible for maintaining arc42 documentation.
+│         - QM personnel, requirement engineers, product owners, etc. primarily work with rich text editors for governance and compliance documents.
+│     - SOPs
+│     - Forms & Records
+│     - Risk (RMF / FMEA)
+│         - Excel import/export must be supported for FMEA tables and related risk management records.
+│         - Severity and probability scales must be configurable per product; recommendations and explanations should be available via the Help page for main parts and terminology.
+│     - Architecture (arc42)
+│     - Reviews
+│         - For the MVP, lighter approvals are requested; 21 CFR Part 11-style e-signatures and strict audit controls are out-of-scope for now.
+│     - Help
+│         - The Help page shall include a short description and explanation (max 3 sentences) of main QM terminology, ISO norms (ISO 42001, ISO 27001), NIS2, and EU AI Act.
+│         - It must be possible to add further topics and items to the Help page; content must be editable and stored in the PostgreSQL database.
+│     - Admin (Products, roles, risk scales)
+│                                                             │
+│   fetch() → /api/v1/* endpoints                       │
 └─────────────────────────────┬───────────────────────────────┘
                               │ HTTP/REST (JSON)
 ┌─────────────────────────────▼───────────────────────────────┐
@@ -97,18 +263,26 @@ The system is decomposed into five logical layers:
 │  analyze_   │  │  check_eu_    │  │  ReportGenerator      │
 │  document() │  │  ai_act_      │  │  HitlWorkflow         │
 │             │  │  compliance() │  │                       │
-└──────┬──────┘  └────────┬──────┘  └───────────────────────┘
+└──────┬──────┘  └────────┬──────┘  └──────────┬────────────┘
+       │                  │                    │
+       │                  │          ┌─────────▼────────────┐
+       │                  │          │   Persistence Layer   │
+       │                  │          │                      │
+       │                  │          │  - PostgreSQL (P0)   │
+       │                  │          │  - Audit Logs (Art12)│
+       │                  │          └──────────────────────┘
        │                  │
 ┌──────▼──────────────────▼──────────────────────────────────┐
 │                  AI Agent Layer (Optional LLM)              │
 │   DocumentCheckAgent          ComplianceCheckAgent          │
 │   - wraps DocumentAnalyzer   - wraps ComplianceChecker      │
-│   - optional Claude call     - optional Claude call         │
+│   - optional LLM call        - optional LLM call            │
 │   - structured prompt        - structured prompt            │
 │   - result parsed to model   - result parsed to model       │
 └─────────────────────────────────────────────────────────────┘
                               │
-                    [Anthropic Claude API]
+                    [Multi-Provider LLM API]
+                  (OpenAI, Anthropic, or others)
                     (optional; graceful fallback)
 ```
 
@@ -128,15 +302,15 @@ The system is decomposed into five logical layers:
 | `services/template_manager.py` | `list_templates()`, `get_template()`, `get_active_templates()` |
 | `services/report_generator.py` | `generate_report()` (ReportLab PDF) |
 | `services/hitl_workflow.py` | `create_review()`, `get_review()`, `update_review_status()`, `list_reviews()` |
-| `agents/doc_check_agent.py` | `DocumentCheckAgent` — wraps service + optional Claude |
-| `agents/compliance_agent.py` | `ComplianceCheckAgent` — wraps service + optional Claude |
+| `agents/doc_check_agent.py` | `DocumentCheckAgent` — wraps service + optional LLM |
+| `agents/compliance_agent.py` | `ComplianceCheckAgent` — wraps service + optional LLM |
 
 ### 3.2 Process / Runtime View
 
 **Document Analysis Sequence:**
 
 ```
-Client          DocumentsRouter    DocumentAnalyzerService    [ClaudeAPI]
+Client          DocumentsRouter    DocumentAnalyzerService    [LLM API]
   │                   │                       │                    │
   │ POST /analyze     │                       │                    │
   │──────────────────►│                       │                    │
@@ -150,7 +324,8 @@ Client          DocumentsRouter    DocumentAnalyzerService    [ClaudeAPI]
   │                   │                       │                    │
   │                   │                       │ [if API key set]   │
   │                   │                       │───────────────────►│
-  │                   │                       │ Claude enrichment  │
+  │                   │                       │ LLM enrichment     │
+  │                   │                       │ (OpenAI/Claude)    │
   │                   │                       │◄───────────────────│
   │                   │◄──────────────────────│                    │
   │                   │  DocumentAnalysisResult                    │
@@ -161,7 +336,7 @@ Client          DocumentsRouter    DocumentAnalyzerService    [ClaudeAPI]
 **EU AI Act Compliance Check Sequence:**
 
 ```
-Client          ComplianceRouter   ComplianceCheckerService   [ClaudeAPI]
+Client          ComplianceRouter   ComplianceCheckerService   [LLM API]
   │                   │                       │                    │
   │ POST /check/eu-ai-act                     │                    │
   │──────────────────►│                       │                    │
@@ -175,7 +350,8 @@ Client          ComplianceRouter   ComplianceCheckerService   [ClaudeAPI]
   │                   │                       │                    │
   │                   │                       │ [if API key set]   │
   │                   │                       │───────────────────►│
-  │                   │                       │ Claude enrichment  │
+  │                   │                       │ LLM enrichment     │
+  │                   │                       │ (OpenAI/Claude)    │
   │                   │                       │◄───────────────────│
   │                   │◄──────────────────────│                    │
   │                   │  ComplianceCheckResult │                    │
@@ -207,6 +383,42 @@ Client          ReportsRouter      ReportGeneratorService    Filesystem
   │                   │                       │◄──────────────────│
   │◄──────────────────│                       │                   │
   │  application/pdf  │                       │                   │
+```
+
+**HITL Review & Fix Workflow Sequence (Art. 14 Traceability):**
+
+```
+Auditor         Client (UI)       HITL Service         PostgreSQL (DB)
+  │                   │                 │                      │
+  │ POST /review      │                 │                      │
+  │ (Submit Verdict)  │                 │                      │
+  │──────────────────►│ create_review() │                      │
+  │                   │────────────────►│                      │
+  │                   │                 │ INSERT ReviewRecord  │
+  │                   │                 │ (Auditor, Timestamp) │
+  │                   │                 │─────────────────────►│
+  │                   │                 │                      │
+  │ [If MODS_NEEDED]  │                 │                      │
+  │                   │                 │ INSERT ModRequests   │
+  │                   │                 │─────────────────────►│
+  │                   │◄────────────────│                      │
+  │◄──────────────────│  201 Created    │                      │
+  │                   │                 │                      │
+  │                   │                 │                      │
+Developer       Client (UI)       HITL Service         PostgreSQL (DB)
+  │                   │                 │                      │
+  │ POST /fix         │                 │                      │
+  │ (Submit Remedy)   │                 │                      │
+  │──────────────────►│ update_fix()    │                      │
+  │                   │────────────────►│                      │
+  │                   │                 │ INSERT FixAction     │
+  │                   │                 │ (Developer, Date)    │
+  │                   │                 │─────────────────────►│
+  │                   │                 │                      │
+  │                   │                 │ UPDATE ReviewStatus  │
+  │                   │                 │─────────────────────►│
+  │                   │◄────────────────│                      │
+  │◄──────────────────│  200 Success    │                      │
 ```
 
 ### 3.3 Deployment View
@@ -381,10 +593,10 @@ class ReportResult(BaseModel):
 | **AD-2** | Data validation library | marshmallow, Pydantic v1, Pydantic v2, attrs | **Pydantic v2** | Type safety, FastAPI native, v2 performance improvements, strict mode available, field validators |
 | **AD-3** | PDF generation | WeasyPrint, wkhtmltopdf, ReportLab, fpdf2 | **ReportLab** | Pure Python (no system-level dependencies), production-proven, rich layout control, no Chromium/Qt runtime required |
 | **AD-4** | LLM integration model | Required dependency, optional dependency, not included | **Optional dependency** | KISS: rule-based core delivers compliance value without API key; Claude adds semantic depth when available; reduces adoption friction |
-| **AD-5** | Storage backend | PostgreSQL, SQLite, Redis, filesystem | **Filesystem (MVP)** | Simplest for MVP: no DB setup, no ORM; reports/ directory for PDFs; in-memory dict for reviews; documented path to SQLite/PostgreSQL |
+| **AD-5** | Storage backend | PostgreSQL, Redis, filesystem | **DB and Filesystem (MVP)** | For MVP: PostgreSQL DB setup and file storage, with ORM; reports/ directory for PDFs eg for exports; in-memory dict storage for reviews, consistent storage at least before reboot or shutdown or triggered by user; documented path to PostgreSQL |
 | **AD-6** | Input sanitisation | Custom regex, OWASP sanitiser, bleach, html.escape | **bleach** | Battle-tested, OWASP-aligned, configurable allow-lists, widely used in production; no custom security code |
 | **AD-7** | Logging library | standard logging, loguru, structlog | **structlog** | JSON-structured output (required for EU AI Act Art. 12 logging compliance), processor pipeline, context binding |
-| **AD-8** | Frontend framework | React, Vue, Angular, vanilla HTML/JS | **Vanilla HTML/CSS/JS** | KISS: no build toolchain, no npm, no bundler; tab navigation is simple enough for plain JS; reduces maintenance surface |
+| **AD-8** | Frontend framework | React, Vue, Angular, typscript, HTML/JS | **Modern Multi-page UI** | KISS: build toolchain if necessary only, no npm, no bundler; tab navigation is simple enough for plain JS; reduces maintenance surface |
 | **AD-9** | Configuration management | os.environ, python-dotenv, pydantic-settings | **pydantic-settings** | Type-safe settings, native Pydantic v2 integration, `.env` file support, validation on startup |
 | **AD-10** | Testing framework | unittest, pytest, hypothesis | **pytest** | Industry standard, rich plugin ecosystem (pytest-asyncio, pytest-cov), cleaner test syntax |
 
@@ -469,7 +681,7 @@ class ReportResult(BaseModel):
 
 - ISO/IEC/IEEE 42010:2022 — Architecture Description Standard
 - ISO/IEC 25010:2023 — Systems and Software Quality Model (SQuaRE)
-- EU AI Act (Regulation (EU) 2024/1689), Arts. 9–15, 43, 72, Annex III, Annex IV
+- EU AI Act (Regulation (EU) 2024/1689), Arts. 9–15, 43, 72, Annex III, Annex IV; https://artificialintelligenceact.eu/
 - arc42 Template v8.2, https://arc42.org
 - BSI IT-Grundschutz-Kompendium, Bundesamt für Sicherheit in der Informationstechnik
 - FastAPI Architecture Documentation, https://fastapi.tiangolo.com/tutorial/bigger-applications/
@@ -489,19 +701,31 @@ class ReportResult(BaseModel):
 5. `templates/sop/` markdown files are static for MVP; template versioning is a Phase 2 concern.
 6. CORS origins `localhost:3000` and `localhost:8000` are sufficient for MVP; production deployment behind a reverse proxy will require CORS origin update.
 7. In-memory `_review_store: dict` in `hitl_workflow.py` is acceptable for MVP with documented risk (R-1 above).
-8. The Anthropic Claude API client is initialised only when `ANTHROPIC_API_KEY` is set; no API calls are made without an explicit key.
+8. The LLM API client is initialised only when a supported `API_KEY` (OpenAI, Anthropic, etc.) is set; no API calls are made without an explicit key.
 
 ---
 
 ## Open Questions
 
-1. **Phase 2 storage:** SQLite (simpler) vs. PostgreSQL (production-ready) for review record persistence?
-2. **Authentication strategy:** Which authentication model for Phase 2? OAuth2 with provider, API key, or LDAP/SAML for enterprise SSO?
-3. **arc42 binary parsing:** When should `.docx` and binary `.pdf` arc42 parsing be added? (Candidate: Phase 2 via python-docx + PyPDF2)
-4. **Agent orchestration:** Should Phase 2 introduce CrewAI or LangGraph for multi-agent orchestration, or continue with the current lightweight single-agent pattern?
-5. **PDF digital signatures:** Should generated reports include pyhanko digital signatures for audit integrity?
-6. **Horizontal scaling:** What triggers the move from single-instance to horizontally scaled deployment? (Candidate trigger: >50 documents/day)
-7. **Template versioning:** How should SOP template updates be managed and communicated to document authors?
+1. **Authentication strategy:** Which authentication model for Phase 2? OAuth2 with provider, API key, or LDAP/SAML for enterprise SSO?
+2. **arc42 binary parsing:** When should `.docx` and binary `.pdf` arc42 parsing be added? (Candidate: Phase 2 via python-docx + PyPDF2)
+3. **PDF digital signatures:** Should generated reports include pyhanko digital signatures for audit integrity?
+4. **Horizontal scaling:** What triggers the move from single-instance to horizontally scaled deployment? (Candidate trigger: >50 documents/day)
+5. **Template versioning:** How should SOP template updates be managed and communicated to document authors?
+
+---
+
+## API Overview
+
+The application exposes a RESTful API with the following main routes (for traceability):
+- `/api/v1/documents` — Document upload, analysis, and retrieval
+- `/api/v1/compliance` — Compliance checking and regulatory mapping
+- `/api/v1/reports` — PDF report generation and download
+- `/api/v1/templates` — Template listing and retrieval
+- `/api/v1/research` — Regulatory research and evidence gathering
+- `/api/v1/reviews` — HITL review creation, update, and listing
+
+All routes are versioned and documented for traceability and audit purposes.
 
 ---
 
@@ -509,10 +733,10 @@ class ReportResult(BaseModel):
 
 ```
 persona=system-arch
-action=create-sad
-timestamp=2025-02-23
+action=update-sad-v0.7.0-agentic-ux-multillm
+timestamp=2026-03-15
 adapter=AAMAD-vscode
 artifact=project-context/1.define/sad.md
-version=0.1.0
+version=0.7.0
 status=complete
 ```

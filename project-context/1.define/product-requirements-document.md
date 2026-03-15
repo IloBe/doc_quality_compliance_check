@@ -1,8 +1,8 @@
 # Product Requirements Document (PRD) — Doc Quality Compliance Check
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.1.0  
-**Date:** 2025-02-23  
+**Version:** 0.7.0  
+**Date:** 2026-03-15  
 **Author persona:** `@product-mgr`  
 **AAMAD phase:** 1.define  
 
@@ -12,33 +12,30 @@
 
 ### Problem Statement
 
-Quality Management teams in EU companies developing or deploying high-risk AI systems face a critical, legally mandated challenge: ensuring all technical documentation meets both structural completeness requirements (arc42 architecture documentation standard) and regulatory compliance requirements (EU AI Act Arts. 9–15, Annex IV). Today, this process is entirely manual:
+Large enterprises in Germany and the EU face a massive bottleneck in AI governance. Quality & Regulatory (Q&R) teams must ensure that AI-enabled software—whether used in R&D or shipped as a product—is developed, validated, and documented in a way that satisfies complex, overlapping mandates (EU AI Act, GDPR, NIS2, BSI TR-03185). Today, this process is broken:
 
-- A QM representative manually cross-checks a 12-section arc42 document against an EU AI Act checklist
-- This takes 8–20 hours per document
-- The review trail is scattered across emails, spreadsheets, and Word documents
-- Generated evidence packages are not consistently formatted or audit-ready
-- No structured workflow exists to communicate gap-filling assignments back to the document author
-
-The consequences of inadequate documentation are severe: EU AI Act non-compliance fines up to €35M or 7% of global turnover, delayed conformity assessments, and failed notified-body audits.
+- **Manual Translation:** Q&R teams spend days translating high-level regulations into internal procedures and engineering checklists.
+- **Static Tools:** Static Word/Excel templates fail to capture the dynamic nature of AI risk and the "Secure Software Lifecycle" (BSI standards).
+- **Communication Gaps:** Engineering teams are often overwhelmed by regulatory jargon and lack clear, actionable "Standard Operating Procedures" (SOPs) for specific AI use cases.
+- **Audit Fragility:** Documentation is often scattered, making it difficult to prove *who* made a decision, *when*, *why*, and based on *what* regulatory criteria (lack of reproducibility).
 
 ### Solution
 
-An AI-assisted document quality and compliance check system built on Python 3.11 + FastAPI, providing:
+A **Multi-Agent AI Governance & Compliance Copilot** that acts as a "Regulatory-to-Workflow" bridge. Built on **Python 3.12**, **CrewAI**, and **NVIDIA Nemotron-Parse**, the system provides:
 
-1. **Automated document analysis:** Checks arc42 architecture documents (12 required sections + UML diagrams) and model cards (9 required sections + EU AI Act fields) for completeness
-2. **EU AI Act compliance assessment:** Evaluates documents against all 9 mandatory requirements (Art. 9–15, Art. 43, Art. 72), classifies AI system risk level, and detects provider/deployer role
-3. **PDF audit reports:** Generates downloadable, submission-ready PDF reports with section checklist, compliance scores, gaps, and recommendations
-4. **SOP template management:** Provides 6 active Standard Operating Procedure templates aligned to EU AI Act and arc42 requirements
-5. **HITL review workflow:** Structured Human-In-The-Loop review with pass/fail verdicts and actionable modification requests
-6. **Optional LLM enrichment:** Anthropic Claude integration for semantic gap analysis beyond rule-based keyword matching
+1.  **AI Use-Case Intake & Classification:** Automated risk classification (EU AI Act risk model) with transparent rationale and cited criteria.
+2.  **Automated Artifact Authoring:** Generation of tailored **Risk Assessment Templates** and associated **SOPs** that explain exactly how engineering roles must execute and document the governance process.
+3.  **arc42 & Compliance Checking:** Automated structural analysis of architecture documents (arc42) and cross-checking against EU AI Act, GDPR, NIS2, and BSI checklists.
+4.  **Reproducibility Repository:** A centralized history of all inputs, agent decisions, tool calls, and generated artifacts to support audit defense.
+5.  **Audit-Ready PDF Evidence:** Generation of downloadable, submission-ready PDF audit reports with embedded traceability data.
+6.  **HITL Governance:** Structured Human-In-The-Loop review where Q&R representatives approve or request modifications for engineering artifacts.
 
 ### Strategic Rationale
 
-- **Regulatory urgency:** EU AI Act full enforcement (August 2026) creates a non-deferrable compliance deadline
-- **Market gap:** No competitor offers the combination of arc42 structural checking + EU AI Act compliance + SOP templates + HITL workflow in a single integrated tool
-- **Multi-agent architecture:** Parallel DocumentCheckAgent and ComplianceCheckAgent enable independent, composable analysis that can be extended with additional agents (MDR agent, GDPR agent) without modifying the core services
-- **MVP delivery timeline:** One experienced developer using VS Code + GitHub Copilot + AAMAD can deliver the complete MVP in 6 weeks, validating the concept before larger investment
+- **German/EU Sovereignty:** Alignment with BSI TR-03185 (Security of AI Systems) and EU-specific legal ecosystems (NIS2, GDPR, AI Act).
+- **Multi-Agent Orchestration:** CrewAI enables specialized agents (Classifier, Author, Auditor) to handle complex, non-linear governance tasks that traditional scripts cannot.
+- **VLM-Driven Ingestion:** NVIDIA Nemotron-Parse ensures complex regulatory tables and flowcharts are correctly ingested into the governance logic.
+- **Audit-First Design:** Unlike generic generative AI, this system prioritizes "Explainability" and "Reproducibility" as core technical constraints.
 
 ---
 
@@ -124,83 +121,82 @@ RECEIVE PDF → REVIEW SCORES → CHECK HITL TRAIL → VERIFY COVERAGE → ACCEP
 
 ## Section 3 – Technical Requirements & Architecture
 
-### 3.1 Multi-Agent Architecture
+### 3.1 Multi-Agent Architecture (CrewAI)
 
-The system uses a CrewAI-style multi-agent architecture where specialised agents are responsible for distinct analysis domains:
+The system utilizes specialized agents orchestrated with **CrewAI** to provide non-linear, explainable reasoning for complex governance tasks:
 
-**DocumentCheckAgent**
-- **Role:** Document Quality Analyst
-- **Goal:** Analyse uploaded documents for structural completeness and quality
-- **Backstory:** Expert in arc42 architecture documentation and model card standards
-- **Tools:** Document content reader, section pattern matcher, UML diagram detector
-- **LLM enrichment (optional):** Anthropic Claude for semantic gap analysis beyond keyword matching
+**Classifier Agent (The Legal Specialist)**
+- **Role:** AI Governance Specialist
+- **Goal:** Classify an AI system according to the EU AI Act risk model and identify applicable German regulations (BSI, NIS2).
+- **Backstory:** Expert in legal text interpretation, Annex III categories, and risk-based obligations.
+- **Tools:** Use-case intake analyzer, rule pack matcher (EU AI Act, GDPR, BSI).
 
-**ComplianceCheckAgent**
-- **Role:** EU AI Act Compliance Specialist
-- **Goal:** Assess documents against EU AI Act mandatory requirements
-- **Backstory:** Expert in EU AI Act Arts. 9–15, risk classification, role detection
-- **Tools:** Regulation requirement matcher, risk level classifier, applicable-regulations detector
-- **LLM enrichment (optional):** Anthropic Claude for nuanced requirement interpretation
+**Orchestration Agent (The Workflow Manager)**
+- **Role:** Governance Process Manager
+- **Goal:** Dynamically select the correct compliance path and coordinate sub-agents based on the Classification results.
+- **Backstory:** Specialist in multi-regulatory compliance logic and hierarchical decision-making; ensures the "Push" and "Pull" workflows are executed only when conditions are met.
+- **Tools:** Workflow router, state manager, cross-agent consistency checker.
 
-### 3.2 Service Layer Architecture
+**Template Author Agent (The Standards Expert)**
+- **Role:** Quality Documentation Architect
+- **Goal:** Author a tailored Risk Assessment Template or arc42-aligned structure for a specific risk class.
+- **Backstory:** Deep knowledge of technical documentation standards (ISO/IEC 42010, arc42).
+- **Tools:** Template generator, section builder.
 
-```
-src/doc_quality/
-  core/
-    config.py           — pydantic-settings (Settings class, get_settings)
-    logging_config.py   — structlog JSON configuration
-    security.py         — bleach sanitisation, filename validation, file size limits
-  models/
-    document.py         — DocumentAnalysisResult, DocumentSection, DocumentType, DocumentStatus
-    compliance.py       — ComplianceCheckResult, ComplianceRequirement, ProductDomainInfo,
-                          RiskLevel, AIActRole, ComplianceFramework
-    report.py           — ReportResult, ReportMetadata
-    review.py           — ReviewRecord, ModificationRequest, ReviewStatus, ReviewVerdict
-  services/
-    document_analyzer.py    — analyze_document, analyze_arc42_document, analyze_model_card,
-                               detect_document_type, _check_sections
-    compliance_checker.py   — check_eu_ai_act_compliance, determine_ai_act_risk_level,
-                               detect_role, get_applicable_regulations
-    template_manager.py     — list_templates, get_template, get_active_templates
-    report_generator.py     — generate_report (PDF via ReportLab)
-    hitl_workflow.py        — create_review, get_review, update_review_status,
-                               list_reviews
-  agents/
-    doc_check_agent.py      — DocumentCheckAgent (wraps document_analyzer + optional Claude)
-    compliance_agent.py     — ComplianceCheckAgent (wraps compliance_checker + optional Claude)
-  api/
-    main.py                 — FastAPI app creation, lifespan, CORS, request logging
-    routes/
-      documents.py          — /api/v1/documents endpoints
-      compliance.py         — /api/v1/compliance endpoints
-      reports.py            — /api/v1/reports endpoints
-      templates.py          — /api/v1/templates endpoints
-```
+**SOP Author Agent (The Process Engineer)**
+- **Role:** Regulatory Operations Specialist
+- **Goal:** Write a Standard Operating Procedure explaining how engineering must fill the templates and what evidence to collect.
+- **Backstory:** Expert in Quality Management Systems (QMS) and SOP design.
+- **Tools:** Procedure flow description generator, evidence requirements builder.
 
-### 3.3 Integration Architecture
+**Compliance Checker Agent (The Auditor)**
+- **Role:** Governance Auditor
+- **Goal:** Verify if a filled artifact (arc42 doc / Risk Assessment) meets the criteria defined in the SOP and original rule packs.
+- **Backstory:** Skeptical reviewer with expert-level knowledge of gap analysis.
+- **Tools:** arc42 structural analyzer, NVIDIA Nemotron-Parse ingestion tool.
+
+### 3.2 System Architecture & Traceability
 
 ```
-Frontend (HTML/CSS/JS)
-    │ fetch() API calls
+Frontend (Modern UI)
+    │ 
     ▼
-FastAPI (uvicorn)
-    │ Pydantic v2 request/response validation
-    ├── DocumentRouter → DocumentAnalyzerService → [DocCheckAgent (optional LLM)]
-    ├── ComplianceRouter → ComplianceCheckerService → [ComplianceAgent (optional LLM)]
-    ├── ReportsRouter → ReportGeneratorService → ReportLab → PDF file
-    └── TemplatesRouter → TemplateManagerService → filesystem
+FastAPI Backend (Python 3.12)
+    │ 
+    ├── CrewAI Workers → [Classifier | Author | Auditor]
+    │       │ 
+    │       └── NVIDIA Nemotron-Parse (VLM-based PDF Ingestion)
+    │ 
+    ├── Persistence: PostgreSQL (Audit history, decision snapshots, model versions)
+    │ 
+    └── Reporting Layer: ReportLab / Jinja2 (PDF generation with embedded metadata)
 ```
 
-### 3.4 Security Requirements
+### 3.3 Security & Explainability Requirements
 
-| Requirement | Implementation | Standard |
-|-------------|---------------|----------|
-| XSS prevention | `bleach.clean()` on all user text inputs | OWASP Top 10 A03 |
-| Path traversal prevention | `validate_filename()` regex whitelist | OWASP Top 10 A01 |
-| File size limits | `validate_file_size()` enforcement | DoS prevention |
-| No PII in logs | structlog event field sanitisation | GDPR Art. 25 |
-| CORS restriction | Explicit allowed origins list | Browser security |
-| Input length limits | Pydantic field validators | Injection prevention |
+| Requirement | Implementation Detail | Governance Standard |
+|-------------|-----------------------|---------------------|
+| **Reproducibility** | Finalized records in PostgreSQL (inputs, models, reasoning). | EU AI Act Art. 12 |
+| **Data Persistence** | All HITL reviews and modification requests stored in DB from MVP. | Compliance Governance |
+| **Performance** | PostgreSQL optimized for audit log retrieval and reporting. | Scalability |
+| **Explainable Rationale** | Agents must cite specific criteria (e.g., EU AI Act Art. 9 §2) for every decision. | Transparency Principle |
+| **Secure VLM Ingestion** | NVIDIA Nemotron-Parse for complex format ingestion (tables, flowcharts). | BSI Security Guidelines |
+| **HITL Control** | Mandatory Q&R human-approval step for all agent-generated artifacts. | EU AI Act Art. 14 |
+| **OWASP LLM Security** | Sanitization and defense against prompt injection (bleach, input validation). | OWASP Top 10 for LLMs |
+| **File size Limits** | validate_file_size() enforcement | DoS prevention |
+| **No PII in logs** | structlog event field sanitisation | GDPR Art. 25 |
+| **Input length limits** | Pydantic field validators | Injection prevention |
+| **CORS restriction** | Explicit allowed origins list | Browser security |
+| **Traceable Audit trail** | Unified audit logging for system actions and user decisions. | German Compliance Laws |
+
+### Security Requirements (Review Update)
+
+The application must:
+- Mitigate OWASP Top 10 AI security risks (prompt injection, insecure model usage, data leakage, supply chain vulnerabilities).
+- Run agents in a sandboxed environment to prevent unauthorized access and privilege escalation.
+- Enforce user authentication and role-based authorization for all sensitive features and data.
+- Maintain audit logs for user actions and system events.
+- Require all releases to pass unit tests, integration tests, and user acceptance tests before deployment, with documented test coverage and results.
 
 ---
 
@@ -211,95 +207,47 @@ FastAPI (uvicorn)
 - **P1 (Enhanced, should-have):** Second milestone priority
 - **P2 (Future, could-have):** Backlog, not committed
 
-### P0 — MVP Requirements
+### P0 — MVP Requirements (The Governance Copilot)
 
-**F1: Document Upload and Analysis**
-- Accept file upload (PDF, DOCX, MD, TXT) via `POST /api/v1/documents/upload`
-- Accept text content directly via `POST /api/v1/documents/analyze`
-- Auto-detect document type (arc42, model card, SOP, requirements, risk assessment)
-- Return `DocumentAnalysisResult` with: document type, sections found/missing, UML diagrams detected, quality score, issues list, recommendations list
-- File size limit: configurable (default 10 MB)
-- Filename validation: alphanumeric + dots/hyphens/underscores only
-- All text content sanitised with bleach before processing
+**F0: Dynamic Workflow Orchestration (The Manager)**
+- **Orchestration Agent:** Implements conditional logic for branching workflows.
+- **Workflow Routing:** If `Risk Level == High`, trigger mandatory **Artifact Generation** (F2) and **Compliance Check** (F3). 
+- **Exemption Handling:** If `Exempt (e.g., pure R&D)`, terminate with an Exemption Certificate generation.
 
-**F2: arc42 Compliance Check**
-- Check for all 12 required arc42 sections by name pattern matching (case-insensitive)
-- Detect presence of UML diagram types (system context, component, sequence, class, deployment)
-- Calculate completeness score: `sections_found / 12 * 100`
-- Return status: `complete` (all 12 present) | `partial` (some missing) | `incomplete` (<50% present) | `invalid`
-- List missing sections with specific, actionable recommendations per missing section
+**F1: AI Use-Case Intake & Classification (The "Push" Workflow)**
+- **Classifier Agent:** Automates risk classification (EU AI Act risk level) with cited reasoning.
+- **Rule Engine:** Maps applicable obligations (GDPR, NIS2, BSI TR-03185).
 
-**F3: Model Card Compliance Check**
-- Check for all 9 required model card sections
-- Flag EU AI Act-specific fields: intended use, limitations, ethical considerations, training data
-- Return completeness score and missing sections
-- Detect model card document type from content/filename heuristics
+**F2: Artifact Generation (Templates & SOPs)**
+- **Template Author Agent:** Drafts a tailored Risk Assessment Template.
+- **SOP Author Agent:** Drafts an SOP describing responsibilities and evidence requirements.
 
-**F4: EU AI Act Compliance Assessment**
-- Evaluate document against all 9 mandatory EU AI Act requirements (EUAIA-1 through EUAIA-9)
-- Classify AI system risk level: `prohibited` | `high` | `limited` | `minimal`
-- Detect role: `provider` | `deployer` | `distributor` | `importer` | `unknown`
-- Return gap list (requirements not met) and met list (requirements evidenced in document)
-- Use `ProductDomainInfo` input: domain name, description, uses_ai_ml flag, intended_use
-- Risk classification based on domain keywords matching EU AI Act Annex III categories
+**F3: arc42 structural analysis & Compliance Check (The "Pull" Workflow)**
+- **Compliance Checker Agent:** Performs 12-section arc42 check and regulatory requirement cross-check.
+- **Nemotron Worker:** Uses NVIDIA Nemotron-Parse to ingest complex forms/tables from PDFs.
 
-**F5: PDF Report Generation**
-- Generate PDF via ReportLab from `DocumentAnalysisResult` + `ComplianceCheckResult`
-- Report includes: title page, document metadata, section checklist, compliance score, gaps list, recommendations, reviewer information (if HITL completed)
-- `POST /api/v1/reports/generate` → returns `ReportResult` with report ID and file path
-- `GET /api/v1/reports/download/{report_id}` → returns PDF as `application/pdf`
-- Reports stored in `reports/` directory on filesystem
+**F4: Reproducibility Repository & History Tracking**
+- **Persistence:** PostgreSQL history per artifact (inputs, timestamps, Agent tool call snapshots, reasoning).
+- **View:** A dedicated "History & Reproducibility" page in the UI.
 
-**F6: SOP Template Management**
-- `GET /api/v1/templates/` → list all templates with metadata (ID, title, category, status, description)
-- `GET /api/v1/templates/{template_id}` → return template content (markdown text) + metadata
-- 6 active templates: `business_goals`, `stakeholders`, `architecture`, `quality_requirements`, `risk_assessment`, `glossary`
-- Inactive templates return placeholder content explaining why they are not yet active
-- Templates loaded from `templates/sop/` filesystem directory
+**F5: HITL Review & Approval Workflow**
+- **Audit Trial:** Record reviewer name, decision, and rationale into metadata.
+- **Modification Request:** Structured, section-based modifications for authors.
 
-**F7: HITL Review Workflow**
-- `POST /api/v1/compliance/review` → create review record (reviewer name, verdict, modification requests)
-- `GET /api/v1/compliance/review/{review_id}` → get review record
-- `PUT /api/v1/compliance/review/{review_id}` → update review status
-- `GET /api/v1/compliance/reviews` → list all reviews
-- Verdicts: `pass` | `modifications_needed`
-- Modification requests: structured objects with `section_name`, `description`, `priority` (critical/high/medium/low)
-- Review records include: ID, reviewer name, document ID, verdict, timestamp, modification requests, status
+**F6: Audit-Ready PDF Evidence Export**
+- **Implementation:** ReportLab-driven PDF with embedded traceability metadata and review history.
 
 ### P1 — Enhanced Requirements
 
-**F8: Domain-Specific Regulation Detection**
-- `POST /api/v1/compliance/applicable-regulations` → detect which regulations apply based on domain info
-- Support: EU AI Act (mandatory if AI/ML), MDR (medical devices), GDPR (personal data), ISO 9001 (quality management), ISO 27001 (information security), BSI Grundschutz
-- Return prioritised list of applicable regulations with brief rationale
+**F7: Enterprise Rule Packs:** Configurable logic for organization-specific standards.
+**F8: Multi-Framework Synthesis:** Unified gap analysis across EU AI Act, GDPR, and BSI.
+**F9: Continuous Improvement Hooks:** Feedback mechanism for Q&R per agent inaccuracies.
 
-**F9: LLM-Enriched Analysis**
-- Optional Anthropic Claude integration (activated by `ANTHROPIC_API_KEY` environment variable)
-- When enabled: agents use Claude for semantic gap detection beyond keyword matching
-- When disabled: graceful fallback to rule-based analysis only
-- Structured prompt templates for arc42 analysis and EU AI Act assessment
-- Response parsing into standard `DocumentAnalysisResult` / `ComplianceCheckResult` models
+### P2 — Future Requirements (Phase 3+)
 
-**F10: Dashboard with Review History**
-- Frontend Reports tab displays review history (reviewer, document, verdict, timestamp)
-- Status tracking: `pending` | `in_review` | `approved` | `rejected` | `revision_requested`
-- Searchable/filterable review list
-
-### P2 — Future Requirements
-
-**F11: Additional Document Types**
-- Requirements specification documents (IEEE 830 / ISO 29148 sections)
-- Test strategy documents (ISO 29119 sections)
-- Deployment architecture documents
-
-**F12: Multi-User Authentication**
-- OAuth2 / API key authentication
-- Role-based access: QM Lead (full access), Architect (submit docs, view own reviews), Auditor (read-only PDF access)
-
-**F13: Database Persistence**
-- SQLite (Phase 2) → PostgreSQL (Phase 3) for review records and report metadata
-- Configurable via `DATABASE_URL` environment variable
-- Migration path from in-memory to database transparent to service layer
+**F10: ALM Integration (Jira/Confluence):** Direct sync of modification requests.
+**F11: Full MDR (Medical) Automation:** End-to-end documentation for high-class medical devices.
+**F12: Multi-User RBAC (Role-Based Access Control):** Enterprise security (OAuth2/LDAP).
 
 ---
 
@@ -346,40 +294,64 @@ FastAPI (uvicorn)
 
 ## Section 6 – UX Design Requirements
 
-### 6.1 Tab-Based Dashboard Layout
+### 6.1 Modern Multi-Page Architecture (SOTA UX)
 
-```
-┌────────────────────────────────────────────────────────────┐
-│  Doc Quality & Compliance Check          v0.1.0            │
-├────────────────────────────────────────────────────────────┤
-│  [Document Analysis] [Compliance Check] [Templates] [Reports]│
-├────────────────────────────────────────────────────────────┤
-│                      Tab Content Area                       │
-│                                                             │
-└────────────────────────────────────────────────────────────┘
-```
+The system transitions from a legacy tab-based design to a **State-of-the-Art (SOTA) Multi-Page Experience**. The UI follows the **"Focus & Flow"** principle, where each step of the governance process is an isolated, high-intent page.
 
-### 6.2 Document Analysis Tab
+#### 6.1.1 Aesthetic & Theme
+- **Theme:** "Deep Governance" (Dark/Light hybrid, slate-900 backgrounds with emerald-500 accents).
+- **Typography:** Inter (Sans-serif) for high legibility in complex legal tables.
+- **Components:** Shadow-heavy cards, blur-effect glassmorphism sidebars, and micro-interactions for agent status transitions.
 
-- **Input area:** File upload button (accepts .md, .txt, .pdf, .docx) + freeform text area for paste
-- **Document type selector:** Auto-detect or manual override (arc42, model card, SOP)
-- **Results panel:** Section checklist table (section name | found/missing | status icon), quality score badge, issues list, recommendations list
-- **Loading state:** Spinner while waiting for analysis response
-- **Error state:** Inline error message with HTTP status and detail
+### 6.2 Page 1: The Command Center (Landing/Intake)
+- **Hero Area:** "Start New Compliance Bridge" — High-contrast CTA.
+- **Project Selection:** Grid of active compliance projects with "Health Score" donuts.
+- **Quick Links:** Access to recent SOPs, high-risk flags, and audit summaries.
 
-### 6.3 Compliance Check Tab
+### 6.3 Page 2: The Bridge (Orchestration & Intake)
+- **Multi-Step Stepper UI:** Logic-aware progress bar (Intake -> Classification -> Branching -> Result).
+- **VLM Ingestion Area:** Drag-and-drop zone for regulatory PDFs. 
+- **Agent Reasoning Window:** A sidebar showing the **Orchestrator's** live thought process (e.g., "Analyzing Art. 6(1) for High-Risk classification...").
+- **Classification Verdict:** Large, centered card showing the Risk Tier (High/Limited/Minimal) + "Why?" explanation citing regulations.
 
-- **Input form:** Domain name, domain description, uses AI/ML checkbox (yes/no), intended use text area
-- **Results panel:** Risk level badge (colour-coded: red=high, orange=limited, green=minimal), role badge (provider/deployer), requirements table (ID | title | met/gap | description), gap list, met requirements list
-- **Applicable regulations:** Expandable section showing detected applicable frameworks
+### 6.4 Page 3: The Artifact Lab (Generation / Push)
+- **Split-View Editor:** 
+    - **Left:** The generated arc42/SOP/Risk Assessment (Markdown preview).
+    - **Right:** Compliance citations (Linked directly to Section 1.1, 2.3, etc.).
+- **Agent Chat Overlay:** "Ask the Author" — Inline chat to refine specific generated sections.
+- **Export Center:** One-click export to PDF, MD, or internal wiki formats.
 
-### 6.4 Templates Tab
+### 6.5 Page 4: The Auditor Vault (Compliance Check / Pull)
+- **Evidence Comparison View:** Side-by-side comparison of "Technical Artifact" vs. "Regulatory SOP".
+- **Gap Matrix:** A heat-map visualization showing which SOP requirements are missing evidence.
+- **Verdict Controls:** "Approve", "Request Revision", or "Escalate" buttons for the Human-in-the-loop (HITL).
 
-- **Template grid:** Card layout with template title, category, status badge (active/inactive), brief description
-- **Template detail modal:** Full markdown content rendered in modal, download button
-- **Active/inactive distinction:** Inactive templates show placeholder content and "Coming soon" indicator
+### 6.6 Page 5: The Audit Trail (Postgres Transparency)
+- **Timeline View:** A vertical chronological log of every agent decision, tool call, and user intervention.
+- **Provenance Search:** Deep search across the **Reproducibility Repository** (e.g., "Show all decisions made using Nemotron-Parse on 2025-05-10").
+- **Immutable Export:** Generate a cryptographically signed "Compliance Certificate" (v2+).
 
-### 6.5 Reports Tab
+---
+
+### Additional Risk Management Requirements
+
+The system must provide:
+- **General Risk Management Record (Company-wide):**
+  - Structured according to Table 1 (Riskmanagement File).
+  - Covers all required topics for company governance and audit readiness.
+  - Links to supporting documents for notified body audits and ISO certification.
+
+- **Product-Specific Risk Management Record:**
+  - Structured according to Table 2 (Documentation of specific Product Risk-Handling).
+  - Tracks risk analysis, mitigation, and verification for each product.
+  - Supports traceability for high-risk products, including complaint resolution and expert review.
+
+Both document types must be:
+- Created, updated, and approved via HITL workflow (with timestamps and responsible person).
+- Linked to technical templates (arc42, SOPs) and QM-specific documentation.
+- Ready for external audits and regulatory certification.
+
+---
 
 - **Generate report form:** Document ID input + compliance check ID input
 - **Download button:** Opens PDF in new tab or triggers download
@@ -426,45 +398,11 @@ FastAPI (uvicorn)
 
 ---
 
-## Section 8 – Implementation Strategy
+## Section 8 – Implementation Strategy (Weeks 1–6)
 
-### Phase 1 (Weeks 1–2): Core Document Analysis
-
-**Deliverables:**
-- `src/doc_quality/core/` — config, logging, security
-- `src/doc_quality/models/document.py` — DocumentAnalysisResult, DocumentType
-- `src/doc_quality/services/document_analyzer.py` — analyze_arc42_document, detect_document_type
-- `src/doc_quality/api/routes/documents.py` — POST /analyze, POST /upload
-- Unit tests: test_document_analyzer.py (7 tests)
-
-**Success criteria:** `POST /api/v1/documents/analyze` returns section checklist for an arc42 document
-
-### Phase 2 (Weeks 3–4): EU AI Act Checker + PDF Reports
-
-**Deliverables:**
-- `src/doc_quality/models/compliance.py` — ComplianceCheckResult, RiskLevel, AIActRole
-- `src/doc_quality/services/compliance_checker.py` — check_eu_ai_act_compliance
-- `src/doc_quality/models/report.py` — ReportResult
-- `src/doc_quality/services/report_generator.py` — PDF generation via ReportLab
-- `src/doc_quality/api/routes/compliance.py` — POST /check/eu-ai-act, POST /applicable-regulations
-- `src/doc_quality/api/routes/reports.py` — POST /generate, GET /download/{id}
-- Unit tests: test_compliance_checker.py (6 tests), test_report_generator.py (3 tests)
-
-**Success criteria:** Full round-trip from domain info → compliance check → PDF report download
-
-### Phase 3 (Weeks 5–6): SOP Templates + HITL + Frontend
-
-**Deliverables:**
-- `templates/sop/` — 6 SOP markdown files
-- `src/doc_quality/services/template_manager.py` — list/get templates
-- `src/doc_quality/models/review.py` — ReviewRecord, ModificationRequest
-- `src/doc_quality/services/hitl_workflow.py` — create/get/update/list reviews
-- `src/doc_quality/api/routes/templates.py` — GET /templates/, GET /templates/{id}
-- `frontend/` — HTML/CSS/JS dashboard (4 tabs)
-- Unit tests: test_template_manager.py (8 tests), test_hitl_workflow.py (6 tests)
-- AI agents: `src/doc_quality/agents/` — DocCheckAgent, ComplianceAgent
-
-**Success criteria:** Full frontend dashboard working; 30 tests passing; HITL workflow complete
+- **Week 1-2:** Core multi-agent pipeline (Classifier & Author) + Use-case intake UI.
+- **Week 3-4:** Compliance Checker agent (The "Pull") + NVIDIA Nemotron-Parse integration.
+- **Week 5-6:** PostgreSQL History Repository + HITL workflow + PDF Audit Export.
 
 ---
 
@@ -555,7 +493,7 @@ FastAPI (uvicorn)
 3. **PDF signature:** Should generated PDF reports include a cryptographic signature for audit submission integrity? (Candidate library: pyhanko)
 4. **Authentication design:** When Phase 2 introduces authentication, should it be OAuth2 (SSO integration), API keys, or basic auth?
 5. **Review record retention:** EU AI Act Art. 72 implies multi-year post-market monitoring; what is the required retention period for HITL review records?
-6. **LLM accuracy metrics:** How will we measure the accuracy of Claude-enriched analysis vs. rule-based baseline? (Proposed: human-annotated benchmark set of 50 arc42 documents)
+6. **LLM accuracy metrics:** How will we measure the accuracy of LLM-enriched analysis vs. rule-based baseline? (Proposed: human-annotated benchmark set of 50 arc42 documents)
 7. **Template versioning:** When SOP templates are updated to reflect new regulation guidance, how are document authors notified of template changes?
 
 ---
@@ -564,10 +502,10 @@ FastAPI (uvicorn)
 
 ```
 persona=product-mgr
-action=create-prd
-timestamp=2025-02-23
+action=update-prd-v0.7.0-agentic-ux
+timestamp=2026-03-15
 adapter=AAMAD-vscode
 artifact=project-context/1.define/product-requirements-document.md
-version=0.1.0
+version=0.7.0
 status=complete
 ```

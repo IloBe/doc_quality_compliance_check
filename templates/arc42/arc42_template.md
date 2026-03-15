@@ -9,6 +9,8 @@
 > This template follows the arc42 documentation structure (https://arc42.org).
 > arc42 is licensed under the Creative Commons Attribution 4.0 license.
 
+> For the MVP, arc42 architecture documentation we use file-based formats only, relying on stable reviewed versions. The app shall check the appropriate version. User gets a message if the format and structure has changed to handle the existing versions appropriately for certifications and audits. The official download page is: https://arc42.org/download
+
 ---
 
 ## 1. Introduction and Goals
@@ -273,3 +275,22 @@ Quality
 | Version | Date | Author | Description |
 |---------|------|--------|-------------|
 | 1.0 | | | Initial arc42 template |
+
+> All templates are initially created by QM personnel, who are responsible for delivering the correct format and content, including main help description parts. This ensures that each template fulfills the expected content requirements for the assigned author (e.g., DevOps engineer adds the deployment diagram, SW Architect adds ADRs).
+> It must be possible to generate an explicit PDF file for each arc42 template section, supporting cases where sections are too large for a single file.
+
+> The arc42 architecture template includes the following elements:
+> - Introduction and Goals
+> - Constraints
+> - Context and Scope
+> - Solution Strategy
+> - Building Block View
+> - Runtime View
+> - Deployment View
+> - Crosscutting Concepts
+> - Architectural Decisions
+> - Quality Requirements
+> - Risks and Technical Debt
+> - Glossary
+>
+> In the UI and navigation panel, these items shall be available as subitems under the arc42 element together. By click on a subitem, the associated part of the arc42 template shall be visible.
