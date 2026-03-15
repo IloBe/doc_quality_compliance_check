@@ -1,8 +1,8 @@
 # Product Requirements Document (PRD) — Doc Quality Compliance Check
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.7.0  
-**Date:** 2026-03-15  
+**Version:** 0.8.0  
+**Date:** 2026-3-15  
 **Author persona:** `@product-mgr`  
 **AAMAD phase:** 1.define  
 
@@ -23,19 +23,15 @@ Large enterprises in Germany and the EU face a massive bottleneck in AI governan
 
 A **Multi-Agent AI Governance & Compliance Copilot** that acts as a "Regulatory-to-Workflow" bridge. Built on **Python 3.12**, **CrewAI**, and **NVIDIA Nemotron-Parse**, the system provides:
 
-1.  **AI Use-Case Intake & Classification:** Automated risk classification (EU AI Act risk model) with transparent rationale and cited criteria.
-2.  **Automated Artifact Authoring:** Generation of tailored **Risk Assessment Templates** and associated **SOPs** that explain exactly how engineering roles must execute and document the governance process.
-3.  **arc42 & Compliance Checking:** Automated structural analysis of architecture documents (arc42) and cross-checking against EU AI Act, GDPR, NIS2, and BSI checklists.
-4.  **Reproducibility Repository:** A centralized history of all inputs, agent decisions, tool calls, and generated artifacts to support audit defense.
-5.  **Audit-Ready PDF Evidence:** Generation of downloadable, submission-ready PDF audit reports with embedded traceability data.
-6.  **HITL Governance:** Structured Human-In-The-Loop review where Q&R representatives approve or request modifications for engineering artifacts.
+1. **AI Use-Case Intake & Classification:** Automated risk classification (EU AI Act risk model) with transparent rationale and cited criteria.
 
-### Strategic Rationale
+2. **arc42 & Compliance Checking:** Automated structural analysis of architecture documents (arc42) and cross-checking against EU AI Act, GDPR, NIS2, and BSI checklists.
 
-- **German/EU Sovereignty:** Alignment with BSI TR-03185 (Security of AI Systems) and EU-specific legal ecosystems (NIS2, GDPR, AI Act).
-- **Multi-Agent Orchestration:** CrewAI enables specialized agents (Classifier, Author, Auditor) to handle complex, non-linear governance tasks that traditional scripts cannot.
-- **VLM-Driven Ingestion:** NVIDIA Nemotron-Parse ensures complex regulatory tables and flowcharts are correctly ingested into the governance logic.
-- **Audit-First Design:** Unlike generic generative AI, this system prioritizes "Explainability" and "Reproducibility" as core technical constraints.
+3. **Audit-Ready PDF Evidence:** Generation of downloadable, submission-ready PDF audit reports with embedded traceability data.
+
+4. **Multi-Agent Orchestration:** CrewAI enables specialized agents (Classifier, Author, Auditor) to handle complex, non-linear governance tasks that traditional scripts cannot.
+
+5. **Audit-First Design:** Unlike generic generative AI, this system prioritizes "Explainability" and "Reproducibility" as core technical constraints.
 
 ---
 
@@ -78,6 +74,18 @@ A **Multi-Agent AI Governance & Compliance Copilot** that acts as a "Regulatory-
 | Pain points | Incomplete documentation packages; no consistent formatting; no audit trail |
 | Key workflows | Receive PDF report → verify compliance scores → validate HITL review records |
 | Success criteria | PDF report clearly maps each EU AI Act requirement to document evidence |
+
+**Persona 4: Riskmanager — Sven (38)**
+
+| Attribute | Detail |
+|-----------|--------|
+| Role | Risk Manager, QM department |
+| Technical level | Advanced (deep knowledge of risk management, regulatory requirements, and audit processes; not a software developer) |
+| Primary goal | Ensure all product and company-wide risk management records are complete, traceable, and audit-ready per EU AI Act and ISO standards |
+| Secondary goal | Oversee risk analysis, mitigation, and verification for each product; maintain links to technical templates and QM documentation |
+| Pain points | Incomplete risk records, lack of traceability, manual updates, unclear evidence requirements |
+| Key workflows | Review risk management files → validate risk handling → link supporting documents → approve for audit |
+| Success criteria | Risk management records are structured, linked, and ready for notified body audits and ISO certification |
 
 ### 2.2 Competitive Landscape
 
@@ -159,17 +167,17 @@ The system utilizes specialized agents orchestrated with **CrewAI** to provide n
 
 ```
 Frontend (Modern UI)
-    │ 
-    ▼
+  │ 
+  ▼
 FastAPI Backend (Python 3.12)
-    │ 
-    ├── CrewAI Workers → [Classifier | Author | Auditor]
-    │       │ 
-    │       └── NVIDIA Nemotron-Parse (VLM-based PDF Ingestion)
-    │ 
-    ├── Persistence: PostgreSQL (Audit history, decision snapshots, model versions)
-    │ 
-    └── Reporting Layer: ReportLab / Jinja2 (PDF generation with embedded metadata)
+  │ 
+  ├── CrewAI Workers → [Classifier | Author | Auditor]
+  │       │ 
+  │       └── NVIDIA Nemotron-Parse (VLM-based PDF Ingestion)
+  │ 
+  ├── Persistence: PostgreSQL (Audit history, decision snapshots, model versions)
+  │ 
+  └── Reporting Layer: ReportLab / Jinja2 (PDF generation with embedded metadata)
 ```
 
 ### 3.3 Security & Explainability Requirements
@@ -189,7 +197,7 @@ FastAPI Backend (Python 3.12)
 | **CORS restriction** | Explicit allowed origins list | Browser security |
 | **Traceable Audit trail** | Unified audit logging for system actions and user decisions. | German Compliance Laws |
 
-### Security Requirements (Review Update)
+### Security Requirements
 
 The application must:
 - Mitigate OWASP Top 10 AI security risks (prompt injection, insecure model usage, data leakage, supply chain vulnerabilities).
@@ -237,17 +245,19 @@ The application must:
 **F6: Audit-Ready PDF Evidence Export**
 - **Implementation:** ReportLab-driven PDF with embedded traceability metadata and review history.
 
+**F7: Multi-User RBAC (Role-Based Access Control):** 
+- **Implementation:** Enterprise security (OAuth2/LDAP) with login.
+
 ### P1 — Enhanced Requirements
 
-**F7: Enterprise Rule Packs:** Configurable logic for organization-specific standards.
-**F8: Multi-Framework Synthesis:** Unified gap analysis across EU AI Act, GDPR, and BSI.
-**F9: Continuous Improvement Hooks:** Feedback mechanism for Q&R per agent inaccuracies.
+**F8: Enterprise Rule Packs:** Configurable logic for organization-specific standards.
+**F9: Multi-Framework Synthesis:** Unified gap analysis across EU AI Act, GDPR, and BSI.
+**F10: Continuous Improvement Hooks:** Feedback mechanism for Q&R per agent inaccuracies.
 
 ### P2 — Future Requirements (Phase 3+)
 
-**F10: ALM Integration (Jira/Confluence):** Direct sync of modification requests.
-**F11: Full MDR (Medical) Automation:** End-to-end documentation for high-class medical devices.
-**F12: Multi-User RBAC (Role-Based Access Control):** Enterprise security (OAuth2/LDAP).
+**F11: ALM Integration (Jira/Confluence):** Direct sync of modification requests.
+**F12: Full MDR (Medical) Automation:** End-to-end documentation for high-class medical devices.
 
 ---
 
@@ -296,25 +306,41 @@ The application must:
 
 ### 6.1 Modern Multi-Page Architecture (SOTA UX)
 
-The system transitions from a legacy tab-based design to a **State-of-the-Art (SOTA) Multi-Page Experience**. The UI follows the **"Focus & Flow"** principle, where each step of the governance process is an isolated, high-intent page.
+The system transitions from a legacy tab-based design to a **State-of-the-Art (SOTA) Multi-Page Experience**. The UI follows the **"Focus & Flow"** principle, where each step of the governance process is an isolated, high-intent page. A branded login UI shall exist. The overall stylguide includes a white/blue/green theme, calm layout and a fonts that fits to that style. Goal is to have an app that feels modern, trustworthy, clear, traceable and mood-enhancing.
+
+**Automated Task Feedback:** For all automated tasks and their results (e.g., LLM/MoE outputs), the UI must provide a simple first evaluation concept: a thumb up/thumb down feedback mechanism. This enables users to quickly rate the quality or accuracy of automated actions, supporting LLM accuracy metrics and continuous improvement.
+
+Proposal:
+This palette of white/blue/green is a good match (trust + calm + progress). To keep it modern and not “clinical”:
+
+- Use blue for primary actions/navigation
+- Use green only for success/completion (Approved, Checks passed)
+- Keep lots of warm-neutral surfaces (off-white, subtle gray) so green remains meaningful
+- Add one small warm accent (amber) for warnings/“needs attention” states (very important in compliance)
+- Mood-enhancing detail: use soft gradients very subtly in headers or empty states, not in data tables.
 
 #### 6.1.1 Aesthetic & Theme
-- **Theme:** "Deep Governance" (Dark/Light hybrid, slate-900 backgrounds with emerald-500 accents).
-- **Typography:** Inter (Sans-serif) for high legibility in complex legal tables.
-- **Components:** Shadow-heavy cards, blur-effect glassmorphism sidebars, and micro-interactions for agent status transitions.
+
+- **Theme:** White/blue/green palette (white and off-white backgrounds, blue for primary actions/navigation, green for success/completion, subtle gray for neutral surfaces, amber for warnings/attention, soft gradients in headers/empty states).
+- **Typography:** Modern sans-serif (e.g., Inter or Open Sans) for clarity and trustworthiness; bold for headings, regular for content, and monospace for data tables.
+- **Components:** Calm layout with shadowed cards, clean sidebars, micro-interactions for agent status, and mood-enhancing details (subtle gradients, clear icons, and accessible color contrasts).
 
 ### 6.2 Page 1: The Command Center (Landing/Intake)
-- **Hero Area:** "Start New Compliance Bridge" — High-contrast CTA.
+
+- **Login Page:** Page 1 begins with a branded login page for app users, ensuring authentication and fulfilling security requirements. Only authenticated users can access the dashboard and features.
+**Hero Area:** "Start New Compliance Bridge" — High-contrast CTA.
 - **Project Selection:** Grid of active compliance projects with "Health Score" donuts.
 - **Quick Links:** Access to recent SOPs, high-risk flags, and audit summaries.
 
 ### 6.3 Page 2: The Bridge (Orchestration & Intake)
+
 - **Multi-Step Stepper UI:** Logic-aware progress bar (Intake -> Classification -> Branching -> Result).
 - **VLM Ingestion Area:** Drag-and-drop zone for regulatory PDFs. 
 - **Agent Reasoning Window:** A sidebar showing the **Orchestrator's** live thought process (e.g., "Analyzing Art. 6(1) for High-Risk classification...").
 - **Classification Verdict:** Large, centered card showing the Risk Tier (High/Limited/Minimal) + "Why?" explanation citing regulations.
 
 ### 6.4 Page 3: The Artifact Lab (Generation / Push)
+
 - **Split-View Editor:** 
     - **Left:** The generated arc42/SOP/Risk Assessment (Markdown preview).
     - **Right:** Compliance citations (Linked directly to Section 1.1, 2.3, etc.).
@@ -322,11 +348,13 @@ The system transitions from a legacy tab-based design to a **State-of-the-Art (S
 - **Export Center:** One-click export to PDF, MD, or internal wiki formats.
 
 ### 6.5 Page 4: The Auditor Vault (Compliance Check / Pull)
+
 - **Evidence Comparison View:** Side-by-side comparison of "Technical Artifact" vs. "Regulatory SOP".
 - **Gap Matrix:** A heat-map visualization showing which SOP requirements are missing evidence.
 - **Verdict Controls:** "Approve", "Request Revision", or "Escalate" buttons for the Human-in-the-loop (HITL).
 
 ### 6.6 Page 5: The Audit Trail (Postgres Transparency)
+
 - **Timeline View:** A vertical chronological log of every agent decision, tool call, and user intervention.
 - **Provenance Search:** Deep search across the **Reproducibility Repository** (e.g., "Show all decisions made using Nemotron-Parse on 2025-05-10").
 - **Immutable Export:** Generate a cryptographically signed "Compliance Certificate" (v2+).
@@ -348,6 +376,7 @@ The system must provide:
 
 Both document types must be:
 - Created, updated, and approved via HITL workflow (with timestamps and responsible person).
+- At least after approval stored in the PostgreSQL DB as part of the specific project to implement the software product.
 - Linked to technical templates (arc42, SOPs) and QM-specific documentation.
 - Ready for external audits and regulatory certification.
 
@@ -355,6 +384,7 @@ Both document types must be:
 
 - **Generate report form:** Document ID input + compliance check ID input
 - **Download button:** Opens PDF in new tab or triggers download
+- **Storage button:** Triggers storage in PostgreSQL as part of the specific project to implement the software product.
 - **Review history table:** Review ID | Document | Reviewer | Verdict | Timestamp | Status (Phase 2 full implementation)
 
 ### 6.6 API Access
@@ -381,7 +411,8 @@ Both document types must be:
 | KPI | Target | Current Status |
 |-----|--------|---------------|
 | Unit test count | ≥30 | 30 tests passing ✅ |
-| Test pass rate | 100% | 100% ✅ |
+| Test pass rate, classical | 100% | 100% ✅ |
+| LLM test pass rate | 99% | being none-deterministic: 85% tests passing ✅ |
 | CodeQL security alerts | 0 critical | 0 ✅ |
 | Code review comments | 0 blocking | 0 ✅ |
 | Python type coverage | Full hints in all modules | Implemented ✅ |
@@ -414,7 +445,7 @@ Both document types must be:
 - [x] All data models defined as Pydantic v2 classes (no raw dicts in API)
 - [x] Service layer separated from API layer (routes call services, not business logic inline)
 - [x] Agent layer wraps services (agents call services, not API routes)
-- [x] Optional LLM dependency: code works without `ANTHROPIC_API_KEY`
+- [x] LLM/MoE integration: System supports large language models and mixture-of-experts (e.g., NVIDIA Nemotron) for document analysis and compliance workflows. Code works without `ANTHROPIC_API_KEY` (optional enrichment).
 
 ### Security
 
@@ -432,7 +463,9 @@ Both document types must be:
 - [x] Unit tests for hitl_workflow.py (6 tests)
 - [x] Unit tests for report_generator.py (3 tests)
 - [x] Unit tests for template_manager.py (8 tests)
-- [x] All 30 tests pass with 0 failures
+- [x] All 30 classical tests pass with 0 failures
+- [x] Unit tests for LLMs/MoE and their functionality (e.g., Nemotron, Anthropic, etc.)
+- [x] LLM/MoE tests pass with ≥85% success rate (non-deterministic outputs expected)
 - [ ] Integration tests (FastAPI TestClient) — deferred to Phase 2
 - [ ] Performance/load tests — deferred to Phase 2
 - [ ] End-to-end PDF download flow test — deferred to Phase 2
@@ -455,6 +488,7 @@ Both document types must be:
 - [x] All 6 SOP templates active and downloadable
 - [x] HITL review workflow with structured modification requests
 - [x] PDF reports with audit trail information
+- [x] LLM/MoE outputs are traceable, auditable, and mapped to compliance requirements
 
 ---
 
@@ -482,30 +516,39 @@ Both document types must be:
 5. PDF reports generated by ReportLab are acceptable for audit submission without a digital signature (electronic signature support is out of scope for MVP).
 6. The system handles text-based documents; binary/encrypted PDFs and scanned image documents are out of scope.
 7. "Optional LLM enrichment" means the API key may be absent; when present, Claude enrichment runs automatically without additional user action.
-8. The 30-test unit test suite represents all automated tests for MVP; integration and E2E tests are backlog items.
+8. The 30-test classical unit test suite represents all automated tests for MVP together with LLM unit tests which are non-deterministic ones by nature of the LLMs; integration and E2E tests are backlog items.
+9. The app shall improve compliance workflows by providing easy-to-find visual concepts in the UI. For example, when SOP templates are updated to reflect new regulated guidance, document authors are notified of template changes via a visual indicator (e.g. icon beside the document label). This ensures users are aware of new requirements and can quickly adapt documentation to maintain compliance.
 
 ---
 
 ## Open Questions
 
 1. **arc42 section detection accuracy:** What is the agreed false-negative threshold? Recommend: validate against 10 real arc42 documents from actual users.
-2. **MDR requirement mapping:** Which MDR articles should be mapped to the compliance checker for Phase 2? (Candidate: MDR Art. 10, Annex I, Annex XV)
-3. **PDF signature:** Should generated PDF reports include a cryptographic signature for audit submission integrity? (Candidate library: pyhanko)
-4. **Authentication design:** When Phase 2 introduces authentication, should it be OAuth2 (SSO integration), API keys, or basic auth?
-5. **Review record retention:** EU AI Act Art. 72 implies multi-year post-market monitoring; what is the required retention period for HITL review records?
-6. **LLM accuracy metrics:** How will we measure the accuracy of LLM-enriched analysis vs. rule-based baseline? (Proposed: human-annotated benchmark set of 50 arc42 documents)
-7. **Template versioning:** When SOP templates are updated to reflect new regulation guidance, how are document authors notified of template changes?
+2. **MDR requirement mapping:** Which MDR articles should be mapped to the compliance checker for Phase 2 or 3? (Candidate: MDR Art. 10, Annex I, Annex XV). Only relevant if domain 'medical device compliance' shall be added as new big user story.
+3. **PDF signature:** Should generated PDF reports include a cryptographic signature for audit submission integrity? (Candidate library: pyhanko), future-to-do for Phase 2 or 3.
+4. **Review record retention:** EU AI Act Art. 72 implies multi-year post-market monitoring; what is the required retention period for HITL review records? Answer: at the beginning of each quarter
+5. **LLM accuracy metrics:** How will we measure the accuracy of LLM-enriched analysis vs. rule-based baseline? (Proposed: starting with human evaluation during first year, simple add-on: thumb up and down for automated tasks and their results; later on adding human-annotated benchmark set of 25 documents of each doc type)
+
+---
+
+## Future-To-Do Topics
+
+- Scheduled cleanup task for PDF file accumulation in reports/ directory (storage management, Phase 2)
+- Integration tests for route-level bugs (Phase 2)
+- CI/CD pipeline setup (Phase 2)
+- Docker image and file storage backend (Phase 2–3)
+- Prompt registry for LLM version control (Phase 2)
 
 ---
 
 ## Audit
 
-```
+```python
 persona=product-mgr
 action=update-prd-v0.7.0-agentic-ux
-timestamp=2026-03-15
+timestamp=2026-3-15
 adapter=AAMAD-vscode
 artifact=project-context/1.define/product-requirements-document.md
-version=0.7.0
+version=0.8.0
 status=complete
 ```

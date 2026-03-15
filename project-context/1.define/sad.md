@@ -1,8 +1,8 @@
 # System Architecture Document (SAD) — Doc Quality Compliance Check
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.7.0  
-**Date:** 2026-03-15  
+**Version:** 0.8.0  
+**Date:** 2026-3-15  
 **Author persona:** `@system-arch`  
 **Standard:** ISO/IEC/IEEE 42010:2022 — Architecture Description  
 **AAMAD phase:** 1.define  
@@ -57,7 +57,22 @@ Human-In-The-Loop review is treated as a **first-class architectural component**
   3. All HITL participants are part of the QM department; for high risk products/issues, a certified Riskmanager should be responsible for risk management and approval.
   4. For high risk aspects, top management must be informed; by law, they hold main responsibility for QM and governance.
   5. For technical SW documents (e.g., arc42), internal review shall be performed by the development department (Senior SW engineers, SW architects, SW testers, DevOps, etc.), depending on the document's focus. After internal approval it will be send to the QM department for additional review necessary for being auditable.
+  6. HITL participant takes care of cost control information regarding model selection and usage.
 - The audit trail of review decisions is itself a compliance artefact for EU AI Act Art. 14
+
+#### Model Selection and Cost Control
+
+All models used in implementation—including classical ML, LLMs, vLMs, and MoE concept models—must be cost controlled:
+
+- Model selection considers both performance and operational cost (compute, storage, inference, licensing).
+- Cost control mechanisms include:
+  - Usage quotas and rate limits for LLM/vLM/MoE APIs.
+  - Preference for open-source or on-premise models where feasible.
+  - Monitoring and logging of model invocation frequency and resource consumption.
+  - Automated alerts for cost threshold breaches.
+  - Periodic review of model cost/performance trade-offs.
+- Model usage policies are documented and enforced in code and architecture.
+- Cost control aligns with compliance, audit, and sustainability requirements.
 
 ### 1.5 Risk Management Documentation Requirements
 
@@ -204,6 +219,7 @@ The system architecture supports a hybrid agentic decision framework combining a
 | Stakeholder | Primary Concerns | Architectural Viewpoints |
 |-------------|-----------------|-------------------------|
 | **Quality Manager (Maria)** | Documents meet EU AI Act compliance standards; audit reports are downloadable PDF; HITL review trail is auditable | Functional, Process, Deployment |
+| **Riskmanager (Sven)** | Responsible for high-risk product/issue risk management and approval; ensures compliance with EU AI Act and ISO standards; maintains audit trail and escalation logs; member of QM department | Functional, Process, Data |
 | **System Architect (Jan)** | arc42 sections complete; UML diagrams present; modification requests are actionable | Functional, Logical |
 | **Compliance Auditor (Elke)** | EU AI Act requirements correctly assessed; risk level classification is accurate; HITL trail demonstrates Art. 14 compliance | Functional, Data |
 | **Developer / ML Engineer** | SOP templates provide clear guidance; modification requests are specific (section + priority + description) | Functional |
@@ -582,10 +598,15 @@ class ReportResult(BaseModel):
 | **Maintainability** | Developer adds new arc42 section | Adds string to `ARC42_REQUIRED_SECTIONS` | Data-driven sections list |
 | **Reliability** | Anthropic API unavailable | Falls back to rule-based without error | `try/except` around all Claude calls |
 | **Reliability** | Service raises exception | Returns structured JSON error | FastAPI exception handlers |
+| **Cost Control** | Model selection and usage (ML, LLM, vLM, MoE) is monitored and limited | Quotas, rate limits, alerts, periodic review, preference for open-source/on-premise models | Usage quotas, logging, automated alerts, review policy, cost control enforcement |
 
 ---
 
 ## Section 5 – Architectural Decisions
+
+### Authentication Approach (Phase 0)
+
+For MVP/Phase 0, the architecture starts with API Key authentication for backend endpoints, providing simple and effective access control. Optionally, OAuth2 with a standard provider (e.g., Google, Microsoft, Auth0) can be added for user login and role-based access. This approach ensures traceability, auditability, and compliance with PRD/SAD requirements. LDAP/SAML for enterprise SSO is deferred to later phases as a future-to-do for large organizations.
 
 | ID | Decision | Options Considered | Chosen Option | Rationale |
 |----|----------|-------------------|--------------|-----------|
@@ -593,10 +614,10 @@ class ReportResult(BaseModel):
 | **AD-2** | Data validation library | marshmallow, Pydantic v1, Pydantic v2, attrs | **Pydantic v2** | Type safety, FastAPI native, v2 performance improvements, strict mode available, field validators |
 | **AD-3** | PDF generation | WeasyPrint, wkhtmltopdf, ReportLab, fpdf2 | **ReportLab** | Pure Python (no system-level dependencies), production-proven, rich layout control, no Chromium/Qt runtime required |
 | **AD-4** | LLM integration model | Required dependency, optional dependency, not included | **Optional dependency** | KISS: rule-based core delivers compliance value without API key; Claude adds semantic depth when available; reduces adoption friction |
-| **AD-5** | Storage backend | PostgreSQL, Redis, filesystem | **DB and Filesystem (MVP)** | For MVP: PostgreSQL DB setup and file storage, with ORM; reports/ directory for PDFs eg for exports; in-memory dict storage for reviews, consistent storage at least before reboot or shutdown or triggered by user; documented path to PostgreSQL |
+| **AD-5** | Storage backend | PostgreSQL, Redis, filesystem | **DB and Filesystem (MVP)** | For MVP: PostgreSQL DB setup and file storage, with ORM; reports/ directory for PDFs eg for exports or temporary local storage; in-memory dict storage for reviews and approved documents, Forms and SOPs, consistent storage at least before reboot or shutdown or triggered by user; documented path to PostgreSQL |
 | **AD-6** | Input sanitisation | Custom regex, OWASP sanitiser, bleach, html.escape | **bleach** | Battle-tested, OWASP-aligned, configurable allow-lists, widely used in production; no custom security code |
 | **AD-7** | Logging library | standard logging, loguru, structlog | **structlog** | JSON-structured output (required for EU AI Act Art. 12 logging compliance), processor pipeline, context binding |
-| **AD-8** | Frontend framework | React, Vue, Angular, typscript, HTML/JS | **Modern Multi-page UI** | KISS: build toolchain if necessary only, no npm, no bundler; tab navigation is simple enough for plain JS; reduces maintenance surface |
+| **AD-8** | Frontend framework | React, Vue, Angular, typscript, HTML/JS | **Modern Multi-page UI with React and tyscript** | KISS: build toolchain if necessary only, no npm, no bundler; tab navigation is simple enough for plain JS; reduces maintenance surface; changes possible according detailed frontend requirements |
 | **AD-9** | Configuration management | os.environ, python-dotenv, pydantic-settings | **pydantic-settings** | Type-safe settings, native Pydantic v2 integration, `.env` file support, validation on startup |
 | **AD-10** | Testing framework | unittest, pytest, hypothesis | **pytest** | Industry standard, rich plugin ecosystem (pytest-asyncio, pytest-cov), cleaner test syntax |
 
@@ -608,25 +629,29 @@ class ReportResult(BaseModel):
 
 | Risk ID | Risk | Probability | Impact | Mitigation | Timeline |
 |---------|------|-------------|--------|------------|----------|
-| **R-1** | In-memory review store lost on restart | **HIGH** | **MEDIUM** | Document as known limitation; SQLite persistence in Phase 2 | Phase 2 |
-| **R-2** | Anthropic API rate limits or outage | **MEDIUM** | **LOW** | Graceful fallback to rule-based implemented | Already mitigated |
-| **R-3** | Large file (>10 MB) blocks event loop | **MEDIUM** | **MEDIUM** | 10 MB limit enforced; background tasks + streaming in Phase 2 | Phase 2 |
-| **R-4** | No authentication on MVP | **MEDIUM** | **MEDIUM** | Document explicitly: MVP is internal-only deployment; auth in Phase 2 | Phase 2 |
-| **R-5** | arc42 section detection false negatives | **MEDIUM** | **MEDIUM** | Regex patterns cover common heading styles; LLM enrichment covers non-standard headings | Ongoing |
-| **R-6** | PDF file accumulation in reports/ dir | **LOW** | **LOW** | Manual cleanup; scheduled cleanup task in Phase 2 | Phase 2 |
-| **R-7** | EU AI Act guidance updates requiring rule changes | **LOW** | **HIGH** | Requirements engine is data-driven (list of dicts); updates require only data changes | On guidance release |
+| **R-1** | Approved review records (HITL, SOP, risk) not persisted to PostgreSQL DB | **HIGH** | **MEDIUM** | Mandatory: All approved records must be stored in PostgreSQL DB; no approved document is lost; enforce as architectural requirement | Immediate |
+| **R-2** | Documents (HITL reviews, SOPs, risk records) not persisted to DB at account session end (logout, app exit, shutdown) | **HIGH** | **MEDIUM** | Mandatory: All documents of mentioned types must be stored in PostgreSQL DB at session end; enforce as architectural requirement; no data loss on logout/app exit/shutdown | Immediate |
+| **R-3** | Model API rate limits or outage (Anthropic, OpenAI, vLM, MoE, etc.) | **MEDIUM** | **LOW** | Graceful fallback to rule-based core; cost control enforced for all model APIs; monitoring and alerting for outages and quota breaches | Already mitigated |
+| **R-4** | Large file (>10 MB) blocks event loop | **MEDIUM** | **MEDIUM** | 10 MB limit enforced; background tasks + streaming in Phase 2; UI feedback for file status is an architectural requirement (app user must be informed if file is too large); system improvement is a future-to-do in Phase 2 | Phase 2 |
+| **R-5** | No authentication and authorisation for app login and critical actions | **HIGH** | **HIGH** | Authentication and authorisation are mandatory for app login and all HITL, risk, and compliance workflows; enforce as architectural requirement for traceability and auditability | Immediate |
+| **R-6** | arc42 section detection false negatives | **MEDIUM** | **MEDIUM** | Regex patterns cover common heading styles; LLM enrichment covers non-standard headings; HITL review ensures completeness | Ongoing |
+| **R-7** | PDF file accumulation in local reports/ dir | **LOW** | **LOW** | Manual cleanup; scheduled cleanup task in Phase 2; UI indicator for report status | Phase 2 |
+| **R-8** | EU AI Act guidance updates requiring rule changes | **LOW** | **HIGH** | Requirements engine is data-driven (list of dicts); updates require only data changes; HITL review for regulatory changes | On guidance release |
+| **R-9** | Cost overruns from model/API usage (LLM, vLM, MoE) | **MEDIUM** | **MEDIUM** | Usage quotas, rate limits, logging, automated alerts, periodic review, preference for open-source/on-premise models | Ongoing |
+| **R-10** | HITL review not enforced for all workflows | **MEDIUM** | **HIGH** | HITL review is mandatory at workflow end; gates are configurable for additional review points; UI/UX supports status indicators and audit trail | Ongoing |
+| **R-11** | Risk management traceability gaps | **MEDIUM** | **HIGH** | Ensure all risk records, updates, and approvals are versioned, linked, and auditable; UI/UX supports search/filter and audit trail visibility | Ongoing |
 
 ### 6.2 Technical Debt
 
 | Item | Debt Type | Impact | Payoff Plan |
 |------|-----------|--------|-------------|
-| In-memory HITL review store | Architecture | Reviews lost on restart | SQLite persistence, Phase 2 |
-| No database layer | Architecture | No query/filter capability | SQLite → PostgreSQL, Phase 2–3 |
-| No authentication | Security | Internal deployment only | OAuth2/API key, Phase 2 |
-| No integration tests | Testing | Route-level bugs undetected | TestClient tests, Phase 2 |
+| In-memory HITL review store | Architecture | Reviews lost on restart | PostgreSQL persistence, Phase 0 |
+| No database layer | Architecture | No query/filter capability | PostgreSQL, Phase 0 |
+| No authentication | Security | Internal deployment only | OAuth2/API key, Phase 0 |
+| No integration tests | Testing | Route-level bugs undetected | TestClient tests, >= Phase 1 |
 | No CI/CD pipeline | Operations | Manual test/deploy | GitHub Actions, Phase 2 |
 | No Docker image | Operations | Non-reproducible deployment | Dockerfile, Phase 2 |
-| No file storage backend | Architecture | Reports stored on local FS | Object storage (S3/MinIO), Phase 3 |
+| No file storage backend | Architecture | Reports stored on local FS | At least: PostgreSQL for approved reports, Phase 0 |
 | LLM prompt not version-controlled | Maintainability | Prompt drift | Prompt registry, Phase 2 |
 
 ---
@@ -638,12 +663,12 @@ class ReportResult(BaseModel):
 | Constraint | Value | Rationale |
 |------------|-------|-----------|
 | Python version | ≥3.11 | Required for `str | None` union syntax, `tomllib`, improved typing |
-| Anthropic API key | Optional | Must work without it; LLM is enhancement only |
+| Anthropic API key | Optional | Must work without it or other LLM types; LLM is expeted to be used for some tasks |
 | EU AI Act Art. 9–15 | Must be checkable by rule-based engine | Legal requirement; no LLM dependency for compliance |
 | PDF output | Must be audit-submission ready | EU AI Act evidence package requirement |
 | File size limit | Configurable (default 10 MB) | Performance constraint; DoS prevention |
-| Filesystem dependency | `reports/` and `templates/` directories | MVP simplicity; no external storage required |
-| CORS | Restricted to explicit origins | Browser security requirement |
+| Filesystem dependency | `reports/` and `templates/` directories | MVP simplicity workflow for local storage of app user; external storage required as well at least for approved, versioned document(PostgreSQL)|
+| CORS (Cross-Origin Resource Sharing) | Restricted to explicit origins | Browser security requirement |
 
 ### 7.2 Business Constraints
 
@@ -695,9 +720,9 @@ class ReportResult(BaseModel):
 ## Assumptions
 
 1. MVP is deployed as a single-instance service (no load balancer, no horizontal scaling).
-2. arc42 documents are in markdown or plain text format; binary DOCX/PDF parsing is best-effort via PyPDF2/python-docx in Phase 2.
+2. arc42 documents are in markdown or plain text format. For binary DOCX/PDF parsing, the architecture starts with PyPDF2/python-docx in Phase 0 (MVP), and is designed to allow easy switching to NVIDIA Nemotron (or other advanced models) via configuration. This modular approach supports reliable MVP delivery and future extensibility for production-grade document ingestion.
 3. The rule-based compliance engine is deterministic for the same input; LLM enrichment may produce slightly different outputs across runs (non-deterministic by nature).
-4. `reports/` directory is writable by the uvicorn process; filesystem persistence of PDFs is sufficient for MVP.
+4. `reports/` directory is writable by the uvicorn process; filesystem persistence of PDFs exists locally for user, final approved report result shall be stored in DB for MVP.
 5. `templates/sop/` markdown files are static for MVP; template versioning is a Phase 2 concern.
 6. CORS origins `localhost:3000` and `localhost:8000` are sufficient for MVP; production deployment behind a reverse proxy will require CORS origin update.
 7. In-memory `_review_store: dict` in `hitl_workflow.py` is acceptable for MVP with documented risk (R-1 above).
@@ -707,11 +732,8 @@ class ReportResult(BaseModel):
 
 ## Open Questions
 
-1. **Authentication strategy:** Which authentication model for Phase 2? OAuth2 with provider, API key, or LDAP/SAML for enterprise SSO?
-2. **arc42 binary parsing:** When should `.docx` and binary `.pdf` arc42 parsing be added? (Candidate: Phase 2 via python-docx + PyPDF2)
-3. **PDF digital signatures:** Should generated reports include pyhanko digital signatures for audit integrity?
-4. **Horizontal scaling:** What triggers the move from single-instance to horizontally scaled deployment? (Candidate trigger: >50 documents/day)
-5. **Template versioning:** How should SOP template updates be managed and communicated to document authors?
+1. **PDF digital signatures:** Should generated reports include pyhanko digital signatures for audit integrity?
+2. **Horizontal scaling:** What triggers the move from single-instance to horizontally scaled deployment? (Candidate trigger: >50 documents/day)
 
 ---
 
@@ -729,14 +751,25 @@ All routes are versioned and documented for traceability and audit purposes.
 
 ---
 
+## Future-To-Do Topics
+
+- LDAP/SAML authentication for enterprise SSO (recommended for large organizations, deferred to Phase 2+)
+- Scheduled cleanup task for PDF file accumulation in reports/ directory (storage management, Phase 2)
+- Integration tests for route-level bugs (Phase 2)
+- CI/CD pipeline setup (Phase 2)
+- Docker image and file storage backend (Phase 2+)
+- Prompt registry for LLM version control (Phase 2)
+
+---
+
 ## Audit
 
-```
+```Python
 persona=system-arch
 action=update-sad-v0.7.0-agentic-ux-multillm
-timestamp=2026-03-15
+timestamp=2026-3-15
 adapter=AAMAD-vscode
 artifact=project-context/1.define/sad.md
-version=0.7.0
+version=0.8.0
 status=complete
 ```
