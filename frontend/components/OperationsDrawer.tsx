@@ -4,8 +4,8 @@ import { useMockStore } from '../lib/mockStore';
 import { 
   LuX, 
   LuLoader, 
-  LuCheckCircle, 
-  LuAlertTriangle, 
+  LuCircleCheck, 
+  LuTriangleAlert, 
   LuClock,
   LuFileText,
   LuExternalLink,
@@ -14,10 +14,80 @@ import {
 } from 'react-icons/lu';
 
 const OperationsDrawer = ({ isOpen, onClose }) => {
-  const activeOperations = useMockStore(state => state.activeOperations);
+
+  const exportJobs = useMockStore(state => state.exports);
+  const bridgeRuns = useMockStore(state => state.bridgeRuns);
   const isOperationsRunning = useMockStore(state => state.isOperationsRunning);
   const getDocById = useMockStore(state => state.getDocById);
-  const removeOperation = useMockStore(state => state.removeOperation);
+
+  type ActiveOp =
+  | {
+      kind: 'export';
+      id: string;
+      docId: string;
+      type: string;
+      timestamp: string;
+      status: 'running' | 'pending' | 'completed' | 'error';
+      url?: string;
+    }
+  | {
+      kind: 'bridge';
+      id: string;
+      product: string;
+      type: string;
+      timestamp: string;
+      status: 'running' | 'pending' | 'completed' | 'error';
+    };
+
+  type OpStatus = 'running' | 'pending' | 'completed' | 'error';
+
+  const exportStatusToOpStatus = (s: string): OpStatus => {
+    switch (s) {
+      case 'Running': return 'running';
+      case 'Queued': return 'pending';
+      case 'Ready': return 'completed';
+      default: return 'error';
+    }
+  };
+
+  const bridgeStatusToOpStatus = (s: string): OpStatus => {
+    switch (s) {
+      case 'Running': return 'running';
+      case 'Idle': return 'pending';
+      case 'Done': return 'completed';
+      default: return 'error';
+    }
+  };
+
+  const activeOperations: ActiveOp[] = [
+    ...exportJobs.map((job) => ({
+      id: job.id,
+      kind: 'export' as const,
+      docId: job.docId,
+      type: `Export ${job.type}`,
+      timestamp: job.completedAt ?? job.createdAt,
+      status: (
+        job.status === 'Running' ? 'running' :
+        job.status === 'Queued' ? 'pending' :
+        job.status === 'Ready' ? 'completed' :
+        'error'
+      ) as OpStatus,
+      url: job.url,
+    })),
+    ...bridgeRuns.map((run) => ({
+      id: run.id,
+      kind: 'bridge' as const,
+      product: run.product,
+      type: `Bridge Run`,
+      timestamp: run.startedAt,
+      status: (
+        run.status === 'Running' ? 'running' :
+        run.status === 'Idle' ? 'pending' :
+        run.status === 'Done' ? 'completed' :
+        'error'
+      ) as OpStatus,
+    })),
+  ];
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -32,8 +102,8 @@ const OperationsDrawer = ({ isOpen, onClose }) => {
   const getStatusIcon = (status) => {
     switch (status) {
       case 'running': return <LuLoader className="w-5 h-5 animate-spin-slow" />;
-      case 'completed': return <LuCheckCircle className="w-5 h-5" />;
-      case 'error': return <LuAlertTriangle className="w-5 h-5" />;
+      case 'completed': return <LuCircleCheck className="w-5 h-5" />;
+      case 'error': return <LuTriangleAlert className="w-5 h-5" />;
       case 'pending': return <LuClock className="w-5 h-5" />;
       default: return <LuClock className="w-5 h-5" />;
     }
@@ -74,7 +144,7 @@ const OperationsDrawer = ({ isOpen, onClose }) => {
           ) : (
             <div className="space-y-3">
               {activeOperations.map((op) => {
-                const doc = getDocById(op.docId);
+                const doc = op.kind === 'export' ? getDocById(op.docId) : undefined;
                 return (
                   <div 
                     key={op.id} 
@@ -98,12 +168,12 @@ const OperationsDrawer = ({ isOpen, onClose }) => {
                         </div>
                         
                         <p className="text-sm font-bold text-neutral-700 truncate mb-1">
-                          {doc?.title || op.docId}
+                          {doc?.title || (op.kind === 'export' ? op.docId : op.product)}
                         </p>
                         
                         <div className="flex items-center gap-1.5 opacity-60 text-[11px] font-medium uppercase tracking-tight">
                            <LuFileText className="w-3 h-3" />
-                           {op.docId}
+                          {op.kind === 'export' ? op.docId : op.product}
                         </div>
 
                         {op.status === 'running' && (
@@ -117,10 +187,10 @@ const OperationsDrawer = ({ isOpen, onClose }) => {
                              <button className="flex-1 text-[11px] font-bold tracking-tighter text-blue-600 bg-blue-100 hover:bg-blue-200 py-1.5 rounded transition uppercase flex items-center justify-center gap-1">
                                 View Report <LuExternalLink className="w-3 h-3" />
                              </button>
-                             <button 
-                               onClick={() => removeOperation(op.id)}
-                               className="p-1.5 bg-neutral-100 text-neutral-400 hover:text-rose-500 rounded transition"
-                             >
+                             <button
+                               disabled
+                               title="Remove not implemented"
+                               className="p-1.5 bg-neutral-100 text-neutral-300 rounded cursor-not-allowed">
                                 <LuTrash2 className="w-3 h-3" />
                              </button>
                           </div>

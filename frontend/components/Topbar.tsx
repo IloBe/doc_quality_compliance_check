@@ -5,7 +5,7 @@ import {
   LuSearch, 
   LuLoader, 
   LuBell, 
-  LuHelpCircle, 
+  LuCircleHelp, 
   LuMaximize, 
   LuMinimize, 
   LuChevronDown, 
@@ -95,7 +95,7 @@ const Topbar = ({ className, onOpsClick, onExitClick }) => {
             className="p-2 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50 rounded-full transition"
             title="Help"
           >
-            <LuHelpCircle className="w-5 h-5" />
+            <LuCircleHelp className="w-5 h-5" />
           </button>
           
           <button 

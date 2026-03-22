@@ -8,9 +8,9 @@ import {
   LuSearch, 
   LuChevronRight,
   LuLock,
-  LuUnlock,
+  LuLockOpen,
   LuClock,
-  LuMoreVertical,
+  LuEllipsisVertical,
   LuArrowUpRight
 } from 'react-icons/lu';
 import { useMockStore } from '../lib/mockStore';
@@ -88,7 +88,7 @@ const DocumentHub = () => {
                   {doc.status}
                </div>
                <button className="p-2 text-neutral-300 hover:text-neutral-800 hover:bg-neutral-50 rounded-xl transition">
-                  <LuMoreVertical className="w-5 h-5" />
+                  <LuEllipsisVertical className="w-5 h-5" />
                </button>
             </div>
 
@@ -102,7 +102,7 @@ const DocumentHub = () => {
                   ID: {doc.id}
                </span>
                <span className="flex items-center gap-1.5">
-                  <LuClock className="w-3 h-3" /> {doc.lastUpdated}
+                  <LuClock className="w-3 h-3" /> Updated: {doc.updatedAt}
                </span>
             </div>
 
@@ -110,10 +110,10 @@ const DocumentHub = () => {
             <div className="flex items-center justify-between p-4 bg-neutral-50 rounded-2xl mb-6">
                <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-[10px] font-bold">
-                    {doc.owner[0]}
+                    {doc.updatedBy?.[0] ?? '?'}
                   </div>
                   <div className="flex flex-col">
-                     <span className="text-[10px] font-black text-neutral-800 leading-none mb-0.5">{doc.owner}</span>
+                     <span className="text-[10px] font-black text-neutral-800 leading-none mb-0.5">{doc.updatedBy ?? 'Unknown'}</span>
                      <span className="text-[9px] text-neutral-400 uppercase font-medium">Lead Author</span>
                   </div>
                </div>
@@ -142,7 +142,7 @@ const DocumentHub = () => {
                     </>
                   ) : (
                     <>
-                      <LuUnlock className="w-3.5 h-3.5" />
+                      <LuLockOpen className="w-3.5 h-3.5" />
                       Acquire Lock
                     </>
                   )}

@@ -13,7 +13,7 @@ import {
   LuHexagon, 
   LuHistory, 
   LuLibrary, 
-  LuHelpCircle, 
+  LuCircleHelp, 
   LuSettings,
   LuLogOut 
 } from 'react-icons/lu';
@@ -75,7 +75,7 @@ const Sidebar = ({ className }) => {
         <NavItem href="/audit-trail" icon={LuLibrary} label="Audit Trail" active={currentPath === '/audit-trail'} />
         
         <SectionLabel label="Support" />
-        <NavItem href="/help" icon={LuHelpCircle} label="Help & Snippets" active={currentPath === '/help'} />
+        <NavItem href="/help" icon={LuCircleHelp} label="Help & Snippets" active={currentPath === '/help'} />
         <NavItem href="/admin" icon={LuSettings} label="Admin" active={currentPath === '/admin'} />
       </nav>
 

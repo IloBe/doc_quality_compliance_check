@@ -1,12 +1,12 @@
 
 import React from 'react';
 import { 
-  LuAlertTriangle, 
+  LuTriangleAlert, 
   LuLogOut, 
   LuLoader, 
   LuInfo,
   LuX
-} from 'react-icons/lu';
+} from 'react-icons/lu'
 
 const BlockingModal = ({ isOpen, type, onClose, onConfirm }) => {
   if (!isOpen) return null;
@@ -21,7 +21,7 @@ const BlockingModal = ({ isOpen, type, onClose, onConfirm }) => {
           <div className="flex items-center justify-between mb-6">
              {type === 'exit' ? (
                 <div className="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-500 ring-4 ring-rose-50">
-                   <LuAlertTriangle className="w-6 h-6" />
+                   <LuTriangleAlert className="w-6 h-6" />
                 </div>
              ) : (
                 <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-500 ring-4 ring-blue-50">
