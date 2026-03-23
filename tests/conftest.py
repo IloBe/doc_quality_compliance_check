@@ -1,14 +1,57 @@
 """Pytest configuration and shared fixtures."""
+import os
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 from src.doc_quality.api.main import app
+from src.doc_quality.core.database import Base, SessionLocal, get_db
+from src.doc_quality.models.orm import ReviewRecordORM
+
+# Use explicit API key in tests for route authentication.
+os.environ.setdefault("SECRET_KEY", "test-api-key")
+
+# Use in-memory SQLite for testing
+TEST_SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+
+
+@pytest.fixture(scope="function")
+def test_db_engine():
+    """Create test database engine."""
+    engine = create_engine(
+        TEST_SQLALCHEMY_DATABASE_URL,
+        connect_args={"check_same_thread": False},
+    )
+    Base.metadata.create_all(bind=engine)
+    yield engine
+    Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(scope="function")
+def test_db_session(test_db_engine) -> Session:
+    """Create test database session."""
+    connection = test_db_engine.connect()
+    transaction = connection.begin()
+    session = SessionLocal(bind=connection)
+
+    yield session
+
+    session.close()
+    transaction.rollback()
+    connection.close()
 
 
 @pytest.fixture
-def client() -> TestClient:
-    """Return a FastAPI test client."""
-    return TestClient(app)
+def client(test_db_session) -> TestClient:
+    """Return a FastAPI test client with database dependency override."""
+    
+    def override_get_db():
+        yield test_db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    yield TestClient(app, headers={"X-API-Key": os.environ["SECRET_KEY"]})
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture

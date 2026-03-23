@@ -1,8 +1,8 @@
 # Backend Implementation Documentation — Doc Quality Compliance Check
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.1.0  
-**Date:** 2025-02-23  
+**Version:** 0.2.0  
+**Date:** 2026-3-22  
 **Author persona:** `@backend-eng`  
 **AAMAD phase:** 2.build  
 
@@ -10,10 +10,11 @@
 
 ## Overview
 
-The backend is a Python 3.11 FastAPI application using a layered architecture:
+The backend is a Python 3.12 FastAPI application using a hybrid layered architecture:
 
-```
-API Routes → Service Layer → [AI Agent Layer (optional)] → [Anthropic Claude API (optional)]
+```text
+API Routes → Service Layer / Skills API → [AI Agent Layer] → [CrewAI Orchestrator for complex workflows]
+                                      └→ [Model Provider Adapter Layer]
 ```
 
 All data flows through Pydantic v2 models. All service functions use full Python type hints. All operations are logged via structlog. User-supplied content is sanitised with bleach at the API boundary.
@@ -22,7 +23,38 @@ All data flows through Pydantic v2 models. All service functions use full Python
 
 ## Section 1 – Multi-Agent Architecture
 
-The system implements a CrewAI-style multi-agent pattern with two specialised agents that wrap the service layer with optional LLM enrichment.
+The system implements a CrewAI-style multi-agent pattern with two specialised agents that wrap the service layer with optional LLM enrichment. The best-fit target architecture is a **hybrid model**:
+
+
+- keep existing wrapper-style agents for simple and latency-sensitive tasks,
+- add a dedicated **CrewAI orchestrator service** for complex multi-step workflows,
+- keep all production-system access in the backend **Skills API / service layer**,
+- route model access through a **provider adapter interface** so workflow code does not depend on a specific SDK.
+
+**Phase 0 status:** Wrapper-based path is production-ready; CrewAI orchestrator is a Phase 0 implementation target that extends (not rewrites) the existing Skills API service layer.
+
+**Prompt Governance & Traceability (AD-11, Phase 0 mandatory):** All LLM prompts (provider-agnostic, including Anthropic/OpenAI/other adapters) must be managed as versioned artifacts in `prompts/` with traceable change rationale and version identifiers. No inline production prompts are permitted.
+
+**Skills API boundary (required):**
+
+- document retrieval and document parsing (`pypdf`, `python-docx`, OCR fallback later),
+- PostgreSQL reads/writes and audit-event persistence,
+- export/report generation,
+- redaction, tool allowlists, and rate-limit/guardrail enforcement.
+
+Agents and CrewAI flows must call these capabilities through backend services or HTTP endpoints; they must not access the database directly.
+
+**Model adapter contract (required):**
+
+- `generate(messages, options) -> { content, json?, tool_calls?, usage, model_id }`
+- optional `stream(messages, options)` for UX/chat paths
+- capability declaration: `tool_calls`, `json_schema`, `streaming`
+
+Initial adapters:
+
+- `AnthropicAdapter` (current primary implementation target)
+- `OpenAICompatibleAdapter` (generic compatible endpoints)
+- `NemotronAdapter` (supported provider target, may initially use stub/dev endpoint or compatible gateway)
 
 ### DocumentCheckAgent (`src/doc_quality/agents/doc_check_agent.py`)
 
@@ -32,7 +64,7 @@ The system implements a CrewAI-style multi-agent pattern with two specialised ag
 | **Goal** | Analyse uploaded documents for structural completeness and quality gaps |
 | **Backstory** | Expert in arc42 architecture documentation standards and model card requirements |
 | **Tools** | `document_analyzer.py` service functions; optional Anthropic Claude call |
-| **LLM enrichment** | When `ANTHROPIC_API_KEY` is set: sends document content to Claude with structured prompt requesting section analysis and gap identification; parses response into `DocumentAnalysisResult` supplement |
+| **LLM enrichment** | When an LLM adapter is enabled (currently Anthropic path): sends document content with a structured prompt loaded from versioned files in `prompts/`; parses response into `DocumentAnalysisResult` supplement |
 
 ### ComplianceCheckAgent (`src/doc_quality/agents/compliance_agent.py`)
 
@@ -42,7 +74,164 @@ The system implements a CrewAI-style multi-agent pattern with two specialised ag
 | **Goal** | Assess domain information against EU AI Act mandatory requirements |
 | **Backstory** | Expert in EU AI Act Arts. 9–15, risk classification methodology, and provider/deployer role detection |
 | **Tools** | `compliance_checker.py` service functions; optional Anthropic Claude call |
-| **LLM enrichment** | When `ANTHROPIC_API_KEY` is set: sends domain description to Claude for nuanced requirement gap analysis; parses response into `ComplianceCheckResult` supplement |
+| **LLM enrichment** | When an LLM adapter is enabled (currently Anthropic path): sends domain description with a structured prompt loaded from versioned files in `prompts/`; parses response into `ComplianceCheckResult` supplement |
+
+### CrewAI Orchestrator (`services/orchestrator/`)
+
+| Property | Value |
+|----------|-------|
+| **Role** | Workflow brain for multi-step compliance runs |
+| **Responsibilities** | crew/flow definition, branching, retries, verifier gates, run/step audit events |
+| **Boundaries** | Uses Skills API/services for tools and data access; no direct DB access from agents |
+| **Endpoints (minimum)** | `/health`, `/workflows/run` |
+| **Initial workflow** | `generate_audit_package` or equivalent end-to-end compliance flow |
+| **Config source** | YAML at `services/orchestrator/src/doc_quality_orchestrator/crews/config/agents.yaml` and `.../tasks.yaml` (loaded by `build_generate_audit_package_crew` via CrewAI `config=...` convention) |
+
+**Crew persona matrix (concise):**
+
+| Agent | Role | Goal | Backstory Focus |
+|-------|------|------|-----------------|
+| Intake | Audit Scope Senior Research Specialist | Resolve scope + validate document/metadata before analysis | Meticulous scope validation and ambiguity reduction |
+| Evidence | Document Evidence Senior Research Specialist | Extract high-signal, citation-ready evidence via Skills API | Completeness and traceable evidence quality |
+| Compliance | EU AI Act Critical Reviewer and Risk Analyst | Identify policy gaps/risks and write evidence-backed findings | Skeptical review; assumption and evidence checks |
+| Synthesis | Senior Compliance Instructor for non-technical reviewers | Explain results clearly in structured audit package | Educator style; clarity for non-technical stakeholders |
+| Verifier | Audit Package Critical Reviewer and Risk Analyst | Pass/fail final package on schema, citations, hallucination checks | Final quality gate, fail-fast mindset |
+
+### Provider Adapter Layer (`services/model_adapters/`)
+
+| Adapter | Purpose |
+|---------|---------|
+| `AnthropicAdapter` | Current provider implementation target |
+| `OpenAICompatibleAdapter` | Common adapter surface for compatible backends |
+| `NemotronAdapter` | Adapter contract for NVIDIA Nemotron-Parse integration target |
+
+### CrewAI Runtime Controls & Observability (Phase 0, defined in CrewAI DoD)
+
+**Operational Safety Limits (hard enforced):**
+
+All CrewAI orchestrator runs are bounded by the following hard limits to prevent runaway execution and excessive token consumption:
+
+- `max_steps`: Maximum number of steps per run (e.g., 10–15 steps for flagship workflow)
+- `max_retries_per_step`: Maximum retries per failed step (e.g., 2–3)
+- `max_token_budget_per_run`: Token budget ceiling per complete run (e.g., 100K tokens)
+- `step_timeout_seconds`: Per-step wall-clock timeout (e.g., 60–120 seconds)
+- `global_run_timeout_seconds`: Overall run timeout (e.g., 300–600 seconds)
+
+Exceeded limits trigger immediate failure with explicit run status and reason code (e.g., `TIMEOUT_EXCEEDED`, `TOKEN_BUDGET_EXCEEDED`, `MAX_RETRIES_EXHAUSTED`).
+
+**Routing and Kill-Switch:**
+
+- `routing_mode`: Task router selects between `single_agent_wrapper` (rule-based, latency-sensitive) and `crewai_workflow` (multi-step, complex)
+- **Feature-flagged:** Routing can be configured per tenant, user, or complexity signal (e.g., document size, requirement count)
+- **Kill-switch:** Enables immediate routing of all traffic back to single-agent path without redeploy (safety feature for production incidents)
+- **Routing decision logging:** Every execution logs its routing choice in audit events for compliance and debugging
+
+**Observability and Auditability:**
+
+Every CrewAI step is fully observable and persisted to PostgreSQL:
+
+- `run_id`, `trace_id`, `workflow_id`: Unique identifiers for end-to-end tracing
+- `step_id`, `attempt`: Step-level tracking with retry attempts
+- `agent_id`, `tool_name`: Agent and tool provenance
+- `status`, `started_at`, `ended_at`: Execution lifecycle
+- `prompt_template` / `prompt_version`: Versioned prompt references (loaded from `prompts/` directory)
+- `tool_inputs` / `tool_outputs`: Step input/output (redacted per policy)
+- `token_usage` / `cost_metadata`: Token and cost tracking where available
+- **Replay links:** All step artifacts (prompts, I/O, redaction metadata) are persisted to enable deterministic replay for audit and debugging
+- **Verifier gate:** A Verifier Agent validates every step's output against JSON schema, presence of citations/evidence, and absence of hallucinated markers
+
+All audit events are stored in the `audit_events` append-only table with provenance fields (`tenant_id`, `org_id`, `project_id`, `actor_id`, `correlation_id`) for full compliance audit trail.
+
+**Agent-specific data governance:**
+
+- Long-retention `audit_events` are preserved for compliance (hot/warm/cold tiers per Persistence DoD)
+- Short-retention `agent_telemetry` (non-compliance-critical) is kept for operational monitoring and debugging
+- Sensitive content is redacted per policy before any persistence
+
+### CrewAI Flow Orchestration Pattern (Phase 0+, Best Practice Implementation)
+
+**Architecture (idiomatic CrewAI pattern):**
+
+```
+FastAPI HTTP Request
+    ↓
+OrchestratorService (thin wrapper)
+    ↓
+DocumentReviewFlow (owns orchestration logic)
+    ├─ _resolve_routing_mode()
+    ├─ execute_workflow()
+    ├─ _dispatch()
+    ├─ _crew_path()  ← calls Crew.kickoff()
+    └─ _scaffold_path()  ← single-agent fallback
+    ↓
+WorkflowRunResponse
+```
+
+**Design pattern rationale:**
+
+Per CrewAI best practices, the Flow pattern separates concerns:
+
+- **Flow** (`DocumentReviewFlow` in `flows/document_review_flow.py`):
+  - Owns end-to-end orchestration logic
+  - Manages workflow state (run_id, trace_id, correlations)
+  - Resolves routing mode (single-agent vs crew) with kill-switch logic
+  - Enforces global timeout via `asyncio.wait_for()`
+  - Logs routing decisions and completion events
+    - Runs a post-crew model validator stage through the provider adapter contract
+  - Dispatches to execution paths
+  - Returns structured response
+
+**Post-crew validator stage (Phase 0 hardening):**
+
+- Executes after `crew.kickoff()` and after the deterministic verifier result is parsed.
+- Uses the same provider adapter abstraction as the rest of the orchestrator, so validation remains provider-neutral.
+- Loads a versioned prompt from `services/orchestrator/src/doc_quality_orchestrator/prompts/model_validator_stage_v1.txt`.
+- Requests structured JSON output with `decision`, `summary`, `issues`, and `checks`.
+- Persists `model_validator_stage_started`, `model_validator_stage_completed`, and `model_validator_stage_skipped` audit events.
+- Keeps deterministic task guardrails and the Crew verifier authoritative; if the model validator cannot return valid structured output, the stage is skipped instead of breaking the run.
+
+- **Service** (`OrchestratorService` in `service.py`):
+  - Thin HTTP-facing wrapper
+  - Accepts requests from FastAPI controller
+  - Instantiates DocumentReviewFlow
+  - Delegates all orchestration to Flow
+  - Returns response to caller
+
+- **Crew** (`build_generate_audit_package_crew()` in `crews/review_flow.py`):
+  - Reusable "team skill" encapsulating five specialized agents
+  - Executed in thread-pool executor via `crew.kickoff()`
+  - Called from Flow._crew_path()
+  - Agents access backend only via Skills API tools
+
+**Flow state management:**
+
+```python
+class DocumentReviewFlow:
+    def __init__(self, settings: OrchestratorSettings):
+        self.settings = settings
+        self.skills_api = SkillsApiClient(settings.backend_base_url)
+        # Flow state (initialized per execute_workflow call)
+        self.run_id: str = ""
+        self.trace_id: str = ""
+        self.routing_mode: Literal["single_agent_wrapper", "crewai_workflow"] = "..."
+
+    async def execute_workflow(self, request: WorkflowRunRequest):
+        # Initialize Flow state
+        self.run_id = str(uuid4())
+        self.trace_id = request.trace_id or str(uuid4())
+        self.routing_mode = self._resolve_routing_mode(request)
+        # ... rest of orchestration
+```
+
+**Future extensibility (Phase 1+):**
+
+The Flow pattern enables:
+- **Multi-crew orchestration:** Sequence multiple crews (extract → analyze → report)
+- **Event-driven workflows:** Respond to webhooks, schedules, document uploads
+- **State machines:** Complex branching and conditional logic
+- **Team skill reuse:** Same crew in multiple flows
+
+All possible without changing Crew definitions.
 
 **Agent initialization pattern:**
 
@@ -136,7 +325,7 @@ async def health_check() -> dict:
 |----------|-------|
 | Request body | `AnalyzeTextRequest` — `content: str`, `filename: str`, `doc_type: DocumentType \| None` |
 | Response | `DocumentAnalysisResult` (JSON) |
-| Auth | None (MVP) |
+| Auth | Required (API key or bearer token, role-based authorization checks) |
 | Security | `sanitize_text(content)`, `validate_filename(filename)` applied before processing |
 
 **`POST /api/v1/documents/upload`**
@@ -144,7 +333,7 @@ async def health_check() -> dict:
 | Property | Value |
 |----------|-------|
 | Request body | `multipart/form-data` — `file: UploadFile` |
-| Supported formats | `.md`, `.txt`, `.pdf`, `.docx` (text extraction; binary parsing limited in MVP) |
+| Supported formats | `.md`, `.txt`, `.pdf`, `.docx` (full text extraction for binary and text formats) |
 | File size limit | `MAX_FILE_SIZE_MB` (default 10 MB); returns HTTP 413 if exceeded |
 | Response | `DocumentAnalysisResult` (JSON) |
 | Security | `validate_filename()`, `validate_file_size()`, `sanitize_text()` applied |
@@ -315,7 +504,7 @@ Returns `ReportResult` with generated UUID and file path.
 
 ### 4.5 HITL Workflow (`src/doc_quality/services/hitl_workflow.py`)
 
-**In-memory store:** `_review_store: dict[str, ReviewRecord] = {}` — module-level dict. Data is lost on process restart (known MVP limitation).
+**Persistent store:** HITL review records are persisted in PostgreSQL and mapped to typed review models. Data survives restarts and is queryable for audit reporting.
 
 **`create_review(document_id, reviewer_name, reviewer_role, modifications, comments) -> ReviewRecord`**
 
@@ -326,15 +515,15 @@ Creates a `ReviewRecord` with UUID. Status is automatically set:
 
 **`get_review(review_id: str) -> ReviewRecord | None`**
 
-Simple dict lookup. Returns `None` if not found.
+Fetches by primary key from the persistence layer. Returns `None` if not found.
 
 **`update_review_status(review_id: str, new_status: ReviewStatus, approver_name: str | None) -> ReviewRecord | None`**
 
-Updates status in-place. Sets `approval_date` when status becomes `PASSED`. Returns `None` if review not found (logs warning).
+Updates persisted status and metadata. Sets `approval_date` when status becomes `PASSED`. Returns `None` if review not found (logs warning).
 
 **`list_reviews() -> list[ReviewRecord]`**
 
-Returns all values from `_review_store` as a list.
+Returns persisted review records as a list, with filtering/pagination support in the API layer.
 
 ---
 
@@ -431,31 +620,26 @@ Raises `ValueError` → converted to HTTP 413 by route handler.
 | Pydantic v2 models | All data passed between layers uses Pydantic BaseModel instances |
 | No raw dicts in service layer | Services receive and return typed Pydantic models |
 | No `print()` statements | All output goes through structlog |
-| No global mutable state | Except `_review_store` in `hitl_workflow.py` (documented known limitation) |
+| No global mutable state | Persistence-backed services avoid module-level mutable stores |
 | Enum types | `DocumentType`, `DocumentStatus`, `RiskLevel`, `AIActRole`, `ReviewStatus` |
 | `@lru_cache` | `get_settings()` — single Settings instance per process |
 
 ---
 
-## Section 7 – Known Limitations (Non-MVP Stubs)
+## Section 7 – Known Limitations (Current)
 
-### 7.1 In-Memory Review Store
+The following previously documented MVP gaps are now addressed and therefore are **not** current limitations:
 
-The HITL review store (`_review_store` dict in `hitl_workflow.py`) is ephemeral. All review records are lost when the process restarts. This is acceptable for MVP (internal use, development) but must be replaced with SQLite persistence in Phase 2.
+- HITL review persistence is implemented (PostgreSQL-backed storage).
+- Authentication and authorization are enforced for protected API routes.
+- Binary document text extraction for `.pdf` and `.docx` is fully supported.
 
-**Impact:** A QM reviewer who approves a document and then the server restarts loses the review record. The PDF report (if already generated and downloaded) persists on the filesystem.
-
-### 7.2 No Authentication
-
-All API endpoints are publicly accessible (no auth middleware). This is acceptable for MVP internal deployment only. Phase 2 will add OAuth2 or API key authentication.
-
-**Impact:** Any user on the local network can access the API and generate reports. Mitigation: bind to `localhost` (default) rather than `0.0.0.0`.
-
-### 7.3 Optional LLM Enrichment — Graceful Degradation
+### 7.1 Optional LLM Enrichment — Graceful Degradation
 
 When `ANTHROPIC_API_KEY` is not set, agents fall back to rule-based analysis only. The rule-based engine is deterministic and covers all PRD P0 requirements. LLM enrichment adds semantic depth but is not required.
 
 **Graceful degradation pattern:**
+
 ```python
 if self.client:
     try:
@@ -467,34 +651,30 @@ if self.client:
 return result
 ```
 
-### 7.4 Binary Document Parsing
+### 7.2 Phase 0 Test Gating and Phase 2 CI/CD
 
-`.docx` (python-docx) and binary `.pdf` (PyPDF2) parsing is installed but only partially active in MVP. Uploaded `.docx` and `.pdf` files are read as bytes and decoded as UTF-8 text (or latin-1 fallback). For markdown and plain text files this works fully. For binary Office documents the text extraction may be incomplete.
+**Phase 0:** Release gating is manual (`pytest tests/ -v` via local developer or CI orchestrator). The 30-test classical unit test suite + LLM unit tests must pass before release; integration tests are deferred to Phase 2.
 
-**Phase 2:** Full binary document text extraction using python-docx and PyPDF2 pipelines.
-
-### 7.5 No CI/CD Pipeline
-
-Tests must be run manually (`pytest tests/ -v`). No GitHub Actions workflow exists yet. Phase 2 will add a CI pipeline with pytest, ruff, and mypy checks on every push.
+**Phase 2:** GitHub Actions CI/CD pipeline will be added with automated pytest, ruff, and mypy checks on every push, plus integration test execution.
 
 ---
 
 ## Sources
 
-- FastAPI Documentation — Application Factory Pattern, https://fastapi.tiangolo.com
-- Pydantic v2 — BaseModel, BaseSettings, https://docs.pydantic.dev/latest/
-- structlog — Processors and Configuration, https://www.structlog.org
-- bleach — `clean()` API, https://bleach.readthedocs.io
-- ReportLab Platypus — SimpleDocTemplate, Table, TableStyle, https://www.reportlab.com/docs/
+- FastAPI Documentation — Application Factory Pattern, [https://fastapi.tiangolo.com](https://fastapi.tiangolo.com)
+- Pydantic v2 — BaseModel, BaseSettings, [https://docs.pydantic.dev/latest/](https://docs.pydantic.dev/latest/)
+- structlog — Processors and Configuration, [https://www.structlog.org](https://www.structlog.org)
+- bleach — `clean()` API, [https://bleach.readthedocs.io](https://bleach.readthedocs.io)
+- ReportLab Platypus — SimpleDocTemplate, Table, TableStyle, [https://www.reportlab.com/docs/](https://www.reportlab.com/docs/)
 - EU AI Act Arts. 9–15, Annex III, Annex IV (Regulation (EU) 2024/1689)
-- arc42 Template v8.2, https://arc42.org
-- Anthropic Python SDK, https://github.com/anthropics/anthropic-sdk-python
+- arc42 Template v8.2, [https://arc42.org](https://arc42.org)
+- Anthropic Python SDK, [https://github.com/anthropics/anthropic-sdk-python](https://github.com/anthropics/anthropic-sdk-python)
 
 ---
 
 ## Assumptions
 
-1. The service layer is stateless except for `_review_store` (documented). Services can be called directly in tests without mocking the FastAPI request context.
+1. The service layer is stateless from an API caller perspective; persistence is delegated to the database layer. Services can be called directly in tests without mocking the FastAPI request context.
 2. `get_settings()` returns a cached `Settings` instance; tests that need custom settings must clear the LRU cache or use dependency injection override.
 3. Pydantic v2 strict mode is not enabled globally; field validators use lenient coercion by default.
 4. The `reports/` directory is created by `report_generator.py` if it does not exist; no pre-creation step is required in deployment.
@@ -503,24 +683,39 @@ Tests must be run manually (`pytest tests/ -v`). No GitHub Actions workflow exis
 
 ---
 
-## Open Questions
+## Resolved Open Questions
 
-1. **Background tasks:** When should FastAPI `BackgroundTasks` be introduced for large document processing? (Proposed: Phase 2, triggered when file size >1 MB)
-2. **Agent orchestration:** Should Phase 2 introduce CrewAI or LangGraph for multi-agent task coordination, or remain with the current single-agent wrapper pattern?
-3. **Prompt version control:** Should Claude prompts be stored as versioned files in `prompts/` directory, or remain as inline strings in agent code?
-4. **Review store:** SQLite (simple, no extra deps) vs. PostgreSQL (production-ready) for Phase 2 persistence?
-5. **DOCX/PDF parsing quality:** Should Phase 2 use Apache Tika (via tika-python) instead of python-docx + PyPDF2 for more robust text extraction?
+1. **Large document processing workflow (SAD-aligned R-4):** The architecture applies a 10 MB upload limit in current scope and plans Phase 2 mitigation with background tasks + streaming for larger files, including mandatory UI feedback when files exceed limits or move to asynchronous processing.
+2. **Agent orchestration (PRD/SAD-aligned (part 1.7), resolved):** Adopt a hybrid pattern: keep the current single-agent wrapper for atomic/latency-sensitive deterministic tasks, and introduce CrewAI flows incrementally for multi-step compliance workflows (audit package generation, evidence gap analysis, cross-document consistency checks) with traceable run events (`trace_id`/`correlation_id`) persisted in PostgreSQL.
+3. **Prompt versioning (SAD-aligned AD-11, resolved):** This is a mandatory requirement, not an open design question. In alignment with SAD Section 1.6 “Prompt Versioning & Traceability (Mandatory)” and AD-11, all LLM prompts must be stored as versioned files in `prompts/` (no inline production prompts), including version identifiers and change rationale for audit traceability and reproducibility.
+4. **Persistence scaling (SAD-aligned AD-13, resolved):** Long-lived review/audit persistence is implemented with an append-only event log, immutable snapshots, and policy-driven hot/warm/cold retention:
+    - **Storage pattern:** append-only `audit_events` as source of truth (who/what/when), separate materialized current-state tables (`reviews`, `findings`, `documents`, `evidence`) for low-latency UI reads.
+    - **Event provenance fields:** `tenant_id`, `org_id`, `project_id`, `event_time`, `event_type`, `actor_type`, `actor_id`, `correlation_id`/`trace_id`, `subject_type`/`subject_id`, `payload` (`jsonb`), optional `payload_hash`.
+    - **Immutable snapshots:** periodic snapshots (e.g., nightly and workflow-completion) for review state and agent-run summaries to reduce expensive historical replay.
+    - **Tiered retention:** hot (0–90 days, full OLTP indexing), warm (90 days–2 years, reduced index footprint), cold (2–7+ years archive with retrieval), with policy controls for legal hold and redaction.
+    - **Partitioning:** PostgreSQL range partitioning by `event_time` (monthly default); optional tenant hash subpartitioning at extreme multi-tenant scale.
+    - **Indexing baseline:** `(tenant_id, event_time desc)`, `(tenant_id, correlation_id)`, `(tenant_id, subject_type, subject_id, event_time desc)`, optional actor/event-type indexes; selective JSON indexing via generated columns + targeted GIN/`jsonb_path_ops`; BRIN on very large time partitions.
+    - **Archival:** export aged partitions to Parquet (or compressed JSONL) with manifest (row counts, min/max time, checksums), store in object storage with integrity controls; maintain `archive_catalog` metadata in PostgreSQL.
+    - **Archive query paths:** on-demand restore into temporary tables and/or federated query engines for long-range analytics without stressing OLTP.
+    - **Agent-specific data governance:** separate long-retention `audit_events` from shorter-retention `agent_telemetry`; store prompt-template version, model/provider metadata, tool-call I/O (redacted where required), and deterministic `trace_id`.
+5. **Extraction quality monitoring (SAD-aligned AD-12, resolved):** OCR fallback for scanned/low-quality PDFs is mandatory and will be implemented with a SOTA pipeline: **transcribe + structure + grounding**. Implementation requirements:
+    - **Pipeline design:** confidence-gated routing from text-layer extraction to OCR fallback; preserve layout anchors/bounding boxes for reading-order reliability and hallucination reduction.
+    - **Output-first model selection:** choose OCR models primarily by required downstream output format (DocTags/HTML for reconstruction, Markdown+captions for LLM QA, JSON for programmatic table/chart extraction).
+    - **Model strategy:** maintain at least two OCR profiles (e.g., form-heavy and layout-heavy) to improve robustness across invoices/forms/scans/multilingual pages.
+    - **Evaluation strategy:** use one public benchmark for sanity checks and a domain micro-benchmark (~50–200 real pages) scored on CER/WER, reading order, table structure accuracy, and field-level extraction accuracy.
+    - **Deployment options:** support local OpenAI-compatible serving (e.g. vLLM) and a Transformers-based path for stricter formatting, post-processing hooks, and future fine-tuning.
+    - **Scale-out path:** support batch OCR jobs for high-volume ingestion and define future upgrades for visual retrieval and direct document QA on complex layouts.
 
 ---
 
 ## Audit
 
-```
+```python
 persona=backend-eng
 action=develop-be
-timestamp=2025-02-23
+timestamp=2026-3-22
 adapter=AAMAD-vscode
 artifact=project-context/2.build/backend.md
-version=0.1.0
+version=0.2.
 status=complete
 ```

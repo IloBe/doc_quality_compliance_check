@@ -1,0 +1,107 @@
+"""SQLAlchemy ORM models for database persistence."""
+from datetime import datetime, timezone
+import uuid
+
+from sqlalchemy import JSON, Column, DateTime, String, Text
+from sqlalchemy.dialects.postgresql import UUID
+
+from ..core.database import Base
+
+
+class ReviewRecordORM(Base):
+    """SQLAlchemy ORM model for HITL review records (persistent storage)."""
+
+    __tablename__ = "hitl_reviews"
+
+    review_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    document_id = Column(String(255), nullable=False, index=True)
+    status = Column(String(50), nullable=False, default="pending")  # ReviewStatus enum as string
+    reviewer_name = Column(String(255), nullable=False)
+    reviewer_role = Column(String(100), nullable=False)
+    review_date = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    modifications_required = Column(JSON, nullable=False, default=list)  # List of ModificationRequest dicts
+    comments = Column(String(4000), nullable=False, default="")
+    approval_date = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self) -> dict:
+        """Convert ORM model to dictionary."""
+        return {
+            "review_id": str(self.review_id),
+            "document_id": self.document_id,
+            "status": self.status,
+            "reviewer_name": self.reviewer_name,
+            "reviewer_role": self.reviewer_role,
+            "review_date": self.review_date,
+            "modifications_required": self.modifications_required,
+            "comments": self.comments,
+            "approval_date": self.approval_date,
+        }
+
+
+class SkillDocumentORM(Base):
+    """Persistent document record used by the Skills API."""
+
+    __tablename__ = "skill_documents"
+
+    document_id = Column(String(64), primary_key=True, index=True)
+    filename = Column(String(255), nullable=False, index=True)
+    content_type = Column(String(100), nullable=False)
+    document_type = Column(String(50), nullable=False, default="unknown", index=True)
+    extracted_text = Column(Text, nullable=False)
+    source = Column(String(50), nullable=False, default="analyze_text")
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class FindingORM(Base):
+    """Persistent finding record created through the Skills API."""
+
+    __tablename__ = "skill_findings"
+
+    finding_id = Column(String(64), primary_key=True, index=True)
+    document_id = Column(String(64), nullable=False, index=True)
+    finding_type = Column(String(100), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    severity = Column(String(20), nullable=False, default="medium")
+    evidence = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class AuditEventORM(Base):
+    """Persistent audit event record used by orchestrator and skills workflows.
+    
+    Append-only audit trail with provenance fields for compliance audit trail.
+    Schema (from backend.md):
+    - tenant_id: Tenant identifier (multi-tenancy support)
+    - org_id: Organization identifier within tenant
+    - project_id: Project identifier within organization
+    - event_time: Timestamp when event occurred (for range partitioning)
+    - event_type: Type of audit event
+    - actor_type: Type of actor (agent, user, system)
+    - actor_id: Actor identifier
+    - subject_type: Type of subject being acted upon
+    - subject_id: Subject identifier
+    - trace_id: Distributed trace identifier
+    - correlation_id: Request correlation identifier
+    - payload: Event-specific data (JSONB)
+    """
+
+    __tablename__ = "audit_events"
+
+    event_id = Column(String(64), primary_key=True, index=True)
+    tenant_id = Column(String(100), nullable=False, index=True)  # NEW: Multi-tenancy support
+    org_id = Column(String(100), nullable=True, index=True)  # NEW: Organization identifier
+    project_id = Column(String(100), nullable=True, index=True)  # NEW: Project identifier
+    event_time = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)  # NEW: Event timestamp (for partitioning)
+    event_type = Column(String(100), nullable=False, index=True)
+    actor_type = Column(String(50), nullable=False)
+    actor_id = Column(String(100), nullable=False)
+    subject_type = Column(String(50), nullable=False)
+    subject_id = Column(String(100), nullable=False, index=True)
+    trace_id = Column(String(64), nullable=True, index=True)
+    correlation_id = Column(String(64), nullable=True, index=True)
+    payload = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)

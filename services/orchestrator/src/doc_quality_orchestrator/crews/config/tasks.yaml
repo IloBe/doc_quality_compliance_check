@@ -1,0 +1,144 @@
+tasks:
+  intake_task:
+    name: Intake Scope Resolution
+    agent: intake_agent
+    output_json: intake_output_json
+    tools:
+      - get_document
+      - search_documents
+    async_execution: false
+    human_input: false
+    markdown: false
+    guardrails:
+      - json_object
+      - no_code_fences
+      - required_keys:document_id,filename,document_type,content_type,scope_confirmed
+    guardrail_max_retries: 1
+    description: >-
+      Normalise the audit scope for this run. {doc_context} {trace_ctx}
+      Use the get_document tool to retrieve the document record and confirm its metadata
+      (filename, document_type, content_type). If document_id is not provided,
+      use search_documents with an empty query and pick the most recent result.
+      Output exactly one compact JSON object with keys: document_id, filename,
+      document_type, content_type, scope_confirmed (bool). Do not add commentary.
+    expected_output: >-
+      Single JSON object: {document_id, filename, document_type, content_type, scope_confirmed}
+
+  evidence_task:
+    name: Evidence Extraction and Indexing
+    agent: evidence_agent
+    output_json: evidence_output_json
+    tools:
+      - extract_text
+      - search_documents
+    context:
+      - intake_task
+    async_execution: false
+    human_input: false
+    markdown: false
+    guardrails:
+      - json_array
+      - no_code_fences
+      - list_length_between:3,10
+    guardrail_max_retries: 1
+    description: >-
+      Using the document_id from the intake step, call extract_text to retrieve
+      the full text content of the document.
+      Identify at minimum 3 key evidence items relevant to compliance.
+      Output exactly one JSON array where each item has keys: text (exact quote),
+      location (section/page hint). Include 3 to 10 items. Do not add commentary.
+    expected_output: >-
+      JSON array of 3-10 evidence items: [{text, location}, ...]
+
+  compliance_task:
+    name: Compliance Gap and Risk Analysis
+    agent: compliance_agent
+    output_json: compliance_output_json
+    tools:
+      - write_finding
+    context:
+      - evidence_task
+    async_execution: false
+    human_input: false
+    markdown: false
+    guardrails:
+      - json_array
+      - no_code_fences
+      - uuid_list
+    guardrail_max_retries: 1
+    description: >-
+      Review the extracted evidence items from the previous step.
+      For each compliance gap or policy violation, call write_finding with:
+      document_id (from intake), finding_type, title, description, severity
+      (low/medium/high/critical), and evidence (list of exact text quotes from evidence step).
+      If no gaps are found, write exactly one finding with finding_type='no_issues_found'
+      and severity='low'.
+      Output exactly one JSON array of finding_ids returned by write_finding.
+    expected_output: >-
+      JSON array of finding_ids: ["<uuid>", ...]
+
+  synthesis_task:
+    name: Audit Package Synthesis
+    agent: synthesis_agent
+    output_pydantic: synthesis_output_pydantic
+    tools:
+      - log_event
+    context:
+      - compliance_task
+    async_execution: false
+    human_input: false
+    markdown: false
+    output_file: artifacts/audit_package_summary.json
+    create_directory: true
+    guardrails:
+      - json_object
+      - no_code_fences
+      - required_keys:scope,evidence_summary,findings_summary,overall_risk
+      - enum_field:overall_risk=low|medium|high|critical
+    guardrail_max_retries: 1
+    description: >-
+      Compile the intake summary, evidence list, and compliance findings into
+      a structured audit package.
+      Call log_event with event_type='audit_package_synthesized',
+      actor_type='agent', actor_id='synthesis_agent',
+      subject_type='document', subject_id=<document_id from intake>.
+      Output exactly one JSON object with keys:
+      scope (from intake), evidence_summary (count + key items),
+      findings_summary (list of {finding_id, title, severity}),
+      overall_risk (low/medium/high/critical). Do not add markdown fences or prose.
+    expected_output: >-
+      Single JSON object: {scope, evidence_summary, findings_summary, overall_risk}
+
+  verify_task:
+    name: Final Quality Verification Gate
+    agent: verifier_agent
+    tools: []
+    context:
+      - synthesis_task
+    async_execution: false
+    human_input: false
+    markdown: false
+    guardrails:
+      - verification_result
+    guardrail_max_retries: 2
+    description: |-
+      Verify the final audit package from the synthesis step. Perform ALL checks:
+      1. Every item in findings_summary has at least one evidence citation
+      (finding_type='no_issues_found' is exempt).
+      2. overall_risk is one of: low, medium, high, critical.
+      3. The package contains no vague or unsupported language
+      ('probably', 'I think', 'it seems', 'may', 'might').
+      4. All required keys are present: scope, evidence_summary,
+      findings_summary, overall_risk.
+      If ALL checks pass output EXACTLY: VERIFIED: PASS
+      If ANY check fails output EXACTLY: VERIFIED: FAIL — <comma-separated list of failed checks>
+    expected_output: >-
+      Exact string only: VERIFIED: PASS  OR  VERIFIED: FAIL — <reason>
+
+validator_stage:
+  enabled: true
+  prompt_version: model_validator_stage_v1
+  required_checks:
+    - final_verdict_consistency
+    - unsupported_language_scan
+    - evidence_signal_present

@@ -1,4 +1,4 @@
-# Initial Definition of Done (DoD) per Epic (Phase 0)
+# Frontend: Initial Definition of Done (DoD) per Epic (Phase 0)
 
 **Product:** Document Quality & Compliance Check System  
 **Version:** 0.1.0  

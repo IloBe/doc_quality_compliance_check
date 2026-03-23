@@ -1,4 +1,5 @@
 """AI agent for document analysis using Anthropic Claude."""
+from pathlib import Path
 from typing import Optional
 
 from ..core.logging_config import get_logger
@@ -6,6 +7,22 @@ from ..models.document import DocumentAnalysisResult, DocumentType
 from ..services.document_analyzer import analyze_document
 
 logger = get_logger(__name__)
+
+_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+
+
+def _load_doc_check_prompt() -> str:
+    """Load doc check agent prompt from versioned file.
+    
+    Prompt file: prompts/doc_check_agent_v1.txt
+    Version: v1
+    Change rationale: Externalize inline prompt to enable version control,
+                      easier A/B testing, and audit trail of prompt changes.
+    """
+    prompt_file = _PROMPTS_DIR / "doc_check_agent_v1.txt"
+    if not prompt_file.exists():
+        raise RuntimeError(f"Prompt file not found: {prompt_file}")
+    return prompt_file.read_text(encoding="utf-8")
 
 
 class DocumentCheckAgent:
@@ -52,13 +69,12 @@ class DocumentCheckAgent:
     ) -> DocumentAnalysisResult:
         """Enrich rule-based result with LLM analysis (requires API key)."""
         try:
-            prompt = (
-                f"You are a technical documentation quality checker.\n"
-                f"Document type: {base_result.document_type.value}\n"
-                f"Current issues found: {base_result.issues}\n"
-                f"Please review the following document excerpt and add any additional "
-                f"quality issues not already identified. Respond with a JSON list of strings.\n\n"
-                f"Document (first 2000 chars):\n{content[:2000]}"
+            # Load prompt template and format with document-specific values
+            prompt_template = _load_doc_check_prompt()
+            prompt = prompt_template.format(
+                document_type=base_result.document_type.value,
+                issues=base_result.issues,
+                content=content[:2000]
             )
             message = self._client.messages.create(
                 model=self._model,

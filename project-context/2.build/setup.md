@@ -12,7 +12,7 @@
 
 | Requirement | Version | Notes |
 |-------------|---------|-------|
-| Python | ≥ 3.11 | Required for union type syntax (`str \| None`) |
+| Python | 3.12.x | Project runtime baseline |
 | pip | ≥ 23.x | For package installation |
 | uv (optional) | ≥ 0.1.x | Faster alternative to pip; not required |
 | Git | Any | For repository cloning |
@@ -21,7 +21,7 @@
 **Verify Python version:**
 ```bash
 python --version
-# Expected: Python 3.11.x or higher
+# Expected: Python 3.12.x
 ```
 
 ---
@@ -67,7 +67,7 @@ uv pip install -e ".[dev]"
 This installs all runtime and development dependencies defined in `pyproject.toml`:
 - `fastapi`, `uvicorn[standard]`, `pydantic`, `pydantic-settings`
 - `reportlab`, `structlog`, `bleach`, `anthropic`
-- `python-multipart`, `python-docx`, `PyPDF2`, `aiofiles`, `jinja2`, `httpx`
+- `python-multipart`, `python-docx`, `pypdf`, `aiofiles`, `jinja2`, `httpx`
 - Dev: `pytest`, `pytest-asyncio`, `pytest-cov`, `ruff`, `mypy`
 
 ---
@@ -179,7 +179,7 @@ pytest tests/ -v
 Expected output:
 ```
 ============================= test session starts ==============================
-platform linux -- Python 3.11.x
+platform linux -- Python 3.12.x
 collected 30 items
 
 tests/test_document_analyzer.py::test_detect_document_type_arc42 PASSED
@@ -320,7 +320,7 @@ doc_quality_compliance_check/
 | `python-multipart` | ≥0.0.9 | Multipart form data parsing for file uploads |
 | `reportlab` | ≥4.1.0 | Pure-Python PDF generation for audit reports |
 | `python-docx` | ≥1.1.0 | DOCX document parsing (Phase 2 active) |
-| `PyPDF2` | ≥3.0.1 | PDF text extraction (Phase 2 active) |
+| `pypdf` | ≥5.0.0 | PDF text extraction (Phase 2 active) |
 | `structlog` | ≥24.1.0 | Structured JSON logging (EU AI Act Art. 12 compliance) |
 | `anthropic` | ≥0.18.0 | Anthropic Claude API client for optional LLM enrichment |
 | `httpx` | ≥0.26.0 | Async HTTP client (used by test utilities) |
@@ -357,11 +357,11 @@ doc_quality_compliance_check/
 
 **Workaround:** Ensure the `frontend/` directory exists at the project root. The directory is included in the repository.
 
-### 4. Python 3.11+ Required
+### 4. Python 3.12 Required
 
-**Issue:** The codebase uses `str | None` union type syntax (PEP 604) which requires Python 3.10+. The `tomllib` standard library module requires 3.11+.
+**Issue:** Running with Python <3.12 is outside the supported project baseline and may lead to dependency resolution/runtime differences.
 
-**Workaround:** Use Python 3.11 or higher. Python 3.10 may work for the application code but is not officially tested.
+**Workaround:** Use Python 3.12.x.
 
 ### 5. Large Document Performance
 
@@ -394,7 +394,7 @@ open http://localhost:8000
 
 ## Sources
 
-- Python 3.11 Release Notes, https://docs.python.org/3/whatsnew/3.11.html
+- Python 3.12 Release Notes, https://docs.python.org/3/whatsnew/3.12.html
 - FastAPI Tutorial — Bigger Applications, https://fastapi.tiangolo.com/tutorial/bigger-applications/
 - Pydantic v2 Migration Guide, https://docs.pydantic.dev/latest/migration/
 - uvicorn Documentation, https://www.uvicorn.org/
@@ -405,7 +405,7 @@ open http://localhost:8000
 
 ## Assumptions
 
-1. The developer has Python 3.11+ installed and a working pip/pip3 in PATH.
+1. The developer has Python 3.12 installed and a working pip/pip3 in PATH.
 2. The `frontend/` directory is present in the repository root (not gitignored).
 3. The `reports/` directory will be created at runtime by the report generator service if it does not exist.
 4. An Anthropic API key is not required; the system is fully functional without it.

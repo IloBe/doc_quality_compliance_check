@@ -324,7 +324,7 @@ Unlike generic document generators, this system emphasizes:
 ### 48-Hour Actions
 
 1. Create AAMAD project-context artifacts (MRD, PRD, SAD) ✅
-2. Confirm Python 3.11 environment and `pip install -e ".[dev]"` working ✅
+2. Confirm Python 3.12 environment and `pip install -e ".[dev]"` working ✅
 3. Validate all 30 unit tests pass ✅
 4. Confirm FastAPI server starts and `/health` returns `{"status": "healthy"}` ✅
 

@@ -4,14 +4,15 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from ..core.config import get_settings
 from ..core.logging_config import configure_logging
-from .routes import compliance, documents, reports, research, templates
+from ..core.security import require_api_auth
+from .routes import compliance, documents, reports, research, skills, templates
 
 logger = structlog.get_logger(__name__)
 
@@ -59,11 +60,13 @@ def create_app() -> FastAPI:
         return response
 
     prefix = settings.api_prefix
-    app.include_router(documents.router, prefix=prefix)
-    app.include_router(compliance.router, prefix=prefix)
-    app.include_router(reports.router, prefix=prefix)
-    app.include_router(templates.router, prefix=prefix)
-    app.include_router(research.router, prefix=prefix)
+    auth_dependencies = [Depends(require_api_auth)]
+    app.include_router(documents.router, prefix=prefix, dependencies=auth_dependencies)
+    app.include_router(compliance.router, prefix=prefix, dependencies=auth_dependencies)
+    app.include_router(reports.router, prefix=prefix, dependencies=auth_dependencies)
+    app.include_router(templates.router, prefix=prefix, dependencies=auth_dependencies)
+    app.include_router(research.router, prefix=prefix, dependencies=auth_dependencies)
+    app.include_router(skills.router, prefix=prefix, dependencies=auth_dependencies)
 
     @app.get("/health")
     async def health_check() -> dict:

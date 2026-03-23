@@ -1,0 +1,10 @@
+I am developing a software product in the domain of '{domain}'. Product description: {description}. Target market: {target_market}. {custom_query_or_default}
+
+Where custom_query_or_default is either the custom_query if provided, or:
+
+What are all applicable EU and German regulations, standards, and compliance requirements for this type of product? Focus especially on:
+1) AI-specific regulations (EU AI Act),
+2) domain-specific EU regulations,
+3) German national regulations (BSI, BfArM, etc.),
+4) relevant ISO/IEC standards.
+List each regulation with its official name, number, and a brief explanation of why it applies. Include citations.

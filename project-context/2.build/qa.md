@@ -79,7 +79,7 @@ pytest tests/test_compliance_checker.py::test_high_risk_medical_domain -v
 ## Section 2 – Test Results Summary
 
 **Last run:** 2025-02-23  
-**Python version:** 3.12.3 (also tested on 3.11.x)  
+**Python version:** 3.12.3  
 **Duration:** 0.05 seconds  
 
 ```
@@ -420,7 +420,7 @@ The `_review_store` dict in `hitl_workflow.py` persists across tests in the same
 2. The `templates/sop/` directory contains all 6 active SOP template files at test time.
 3. The `reports/` directory is writable by the test process; it is created automatically by the report generator service if absent.
 4. The `_review_store` module-level dict does not cause test interference because each test uses unique document IDs.
-5. Python 3.11+ is required; the test suite was validated on Python 3.12.3 but targets Python 3.11+.
+5. Python 3.12 is required; the test suite was validated on Python 3.12.3.
 6. No Anthropic API key is required to run the tests; all tests use the rule-based engine only.
 
 ---

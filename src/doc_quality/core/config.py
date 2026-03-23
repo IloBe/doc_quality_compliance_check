@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # Application
     app_name: str = "Doc Quality Compliance Check"
@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # Security
     secret_key: str = "change-me-in-production"
     allowed_file_types: list[str] = [".pdf", ".docx", ".md", ".txt"]
-    max_file_size_mb: int = 50
+    max_file_size_mb: int = 10
 
     # AI / Anthropic
     anthropic_api_key: str = ""
@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     # Templates directory
     templates_dir: str = "templates"
     reports_output_dir: str = "reports"
+
+    # Database (PostgreSQL for HITL persistence)
+    database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality"
+    database_echo: bool = False
 
 
 def get_settings() -> Settings:

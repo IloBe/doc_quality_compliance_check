@@ -23,6 +23,7 @@ This architecture follows the **KISS principle** (Keep It Simple, Stupid) for MV
 | **Graceful Degradation** | LLM enrichment is optional; rule-based core is self-sufficient |
 | **Security by Default** | bleach sanitisation, filename validation, and file size limits applied at API boundary, not deep in services |
 | **Observability First** | structlog structured JSON logging in every service function, not just error paths |
+| **Layered Validation** | Deterministic task guardrails run first; a provider-neutral model validator performs a second-pass review over final crew output |
 
 ### 1.2 Quality Model — ISO/IEC 25010:2023
 
@@ -145,6 +146,25 @@ The system must address the following security requirements:
 4. **Testing Before Release:**
    - All releases must pass unit tests, integration tests, and user acceptance tests before deployment.
    - Test coverage and results must be documented and reviewed as part of the release process.
+
+5. **Prompt Versioning & Traceability (Mandatory):**
+    - All LLM prompts must be stored as versioned files under a dedicated `prompts/` directory.
+    - Inline prompt strings in production agent code are not allowed, except for short test fixtures.
+    - Prompt changes must be traceable (version identifier + change rationale) to support auditability and reproducibility.
+
+6. **OCR Fallback & Extraction Quality Monitoring (Mandatory):**
+    - For scanned/low-quality PDFs and image-heavy documents, OCR fallback must be applied when text-layer extraction confidence is below threshold.
+    - OCR processing must follow a SOTA pipeline: **transcribe + structure + grounding** (layout anchors / bounding-box awareness) to preserve reading order and reduce hallucinations.
+    - OCR model selection must be output-format-first: DocTags/HTML (reconstruction), Markdown+captions (LLM QA), JSON (programmatic extraction).
+    - Extraction quality must be monitored with both public benchmark sanity checks and a domain micro-benchmark (including tables, multilingual pages, low-DPI scans, and field-level accuracy checks).
+
+7. **Persistence Scaling & Archival Governance (Mandatory):**
+    - Auditability data must use an append-only event log as the system-of-record, plus materialized current-state tables for operational UX.
+    - Immutable snapshots must be generated periodically (e.g., nightly and workflow completion) to bound reconstruction cost for long-lived cases.
+    - Retention must be policy-driven with hot/warm/cold tiers, legal-hold override, and redaction controls per tenant/project.
+    - PostgreSQL storage must use time-based partitioning and targeted indexes for investigation queries; index design must balance write throughput and read latency.
+    - Cold archival must use compliance-grade exports (e.g., Parquet + manifest + checksum) with retrievability and integrity verification.
+    - Agentic traceability must preserve provenance metadata (`trace_id`/`correlation_id`, actor, subject, prompt/template version, model/provider metadata) and separate long-retention audit events from short-retention telemetry.
 
 #### Security Requirements Implementation & Review Process
 
@@ -288,19 +308,80 @@ The system is decomposed into five logical layers:
        │                  │          │  - Audit Logs (Art12)│
        │                  │          └──────────────────────┘
        │                  │
-┌──────▼──────────────────▼──────────────────────────────────┐
-│                  AI Agent Layer (Optional LLM)              │
+┌─────────────────────────────────────────────────────────────┐
+│           Execution / Skills API (Safe Runtime)            │
+│  document retrieval • parsing • exports • DB writes        │
+│  guardrails/redaction • allowlisted tools • rate limits    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│      AI Agent Layer + Hybrid CrewAI Orchestration          │
 │   DocumentCheckAgent          ComplianceCheckAgent          │
 │   - wraps DocumentAnalyzer   - wraps ComplianceChecker      │
 │   - optional LLM call        - optional LLM call            │
 │   - structured prompt        - structured prompt            │
 │   - result parsed to model   - result parsed to model       │
+│                                                             │
+│   CrewAI Orchestrator                                       │
+│   - workflow brain for multi-step runs                      │
+│   - retries / branching / verifier gates                    │
+│   - emits run/step audit events                             │
 └─────────────────────────────────────────────────────────────┘
                               │
-                    [Multi-Provider LLM API]
-                  (OpenAI, Anthropic, or others)
+                 [Model Provider Adapter Layer]
+      (AnthropicAdapter | OpenAICompatibleAdapter | NemotronAdapter)
                     (may be optional, graceful fallback)
 ```
+
+### 3.1.1 Flow Pattern (CrewAI Best Practice)
+
+**Orchestration Architecture (Phase 0+):**
+
+The orchestrator implements the **CrewAI Flow best practice pattern**:
+
+- **DocumentReviewFlow** (`services/orchestrator/flows/document_review_flow.py`): Owns end-to-end orchestration logic
+  - Resolves routing mode (single-agent vs. crew) with kill-switch and feature flags
+  - Manages workflow state (run_id, trace_id, correlations)
+  - Enforces global timeout via asyncio.wait_for()
+  - Logs routing decisions and completion events
+  - Executes a post-crew validator stage using the model adapter contract and structured JSON output
+  - Dispatches to execution paths (_crew_path / _scaffold_path)
+  - Returns structured WorkflowRunResponse
+
+- **OrchestratorService** (`services/orchestrator/service.py`): Thin HTTP-facing wrapper
+  - Accepts requests from FastAPI controller
+  - Instantiates DocumentReviewFlow
+  - Delegates all orchestration to Flow
+  - Returns response to caller
+
+- **Crew** (`services/orchestrator/crews/review_flow.py`): Reusable "team skill" called by Flow
+  - Defines five specialized agents (Intake Specialist, Evidence Collector, Compliance Analyst, Report Synthesizer, Quality Verifier)
+  - Executes sequential multi-agent tasks
+  - Called from Flow._crew_path() in thread-pool executor
+  - Agents access backend via Skills API tools only
+
+**Crew persona matrix (concise):**
+
+| Agent | Role | Goal | Backstory Focus |
+|-------|------|------|-----------------|
+| Intake | Audit Scope Senior Research Specialist | Resolve scope + validate document/metadata before analysis | Scope completeness and ambiguity reduction |
+| Evidence | Document Evidence Senior Research Specialist | Extract high-signal, citation-ready evidence via Skills API | Traceable evidence quality and coverage |
+| Compliance | EU AI Act Critical Reviewer and Risk Analyst | Identify policy gaps/risks and write evidence-backed findings | Skeptical assumption checks and risk focus |
+| Synthesis | Senior Compliance Instructor for non-technical reviewers | Explain results clearly in structured audit package | Clarity-first communication for non-technical stakeholders |
+| Verifier | Audit Package Critical Reviewer and Risk Analyst | Pass/fail final package on schema, citations, hallucination checks | Final quality gate and fail-fast rigor |
+
+**Second-pass validator stage:**
+- Task-level deterministic guardrails and schema checks in `crews/review_flow.py` remain the first reliability layer.
+- `DocumentReviewFlow._crew_path()` now adds a second-pass validator stage that reviews the final crew output through the provider adapter contract.
+- Validator prompts are versioned files under `services/orchestrator/src/doc_quality_orchestrator/prompts/` rather than inline workflow strings.
+- Validator output is normalized to `decision`, `summary`, `issues`, and `checks`, then emitted as audit events.
+- If the provider cannot return valid structured output, the stage degrades gracefully by skipping instead of failing the workflow on adapter-scaffold limitations.
+
+**Pattern Benefits:**
+- Separation of concerns: Flow owns business logic, Crew owns agent collaboration
+- Reusability: Crew is a standalone skill that can be orchestrated in multiple flows
+- Future extensibility: Multi-crew workflows, event triggers, and state machines can be added in Flow without changing Crew
+- Auditability: Routing decisions, state transitions logged at Flow level
 
 **Core module responsibilities:**
 
@@ -318,6 +399,8 @@ The system is decomposed into five logical layers:
 | `services/template_manager.py` | `list_templates()`, `get_template()`, `get_active_templates()` |
 | `services/report_generator.py` | `generate_report()` (ReportLab PDF) |
 | `services/hitl_workflow.py` | `create_review()`, `get_review()`, `update_review_status()`, `list_reviews()` |
+| `services/orchestrator/` | CrewAI workflow runtime, routing, retries, verifier gate, run/step audit emission |
+| `services/model_adapters/` | Provider abstraction for Anthropic, OpenAI-compatible backends, and Nemotron target integration |
 | `agents/doc_check_agent.py` | `DocumentCheckAgent` — wraps service + optional LLM |
 | `agents/compliance_agent.py` | `ComplianceCheckAgent` — wraps service + optional LLM |
 
@@ -446,7 +529,7 @@ Developer       Client (UI)       HITL Service         PostgreSQL (DB)
 │                   Host Machine (Linux/macOS/Windows)      │
 │                                                          │
 │  ┌────────────────────────────────────────────────────┐  │
-│  │  Python 3.11 Process (uvicorn)                     │  │
+│  │  Python 3.12 Process (uvicorn)                     │  │
 │  │                                                    │  │
 │  │  FastAPI app (src/doc_quality/api/main.py)         │  │
 │  │  Port: 8000                                        │  │
@@ -620,6 +703,17 @@ For MVP/Phase 0, the architecture starts with API Key authentication for backend
 | **AD-8** | Frontend framework | React, Vue, Angular, typscript, HTML/JS | **Modern Multi-page UI with React and tyscript** | KISS: build toolchain if necessary only, no npm, no bundler; tab navigation is simple enough for plain JS; reduces maintenance surface; changes possible according detailed frontend requirements |
 | **AD-9** | Configuration management | os.environ, python-dotenv, pydantic-settings | **pydantic-settings** | Type-safe settings, native Pydantic v2 integration, `.env` file support, validation on startup |
 | **AD-10** | Testing framework | unittest, pytest, hypothesis | **pytest** | Industry standard, rich plugin ecosystem (pytest-asyncio, pytest-cov), cleaner test syntax |
+| **AD-11** | Prompt management | Inline strings, DB-stored prompts, versioned files | **Versioned prompt files in `prompts/` directory** | Auditability, reproducibility, rollback support, and lower prompt drift risk across releases |
+| **AD-12** | OCR fallback architecture | Text-only extraction, legacy OCR pipeline, SOTA VLM OCR pipeline | **Confidence-gated OCR fallback with transcribe+structure+grounding** | Better robustness on scanned/complex layouts; improved reading order; lower extraction-induced hallucinations; supports output-specific downstream workflows |
+| **AD-13** | Audit persistence scaling | Mutable current-state only, event log without archival tiers, append-only event log + snapshots + tiered archival | **Append-only event log + immutable snapshots + hot/warm/cold archival** | Preserves provenance/non-repudiation, keeps recent investigations fast, and reduces long-term storage cost while retaining queryability |
+
+#### Phase 0 Implementation Specifications
+
+The above architectural decisions are elaborated with detailed acceptance criteria in the corresponding Phase 0 Definition of Done documents:
+
+- **AD-11 (Prompt Governance)**, **AD-12 (OCR Fallback)**, **AD-13 (Persistence Archival)**: See `project-context/2.build/backend.md` "Resolved Open Questions" Section 7 for implementation details.
+- **CrewAI Orchestration Runtime Controls & Observability**: See `project-context/2.build/phase0_crewAI_orchestration_definition_of_done.md` for runtime safety limits, routing modes, feature flags, and step-level observability requirements.
+- **PostgreSQL Persistence Scaling**: See `project-context/2.build/phase0_persistence_definition_of_done.md` for schema, retention policy defaults (hot/warm/cold tiers), partitioning strategy, archival pipeline, and integrity verification.
 
 ---
 
@@ -629,10 +723,10 @@ For MVP/Phase 0, the architecture starts with API Key authentication for backend
 
 | Risk ID | Risk | Probability | Impact | Mitigation | Timeline |
 |---------|------|-------------|--------|------------|----------|
-| **R-1** | Approved review records (HITL, SOP, risk) not persisted to PostgreSQL DB | **HIGH** | **MEDIUM** | Mandatory: All approved records must be stored in PostgreSQL DB; no approved document is lost; enforce as architectural requirement | Immediate |
+| **R-1** | Approved review records (HITL, SOP, risk) not persisted to PostgreSQL DB | **HIGH** | **MEDIUM** | Mandatory: Persist all approved records in PostgreSQL via append-only audit events + materialized current-state tables; enforce immutable snapshots and retention/archival policy so no approved document is lost | Immediate |
 | **R-2** | Documents (HITL reviews, SOPs, risk records) not persisted to DB at account session end (logout, app exit, shutdown) | **HIGH** | **MEDIUM** | Mandatory: All documents of mentioned types must be stored in PostgreSQL DB at session end; enforce as architectural requirement; no data loss on logout/app exit/shutdown | Immediate |
 | **R-3** | Model API rate limits or outage (Anthropic, OpenAI, vLM, MoE, etc.) | **MEDIUM** | **LOW** | Graceful fallback to rule-based core; cost control enforced for all model APIs; monitoring and alerting for outages and quota breaches | Already mitigated |
-| **R-4** | Large file (>10 MB) blocks event loop | **MEDIUM** | **MEDIUM** | 10 MB limit enforced; background tasks + streaming in Phase 2; UI feedback for file status is an architectural requirement (app user must be informed if file is too large); system improvement is a future-to-do in Phase 2 | Phase 2 |
+| **R-4** | Large file (>10 MB) blocks event loop | **MEDIUM** | **MEDIUM** | 10 MB limit enforced; background tasks + streaming in Phase 2; UI feedback for file status is an architectural requirement (app user must be informed if file is too large); confidence-gated OCR fallback required for scanned/low-quality files in supported size range | Phase 2 |
 | **R-5** | No authentication and authorisation for app login and critical actions | **HIGH** | **HIGH** | Authentication and authorisation are mandatory for app login and all HITL, risk, and compliance workflows; enforce as architectural requirement for traceability and auditability | Immediate |
 | **R-6** | arc42 section detection false negatives | **MEDIUM** | **MEDIUM** | Regex patterns cover common heading styles; LLM enrichment covers non-standard headings; HITL review ensures completeness | Ongoing |
 | **R-7** | PDF file accumulation in local reports/ dir | **LOW** | **LOW** | Manual cleanup; scheduled cleanup task in Phase 2; UI indicator for report status | Phase 2 |
@@ -652,7 +746,7 @@ For MVP/Phase 0, the architecture starts with API Key authentication for backend
 | No CI/CD pipeline | Operations | Manual test/deploy | GitHub Actions, Phase 2 |
 | No Docker image | Operations | Non-reproducible deployment | Dockerfile, Phase 2 |
 | No file storage backend | Architecture | Reports stored on local FS | At least: PostgreSQL for approved reports, Phase 0 |
-| LLM prompt not version-controlled | Maintainability | Prompt drift | Prompt registry, Phase 2 |
+| LLM prompt governance gaps | Maintainability | Prompt drift and non-reproducible LLM behavior | Mandatory: versioned prompt files in `prompts/` directory with change rationale and version identifiers; enforce in code review checklist (Immediate) |
 
 ---
 
@@ -662,7 +756,7 @@ For MVP/Phase 0, the architecture starts with API Key authentication for backend
 
 | Constraint | Value | Rationale |
 |------------|-------|-----------|
-| Python version | ≥3.11 | Required for `str | None` union syntax, `tomllib`, improved typing |
+| Python version | 3.12 | Project runtime baseline with latest typing/runtime improvements |
 | Anthropic API key | Optional | Must work without it or other LLM types; LLM is expeted to be used for some tasks |
 | EU AI Act Art. 9–15 | Must be checkable by rule-based engine | Legal requirement; no LLM dependency for compliance |
 | PDF output | Must be audit-submission ready | EU AI Act evidence package requirement |
@@ -720,12 +814,12 @@ For MVP/Phase 0, the architecture starts with API Key authentication for backend
 ## Assumptions
 
 1. MVP is deployed as a single-instance service (no load balancer, no horizontal scaling).
-2. arc42 documents are in markdown or plain text format. For binary DOCX/PDF parsing, the architecture starts with PyPDF2/python-docx in Phase 0 (MVP), and is designed to allow easy switching to NVIDIA Nemotron (or other advanced models) via configuration. This modular approach supports reliable MVP delivery and future extensibility for production-grade document ingestion.
+2. arc42 documents are in markdown or plain text format. For binary DOCX/PDF parsing, the architecture uses text-layer extraction first and enforces confidence-gated OCR fallback for scanned/low-quality documents, following transcribe+structure+grounding principles with output-format-first model selection.
 3. The rule-based compliance engine is deterministic for the same input; LLM enrichment may produce slightly different outputs across runs (non-deterministic by nature).
 4. `reports/` directory is writable by the uvicorn process; filesystem persistence of PDFs exists locally for user, final approved report result shall be stored in DB for MVP.
 5. `templates/sop/` markdown files are static for MVP; template versioning is a Phase 2 concern.
 6. CORS origins `localhost:3000` and `localhost:8000` are sufficient for MVP; production deployment behind a reverse proxy will require CORS origin update.
-7. In-memory `_review_store: dict` in `hitl_workflow.py` is acceptable for MVP with documented risk (R-1 above).
+7. HITL persistence uses PostgreSQL-backed audit events + current-state projections; in-memory review state is not accepted for approval-critical records.
 8. The LLM API client is initialised only when a supported `API_KEY` (OpenAI, Anthropic, etc.) is set; no API calls are made without an explicit key.
 
 ---
@@ -758,8 +852,14 @@ All routes are versioned and documented for traceability and audit purposes.
 - Integration tests for route-level bugs (Phase 2)
 - CI/CD pipeline setup (Phase 2)
 - Docker image and file storage backend (Phase 2+)
-- Prompt registry for LLM version control (Phase 2)
 - Document/Report artefacts belong to more than one project or product, being part of a general document framework that can be reused by future projects and their products; more expierence of few project requirements are needed (Phase 3+)
+- **OCR fallback enhancement (Phase 2+)**: Build upon confidence-gated extraction pipeline with:
+  - Integration of SOTA OCR service (Docling, PaddleOCR, or local vLLM serving)
+  - Multiple OCR profiles (form-heavy and layout-heavy) for robustness across invoices/forms/scans/multilingual pages
+  - Benchmark evaluation using public datasets and domain micro-benchmarks (~50–200 real pages) scored on CER/WER, reading order accuracy, table structure fidelity, and field-level extraction precision
+  - Deployment options supporting local OpenAI-compatible serving (vLLM) and Transformers-based paths with post-processing hooks and future fine-tuning capability
+  - Batch OCR job support for high-volume document ingestion
+  - Visual retrieval and direct document QA capability for complex layouts
 
 ---
 

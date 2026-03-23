@@ -150,10 +150,13 @@ This document describes the 6-week implementation plan for delivering the Docume
 | 6.3 | Performance benchmarking (load testing with locust) | QA | 📋 Planned |
 | 6.4 | Database persistence layer (replace in-memory stores) | Backend | 📋 Planned |
 | 6.5 | Authentication & authorisation (JWT / OAuth2) | Backend | 📋 Planned |
-| 6.6 | Docker containerisation | DevOps | 📋 Planned |
-| 6.7 | Deployment to staging environment | DevOps | 📋 Planned |
-| 6.8 | Final documentation review | All | 📋 Planned |
-| 6.9 | Stakeholder demo and sign-off | PM | 📋 Planned |
+| 6.6 | CrewAI orchestrator service with one end-to-end workflow | Backend | 📋 Planned |
+| 6.7 | Model adapter interface (`AnthropicAdapter`, `NemotronAdapter` scaffold) | Backend | 📋 Planned |
+| 6.8 | Enforce Skills API boundary for agent/orchestrator tool access | Backend | 📋 Planned |
+| 6.9 | Docker containerisation | DevOps | 📋 Planned |
+| 6.10 | Deployment to staging environment | DevOps | 📋 Planned |
+| 6.11 | Final documentation review | All | 📋 Planned |
+| 6.12 | Stakeholder demo and sign-off | PM | 📋 Planned |
 
 ### Deliverables
 - Production-ready deployment package
@@ -174,6 +177,8 @@ This document describes the 6-week implementation plan for delivering the Docume
 | ADR-005 | In-memory store for HITL reviews (v1) | Simplicity for initial implementation; replaced by DB in v2 |
 | ADR-006 | Anthropic Claude for LLM analysis | Best-in-class document analysis capabilities |
 | ADR-007 | Vanilla JS frontend | No build toolchain required, simpler deployment |
+| ADR-008 | Hybrid CrewAI orchestration over Skills API | Enables multi-step workflows with minimal rewrite and strong guardrails |
+| ADR-009 | Provider adapter layer for LLM/VLM access | Keeps orchestration vendor-neutral; allows Nemotron support via adapter |
 
 ---
 
@@ -199,4 +204,6 @@ This document describes the 6-week implementation plan for delivering the Docume
 - [ ] Integration with Confluence / SharePoint
 - [ ] Multi-language support (German, French)
 - [ ] Advanced AI agent with multi-step reasoning
+- [ ] Dedicated `services/orchestrator/` runtime with CrewAI flow packaging
+- [ ] Nemotron provider adapter promoted from scaffold to production integration
 - [ ] Dashboard analytics and trend reporting

@@ -7,6 +7,7 @@ to a static regulation map when no API key is configured.
 Perplexity API reference: https://docs.perplexity.ai/api-reference/chat-completions
 """
 import re
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -15,6 +16,8 @@ from ..core.logging_config import get_logger
 from ..models.research import ResearchCitation, ResearchRequest, ResearchResult
 
 logger = get_logger(__name__)
+
+_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 # Static fallback: domain keyword → known regulation names
 _STATIC_FALLBACK: dict[str, list[str]] = {
@@ -68,26 +71,58 @@ _KNOWN_REGULATIONS = [
 _PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
 
 
+def _load_research_prompt_template() -> str:
+    """Load research prompt template from versioned file.
+    
+    Prompt file: prompts/research_prompt_v1.txt
+    Version: v1
+    Change rationale: Externalize inline prompt to enable version control,
+                      easier A/B testing, and audit trail of prompt changes.
+    """
+    prompt_file = _PROMPTS_DIR / "research_prompt_v1.txt"
+    if not prompt_file.exists():
+        raise RuntimeError(f"Prompt file not found: {prompt_file}")
+    return prompt_file.read_text(encoding="utf-8")
+
+
+def _load_research_system_prompt() -> str:
+    """Load research system prompt from versioned file.
+    
+    Prompt file: prompts/research_system_prompt_v1.txt
+    Version: v1
+    Change rationale: Externalize inline prompt to enable version control,
+                      easier A/B testing, and audit trail of prompt changes.
+    """
+    prompt_file = _PROMPTS_DIR / "research_system_prompt_v1.txt"
+    if not prompt_file.exists():
+        raise RuntimeError(f"Prompt file not found: {prompt_file}")
+    return prompt_file.read_text(encoding="utf-8")
+
+
 def _build_research_prompt(request: ResearchRequest) -> str:
     """Build a focused research prompt for Perplexity."""
-    base = (
-        f"I am developing a software product in the domain of '{request.domain}'. "
-        f"Product description: {request.description}. "
-        f"Target market: {request.target_market}. "
-    )
+    template = _load_research_prompt_template()
+    
+    # Determine custom_query_or_default
     if request.custom_query:
-        return base + request.custom_query
-
-    return (
-        base
-        + "What are all applicable EU and German regulations, standards, and compliance "
-        "requirements for this type of product? Focus especially on: "
-        "1) AI-specific regulations (EU AI Act), "
-        "2) domain-specific EU regulations, "
-        "3) German national regulations (BSI, BfArM, etc.), "
-        "4) relevant ISO/IEC standards. "
-        "List each regulation with its official name, number, and a brief explanation "
-        "of why it applies. Include citations."
+        custom_or_default = request.custom_query
+    else:
+        custom_or_default = (
+            "What are all applicable EU and German regulations, standards, and compliance "
+            "requirements for this type of product? Focus especially on:\n"
+            "1) AI-specific regulations (EU AI Act),\n"
+            "2) domain-specific EU regulations,\n"
+            "3) German national regulations (BSI, BfArM, etc.),\n"
+            "4) relevant ISO/IEC standards.\n"
+            "List each regulation with its official name, number, and a brief explanation "
+            "of why it applies. Include citations."
+        )
+    
+    return template.format(
+        domain=request.domain,
+        description=request.description,
+        target_market=request.target_market,
+        custom_query_or_default=custom_or_default
     )
 
 
@@ -155,16 +190,13 @@ async def research_regulations(
         return _static_fallback(request)
 
     prompt = _build_research_prompt(request)
+    system_prompt = _load_research_system_prompt()
     payload: dict[str, Any] = {
         "model": model,
         "messages": [
             {
                 "role": "system",
-                "content": (
-                    "You are a European regulatory compliance expert specialising in "
-                    "AI governance, product safety law, and German/EU standards. "
-                    "Always cite your sources with URLs."
-                ),
+                "content": system_prompt,
             },
             {"role": "user", "content": prompt},
         ],
