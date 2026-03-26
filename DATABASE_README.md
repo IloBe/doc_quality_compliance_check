@@ -31,7 +31,7 @@ cd C:\Dev\doc-quality-compliance-check\doc_quality_compliance_check\frontend
 npm run dev
 ```
 
-Open `http://localhost:3000/login` and test with `demo@quality-station.ai` / `change-me`.
+Open `http://localhost:3000/login` and sign in with the `AUTH_MVP_EMAIL` / `AUTH_MVP_PASSWORD` values from your `.env` file.
 
 ### B) Integration Test (PostgreSQL) — Recommended Before Sign-Off
 
@@ -83,7 +83,7 @@ Quick API smoke test:
 ```powershell
 # Request recovery token
 $tmp = ".\recovery_request.json"
-Set-Content -Path $tmp -Value '{"email":"demo@quality-station.ai"}' -NoNewline
+Set-Content -Path $tmp -Value "{`"email`":`"$env:AUTH_MVP_EMAIL`"}" -NoNewline
 curl.exe -sS -H "Content-Type: application/json" --data-binary "@$tmp" http://localhost:8000/api/v1/auth/recovery/request
 
 # Then call verify/reset with returned debug_token in development mode
@@ -104,7 +104,7 @@ Start-Sleep -Seconds 15  # Wait for database ready
 
 **Option B: Local Installation**
 - Download PostgreSQL 16 from [postgresql.org/download/windows](https://postgresql.org/download/windows)
-- Install with port 5432, user `postgres`, password `postgres`
+- Install with port 5432, user `postgres`, set a strong password of your choice (store it in `.env` as `DATABASE_URL`)
 - Start Windows Service: `Services.msc` → PostgreSQL → Start
 
 **Option C: Cloud** (AWS RDS, Azure Database, etc.)
@@ -115,8 +115,8 @@ Start-Sleep -Seconds 15  # Wait for database ready
 ### 2️⃣ Initialize Database
 
 ```powershell
-# Set connection URL
-$env:DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality"
+# Set connection URL — replace CHANGE_ME with your actual postgres password from .env
+$env:DATABASE_URL = "postgresql+psycopg2://postgres:CHANGE_ME@localhost:5432/doc_quality"
 
 # Run one-command initialization (creates DB + runs all migrations)
 .\.venv\Scripts\python.exe init_postgres.py
@@ -133,15 +133,15 @@ $env:DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/doc_
 ### 3️⃣ Start Backend & Test Login
 
 ```powershell
-# Terminal 1: Backend server
-$env:DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality"
+# Terminal 1: Backend server — load real credentials from .env, not inline
+$env:DATABASE_URL = "postgresql+psycopg2://postgres:CHANGE_ME@localhost:5432/doc_quality"
 .\.venv\Scripts\python.exe -m uvicorn doc_quality.api.main:app `
   --app-dir "C:\Dev\doc-quality-compliance-check\doc_quality_compliance_check\src" `
   --host 0.0.0.0 --port 8000
 
-# Terminal 2: Test login (creates session)
+# Terminal 2: Test login — use YOUR AUTH_MVP_EMAIL / AUTH_MVP_PASSWORD from .env
 $tmp = ".\login.json"
-Set-Content -Path $tmp -Value '{"email":"demo@quality-station.ai","password":"change-me"}' -NoNewline
+Set-Content -Path $tmp -Value "{`"email`":`"$env:AUTH_MVP_EMAIL`",`"password`":`"$env:AUTH_MVP_PASSWORD`"}" -NoNewline
 curl.exe -i -sS -H "Content-Type: application/json" --data-binary "@$tmp" http://localhost:8000/api/v1/auth/login
 ```
 
@@ -178,7 +178,7 @@ curl.exe -i -sS -H "Content-Type: application/json" --data-binary "@$tmp" http:/
 ```sql
 session_id          VARCHAR(64) PRIMARY KEY
 session_token_hash  VARCHAR(128) UNIQUE         -- Hashed cookie value
-user_email          VARCHAR(255)                -- demo@quality-station.ai
+user_email          VARCHAR(255)                -- e.g. you@your-domain.example
 user_roles          JSON                        -- ["qm_lead", ...]
 user_org            VARCHAR(255)                -- QM-CORE-STATION
 is_revoked          BOOLEAN DEFAULT false
@@ -213,15 +213,16 @@ created_at          TIMESTAMP WITH TIME ZONE
 Create `.env` in repo root with:
 
 ```env
+# Copy .env.example → .env and fill in your real values — never commit .env
 # Database connection (PostgreSQL required for integration/pre-release validation)
-DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality
+DATABASE_URL=postgresql+psycopg2://postgres:CHANGE_ME@localhost:5432/doc_quality
 DATABASE_ECHO=false
 
-# Auth (Phase 0 MVP credentials)
-AUTH_MVP_EMAIL=demo@quality-station.ai
-AUTH_MVP_PASSWORD=change-me
+# Auth (MVP demo user — set a real mailbox and strong password)
+AUTH_MVP_EMAIL=you@your-domain.example
+AUTH_MVP_PASSWORD=CHANGE_ME_BEFORE_USE
 AUTH_MVP_ROLES=qm_lead
-AUTH_MVP_ORG=QM-CORE-STATION
+AUTH_MVP_ORG=YOUR-ORG
 ```
 
 ### Cloud / Remote PostgreSQL

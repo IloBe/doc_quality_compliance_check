@@ -11,8 +11,10 @@ from src.doc_quality.models.orm import ReviewRecordORM
 
 # Use explicit API key in tests for route authentication.
 os.environ.setdefault("SECRET_KEY", "test-api-key")
-os.environ.setdefault("AUTH_MVP_EMAIL", "demo@quality-station.ai")
-os.environ.setdefault("AUTH_MVP_PASSWORD", "change-me")
+# AUTH_MVP_EMAIL and AUTH_MVP_PASSWORD must be set via environment variables or .env in real runs.
+# The sentinel fallbacks below are intentionally invalid to prevent accidental login with defaults.  # noqa: S105
+os.environ.setdefault("AUTH_MVP_EMAIL", "mvp-user@example.invalid")  # nosec B105
+os.environ.setdefault("AUTH_MVP_PASSWORD", "CHANGE_ME_BEFORE_USE")  # nosec B105
 
 # Use in-memory SQLite for testing
 TEST_SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"

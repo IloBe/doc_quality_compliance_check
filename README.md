@@ -39,7 +39,7 @@ Phase 0 requires **PostgreSQL 16** for session authentication, HITL reviews, and
 
 1. Start PostgreSQL (Docker: `docker-compose up -d` | Local: Install PostgreSQL 16 + start service)
 2. Initialize database: `.\.venv\Scripts\python.exe init_postgres.py`
-3. Verify with login test (credentials: `demo@quality-station.ai` / `change-me`)
+3. Verify with login test (use `AUTH_MVP_EMAIL` / `AUTH_MVP_PASSWORD` from your `.env`)
 4. Run tests: `pytest tests/test_auth_session_api.py -v`
 
 📖 **[Database Setup Guide](DATABASE_README.md)** — Complete walkthrough with Docker/local/cloud options, troubleshooting, and schema details.

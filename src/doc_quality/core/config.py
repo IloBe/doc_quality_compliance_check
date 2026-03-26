@@ -26,8 +26,9 @@ class Settings(BaseSettings):
     session_cookie_name: str = "dq_session"
     session_cookie_secure: bool = False
     session_ttl_minutes: int = 480
-    auth_mvp_email: str = "demo@quality-station.ai"
-    auth_mvp_password: str = "change-me"
+    # Override via AUTH_MVP_EMAIL env var or .env file — never commit real values  # noqa: S105
+    auth_mvp_email: str = "mvp-user@example.invalid"  # nosec B105 — placeholder, not a real credential
+    auth_mvp_password: str = "CHANGE_ME_BEFORE_USE"  # nosec B105 — placeholder, not a real credential
     auth_mvp_roles: str = "qm_lead"
     auth_mvp_org: str = "QM-CORE-STATION"
     auth_auto_provision_mvp_user: bool = True
@@ -53,8 +54,10 @@ class Settings(BaseSettings):
     templates_dir: str = "templates"
     reports_output_dir: str = "reports"
 
-    # Database (PostgreSQL for HITL persistence)
-    database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality"
+    # Database — set DATABASE_URL in your .env file; never commit real credentials  # noqa: S105
+    # Example: postgresql+psycopg2://dbuser:CHANGE_ME@localhost:5432/doc_quality
+    # Example (smoke tests): sqlite:///./doc_quality.db
+    database_url: str = "postgresql+psycopg2://dbuser:CHANGE_ME@localhost:5432/doc_quality"  # nosec B105
     database_echo: bool = False
 
 

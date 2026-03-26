@@ -80,7 +80,7 @@ def test_login_rejects_invalid_password(test_db_session) -> None:
     try:
         response = client.post(
             "/api/v1/auth/login",
-            json={"email": "demo@quality-station.ai", "password": "bad-password"},
+            json={"email": os.environ.get("AUTH_MVP_EMAIL", "mvp-user@example.invalid"), "password": "bad-password"},
         )
         assert response.status_code == 401
     finally:
