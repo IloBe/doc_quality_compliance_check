@@ -5,22 +5,29 @@ import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import OperationsDrawer from './OperationsDrawer';
 import BlockingModal from './BlockingModal';
+import { logoutSession } from '../lib/authClient';
 
-const AppShell = ({ children }) => {
+const AppShell = ({ children, currentUser }) => {
   const [isOpsOpen, setIsOpsOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('exit');
   
   const isOperationsRunning = useMockStore(state => state.isOperationsRunning);
 
+  const performLogout = async () => {
+    try {
+      await logoutSession();
+    } finally {
+      window.location.href = '/login';
+    }
+  };
+
   const handleExitClick = () => {
     if (isOperationsRunning) {
       setModalType('exit');
       setIsModalOpen(true);
     } else {
-      // Logic for regular sign out
-      console.log('Logging out...');
-      window.location.href = '/login';
+      performLogout();
     }
   };
 
@@ -39,6 +46,7 @@ const AppShell = ({ children }) => {
           className="h-16 px-8 border-b border-neutral-200 bg-white" 
           onOpsClick={() => setIsOpsOpen(!isOpsOpen)}
           onExitClick={handleExitClick}
+          currentUser={currentUser}
         />
 
         {/* Global Hub/Project Breadcrumbs could go here */}
@@ -64,8 +72,7 @@ const AppShell = ({ children }) => {
         onClose={() => setIsModalOpen(false)}
         onConfirm={() => {
           setIsModalOpen(false);
-          // Actual logout or confirm logic
-          window.location.href = '/login';
+          performLogout();
         }}
       />
     </div>

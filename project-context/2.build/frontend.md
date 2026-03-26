@@ -1,8 +1,8 @@
 # Frontend Implementation Documentation — Doc Quality Compliance Check
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.3.0  
-**Date:** 2026-3-15  
+**Version:** 0.4.0  
+**Date:** 2026-3-23  
 **Author persona:** `@frontend-eng`  
 **AAMAD phase:** 2.build  
 
@@ -10,9 +10,32 @@
 
 ## Overview
 
-The frontend is a single-page application built with **vanilla HTML5, CSS3, and JavaScript** — no framework, no build toolchain, no npm. This follows the KISS principle for MVP: the tab-based dashboard is simple enough for plain JavaScript, and eliminating a build pipeline reduces maintenance overhead and deployment friction.
+The frontend is a multi-page application built with SOTA UI frameworks and modern style. Create a polished product like layout that fits to production-grade “Q&R workstation”. A growing UI complexity is expected (e.g. workflow runs, approvals, diffing, audit trail explorations). 
+
+Modern UI principles are:
+- Workflow-first navigation: users should start tasks, not hunt documents.
+- Strong structure + templates: reduce free-text chaos.
+- Explainability panel: every agent conclusion must show “why” + missing info.
+- One-click exports: auditors love printable packs.
+- Versioning everywhere: templates/SOPs/case decisions.
+- UI shall express trust, clarity, traceability, and speed—while still feeling modern and “uplifting”.
 
 **CORS note:** All API calls use relative URLs (e.g., `/api/v1/documents/analyze`) because the FastAPI backend serves the frontend via `StaticFiles`. No CORS issues arise in this configuration — the frontend and API share the same origin (`localhost:8000`).
+
+**Business insights including but not limited to:**
+- Cycle-time reduction for first-pass risk classification and documentation preparation.
+- Improved audit confidence through consistent structure and traceable history.
+- Higher adoption by engineering teams due to clear SOP guidance and ready-to-use templates.
+- A scalable foundation for expanding to additional workflows (requirements engineering templates, security assessments, DPIA support, supplier documentation, post-market monitoring, complaint handling evidence).
+
+So, this is a  multi-agent, audit-ready governance automation focused on Germany/EU reality with a 'regulatory-to-workflow' bridge and a clean workflow separation. Unlike generic document generators, this capstone emphasizes:
+
+   - Explainable outcomes (risk class + reasoning + cited sources/criteria),
+   - Actionable artifacts (templates + SOPs, not just text answers),
+   - Reproducibility (history and versioning for audit defense),
+   - EU/Germany-first governance framing (security lifecycle expectations + EU legal ecosystem),
+   - Designed for Q&R workflows rather than developer-only tooling.
+
 
 ---
 
@@ -949,6 +972,7 @@ UI requirement: Crew status must be clearly visible and legible.
 - Row-level locking for FMEA
 - Advanced notifications (unlock requests, export ready push, etc.)
 - Audit bundles / packaged exports
+- Enterprise SSO via OIDC (future step after email/password MVP with backend-managed sessions in Postgres/Redis)
 
 #### 9.17.2 Engineering-ready backlog epics (suggested)
 - Epic A: App shell + auth + project selector + navigation
@@ -960,6 +984,7 @@ UI requirement: Crew status must be clearly visible and legible.
 - Epic G: Artifact Lab (type-aware editors scaffold) + “suggestion” accept/reject
 - Epic H: Auditor Vault (side-by-side + gap list + tasks)
 - Epic I: Audit Trail (timeline + filters)
+- Epic J: Identity & access hardening (email/password MVP now with backend sessions; OIDC SSO provider integration later)
 
 ### 9.18 Definition-of-Done and Route Map of Tasks (additional build .md files)
 Notes aligned to repo’s build docs:
@@ -988,7 +1013,7 @@ Notes aligned to repo’s build docs:
 4. The Reports tab form auto-populates `document_id`, `compliance_check_id`, and reviewer/session fields after each analysis; additional HITL and audit fields are now included for traceability.
 5. Template download uses the Blob API (modern browsers only); no fallback for legacy browsers is required.
 6. The stats bar (docs analyzed, avg score, risk classification) is now backend-powered and persists across sessions; real-time statistics are fetched from PostgreSQL.
-7. Authentication/login UI is a stub for Phase 0; only authenticated users can access app shell routes.
+7. Authentication/login UI is expanded beyond stub and uses backend-owned session management; only authenticated users can access app shell routes.
 8. Locking, exclusive edit, and exit blocking modal are enforced in the UI; open is read-only by default, edit requires exclusive lock, and exit/sign out is blocked during operations.
 9. Sidebar navigation and top bar features are documented and must be implemented for persistent navigation and app shell functionality.
 10. UI follows strict color semantics and typography hierarchy as specified; micro-interactions and tooltips are used for disabled actions and lock states.
@@ -1000,8 +1025,8 @@ Notes aligned to repo’s build docs:
 1. **Mobile navigation:** Sidebar and top bar navigation are now required; should a hamburger menu or drawer be added for mobile?
 2. **Form validation:** Should HTML5 `required` attributes and constraint validation be added for all forms, including HITL review, audit, and login?
 3. **Accessibility:** Are ARIA labels and keyboard navigation implemented for new sidebar, top bar, and modal components? (Phase 2 candidate)
-4. **Session persistence:** Should `localStorage` be used to persist stats, last analysis, and user session across page refreshes?
-5. **Authentication:** Should login UI be expanded beyond stub, and should session management be handled client-side or via backend?
+4. **Session persistence (Decision):** Do not use `localStorage` for user session/auth tokens; session/auth state is backend-owned via HTTP-only, `Secure` cookie. Frontend keeps only non-sensitive UI state in memory, and stats/last-analysis views are reloaded from backend APIs after refresh (optional TTL caching is limited to non-sensitive view state).
+5. **Authentication (Decision):** Login UI shall be expanded beyond stub, and session management shall be backend-owned with HTTP-only, `Secure` cookies validated by FastAPI on each request; rationale includes XSS risk reduction, centralized revocation/logout/expiry, legal-hold/audit-grade server identity, and easier RBAC/ABAC at the API boundary. Frontend responsibilities are calling `/auth/login`, `/auth/logout`, and `/auth/me`, while keeping only non-sensitive UI state in memory.
 6. **Locking:** Should lock status and chips be updated in real time (e.g., via WebSocket), and should lock expiry/reacquire be user-notified?
 7. **Audit Trail:** Should audit events be filterable/searchable by user, doc, run, and operation type in the UI?
 8. **Export registry:** Should export redundancy prevention prompt be expanded to cover all export types and statuses?
@@ -1013,9 +1038,9 @@ Notes aligned to repo’s build docs:
 ```Python
 persona=frontend-eng
 action=develop-fe
-timestamp=2026-3-15
+timestamp=2026-3-23
 adapter=AAMAD-vscode
 artifact=project-context/2.build/frontend.md
-version=0.3.0
+version=0.4.0
 status=complete
 ```

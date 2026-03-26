@@ -14,10 +14,13 @@ import {
   LuArrowUpRight
 } from 'react-icons/lu';
 import { useMockStore } from '../lib/mockStore';
+import { useCan } from '../lib/authContext';
 
 const DocumentHub = () => {
   const documents = useMockStore(state => state.documents);
   const acquireLock = useMockStore(state => state.acquireLock);
+  const canEditDocuments = useCan('doc.edit');
+  const canRunBridge = useCan('bridge.run');
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -47,7 +50,15 @@ const DocumentHub = () => {
                 <LuList className="w-5 h-5" />
              </button>
            </div>
-           <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold transition shadow-lg shadow-blue-200 uppercase text-xs tracking-widest">
+           <button
+             disabled={!canEditDocuments}
+             title={canEditDocuments ? 'Upload Document' : 'Insufficient role permissions'}
+             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition uppercase text-xs tracking-widest ${
+               canEditDocuments
+                 ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200'
+                 : 'bg-neutral-200 text-neutral-500 cursor-not-allowed'
+             }`}
+           >
               <LuFilePlus className="w-4 h-4" />
               Upload Document
            </button>
@@ -128,9 +139,10 @@ const DocumentHub = () => {
             <div className="flex items-center gap-2">
                <button 
                  onClick={() => acquireLock(doc.id)}
-                 disabled={doc.lockedBy !== null}
+                 disabled={doc.lockedBy !== null || !canEditDocuments}
+                 title={!canEditDocuments ? 'Insufficient role permissions' : undefined}
                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest transition shadow-sm ${
-                   doc.lockedBy 
+                   doc.lockedBy || !canEditDocuments
                     ? 'bg-amber-50 text-amber-600 border border-amber-100 cursor-not-allowed' 
                     : 'bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50 active:scale-95'
                  }`}
@@ -149,8 +161,14 @@ const DocumentHub = () => {
                </button>
                
                <a 
-                 href={`/doc/${doc.id}/bridge`}
-                 className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-100 group/btn"
+                 href={canRunBridge ? `/doc/${doc.id}/bridge` : '#'}
+                 aria-disabled={!canRunBridge}
+                 title={canRunBridge ? 'Open Bridge workflow' : 'Insufficient role permissions'}
+                 className={`p-3 rounded-xl transition shadow-lg group/btn ${
+                   canRunBridge
+                     ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-100'
+                     : 'bg-neutral-200 text-neutral-500 pointer-events-none'
+                 }`}
                >
                   <LuArrowUpRight className="w-5 h-5 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform" />
                </a>

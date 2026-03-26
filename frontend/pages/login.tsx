@@ -1,27 +1,64 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { 
-  LuLayout, 
+  LuLayoutTemplate, 
   LuLock, 
   LuShieldCheck, 
   LuEye, 
   LuArrowRight,
   LuLoader,
   LuMail,
+  LuKeyRound,
   LuBriefcase,
-  LuCompass
+   LuCompass,
+   LuWifi,
+   LuWifiOff
 } from 'react-icons/lu';
+import { checkAuthServiceHealth, loginWithPassword } from '../lib/authClient';
 
 const Login = () => {
+   const router = useRouter();
   const [email, setEmail] = useState('demo@quality-station.ai');
+   const [password, setPassword] = useState('change-me');
   const [isLoading, setIsLoading] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+   const [authServiceOnline, setAuthServiceOnline] = useState<boolean | null>(null);
+   const [authServiceVersion, setAuthServiceVersion] = useState<string | null>(null);
 
-  const handleLogin = (e) => {
+   useEffect(() => {
+      let mounted = true;
+
+      const refreshHealth = async () => {
+         const health = await checkAuthServiceHealth();
+         if (!mounted) {
+            return;
+         }
+         setAuthServiceOnline(health.online);
+         setAuthServiceVersion(health.version ?? null);
+      };
+
+      refreshHealth();
+      const interval = setInterval(refreshHealth, 15000);
+      return () => {
+         mounted = false;
+         clearInterval(interval);
+      };
+   }, []);
+
+   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
-       window.location.href = '/';
-    }, 1500);
+      setError(null);
+      try {
+         await loginWithPassword(email, password);
+         router.replace('/');
+      } catch (err) {
+         setError(err instanceof Error ? err.message : 'Login failed');
+      } finally {
+         setIsLoading(false);
+      }
   };
 
   return (
@@ -36,7 +73,7 @@ const Login = () => {
          <div className="relative flex flex-col justify-center px-24 space-y-12">
             <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left-4 duration-700">
                <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-blue-200 ring-8 ring-blue-50">
-                  <LuLayout className="w-7 h-7" />
+                  <LuLayoutTemplate className="w-7 h-7" />
                </div>
                <div className="flex flex-col">
                   <span className="text-2xl font-black text-neutral-900 tracking-tight leading-none mb-1">DocQuality</span>
@@ -86,6 +123,23 @@ const Login = () => {
                <p className="text-neutral-400 text-sm font-medium leading-relaxed">
                   Sign in with your corporate SSO or project email.
                </p>
+                      <div className={`inline-flex items-center gap-2 mt-2 rounded-full px-3 py-1 text-[11px] font-bold ${
+                         authServiceOnline === true
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                            : authServiceOnline === false
+                               ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                               : 'bg-neutral-100 text-neutral-600 border border-neutral-200'
+                      }`}>
+                         {authServiceOnline === true
+                            ? <LuWifi className="w-3.5 h-3.5" />
+                            : authServiceOnline === false
+                               ? <LuWifiOff className="w-3.5 h-3.5" />
+                               : <LuLoader className="w-3.5 h-3.5 animate-spin" />}
+                         <span>
+                            Auth API: {authServiceOnline === true ? 'Online' : authServiceOnline === false ? 'Offline' : 'Checking...'}
+                            {authServiceVersion ? ` (v${authServiceVersion})` : ''}
+                         </span>
+                      </div>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-6">
@@ -106,18 +160,41 @@ const Login = () => {
                   </div>
                </div>
 
+                      <div className="space-y-1.5 focus-within:transform focus-within:scale-[1.02] transition-transform duration-300">
+                           <label htmlFor="password" className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.1em] ml-1">
+                              Password
+                           </label>
+                           <div className="relative group focus-within:ring-4 focus-within:ring-blue-50 rounded-2xl transition-all">
+                              <LuKeyRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-300 group-focus-within:text-blue-500 transition" />
+                              <input 
+                                 id="password"
+                                 type="password"
+                                 value={password}
+                                 onChange={(e) => setPassword(e.target.value)}
+                                 className="w-full bg-neutral-50 border border-neutral-100 pl-12 pr-4 py-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-blue-400 transition"
+                                 required
+                              />
+                           </div>
+                      </div>
+
+                      {error && (
+                         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert" aria-live="polite">
+                            {error}
+                         </div>
+                      )}
+
                <div className="flex items-center justify-between text-xs font-bold text-neutral-400 uppercase tracking-tight ml-1">
                   <label className="flex items-center gap-2 cursor-pointer group">
                      <input type="checkbox" className="w-4 h-4 rounded-lg bg-neutral-100 border-none transition focus:ring-blue-400 group-hover:ring-2" defaultChecked />
                      Remember session
                   </label>
-                  <a href="#" className="hover:text-blue-600 transition tracking-tighter decoration-dotted underline underline-offset-4">Forgot Access?</a>
+                  <Link href="/forgot-access" className="hover:text-blue-600 transition tracking-tighter decoration-dotted underline underline-offset-4">Forgot Access?</Link>
                </div>
 
                <button 
                  type="submit" 
-                 disabled={isLoading}
-                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl transition-all active:scale-95 shadow-2xl shadow-blue-200 flex items-center justify-center gap-3 uppercase text-xs tracking-[0.2em]"
+                         disabled={isLoading}
+                         className="w-full font-bold py-4 rounded-2xl transition-all active:scale-95 shadow-2xl flex items-center justify-center gap-3 uppercase text-xs tracking-[0.2em] bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
                >
                   {isLoading ? (
                     <>
@@ -150,7 +227,7 @@ const Login = () => {
 
          {/* Footer / Legal */}
          <div className="absolute bottom-10 inset-x-0 text-center text-[10px] text-neutral-300 font-bold uppercase tracking-[0.3em] overflow-hidden">
-            AAMAD Core System v1.0 &copy; 2024
+            QM Core System v1.0 &copy; 2026
          </div>
       </div>
     </div>

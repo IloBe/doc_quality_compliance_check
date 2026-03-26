@@ -3,14 +3,14 @@ import React from 'react';
 import { 
   LuShieldCheck, 
   LuFileCheck, 
-  LuAlertCircle, 
+  LuCircleAlert, 
   LuCpu, 
   LuGlobe, 
   LuMicrochip,
   LuExternalLink,
   LuChevronRight,
   LuBookOpen,
-  LuCheckCircle2
+  LuCircleCheck
 } from 'react-icons/lu';
 
 const ComplianceStandards = () => {
@@ -102,7 +102,7 @@ const ComplianceStandards = () => {
          <div className="space-y-6">
             <div className="bg-white rounded-[2rem] p-8 border border-neutral-100 shadow-xl overflow-hidden relative">
                <div className="bg-emerald-50 text-emerald-600 inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase mb-6">
-                  <LuCheckCircle2 className="w-3.5 h-3.5" />
+                  <LuCircleCheck className="w-3.5 h-3.5" />
                   Real-time Feed Active
                </div>
                
@@ -111,7 +111,7 @@ const ComplianceStandards = () => {
                   {[1, 2, 3].map(i => (
                     <div key={i} className="flex gap-4 p-4 hover:bg-neutral-50 rounded-2xl transition cursor-pointer border border-transparent hover:border-neutral-100">
                        <div className="mt-1">
-                          <LuAlertCircle className="w-4 h-4 text-amber-500" />
+                          <LuCircleAlert className="w-4 h-4 text-amber-500" />
                        </div>
                        <div className="space-y-1">
                           <p className="text-xs font-bold text-neutral-800 leading-tight">ISO 27001 Amendment v24.2 released.</p>

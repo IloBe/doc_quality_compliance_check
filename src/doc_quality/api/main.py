@@ -11,8 +11,8 @@ from fastapi.staticfiles import StaticFiles
 
 from ..core.config import get_settings
 from ..core.logging_config import configure_logging
-from ..core.security import require_api_auth
-from .routes import compliance, documents, reports, research, skills, templates
+from ..core.session_auth import require_authenticated_user
+from .routes import auth, compliance, documents, reports, research, skills, templates
 
 logger = structlog.get_logger(__name__)
 
@@ -40,7 +40,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000", "http://localhost:8000"],
-        allow_credentials=False,
+        allow_credentials=True,
         allow_methods=["GET", "POST", "PUT"],
         allow_headers=["*"],
     )
@@ -60,7 +60,8 @@ def create_app() -> FastAPI:
         return response
 
     prefix = settings.api_prefix
-    auth_dependencies = [Depends(require_api_auth)]
+    auth_dependencies = [Depends(require_authenticated_user)]
+    app.include_router(auth.router, prefix=prefix)
     app.include_router(documents.router, prefix=prefix, dependencies=auth_dependencies)
     app.include_router(compliance.router, prefix=prefix, dependencies=auth_dependencies)
     app.include_router(reports.router, prefix=prefix, dependencies=auth_dependencies)

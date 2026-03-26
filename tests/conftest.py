@@ -11,6 +11,8 @@ from src.doc_quality.models.orm import ReviewRecordORM
 
 # Use explicit API key in tests for route authentication.
 os.environ.setdefault("SECRET_KEY", "test-api-key")
+os.environ.setdefault("AUTH_MVP_EMAIL", "demo@quality-station.ai")
+os.environ.setdefault("AUTH_MVP_PASSWORD", "change-me")
 
 # Use in-memory SQLite for testing
 TEST_SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"

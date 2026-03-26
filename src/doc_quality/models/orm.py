@@ -2,8 +2,7 @@
 from datetime import datetime, timezone
 import uuid
 
-from sqlalchemy import JSON, Column, DateTime, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
 
 from ..core.database import Base
 
@@ -105,3 +104,51 @@ class AuditEventORM(Base):
     correlation_id = Column(String(64), nullable=True, index=True)
     payload = Column(JSON, nullable=False, default=dict)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class UserSessionORM(Base):
+    """Persistent server-side user session (email/password MVP)."""
+
+    __tablename__ = "user_sessions"
+
+    session_id = Column(String(64), primary_key=True, index=True)
+    session_token_hash = Column(String(128), nullable=False, unique=True, index=True)
+    user_email = Column(String(255), nullable=False, index=True)
+    user_roles = Column(JSON, nullable=False, default=list)
+    user_org = Column(String(255), nullable=True)
+    is_revoked = Column(Boolean, nullable=False, default=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    last_seen_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class AppUserORM(Base):
+    """Application user record with hashed password."""
+
+    __tablename__ = "app_users"
+
+    user_id = Column(String(64), primary_key=True, index=True)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    password_hash = Column(String(512), nullable=False)
+    roles = Column(JSON, nullable=False, default=list)
+    org = Column(String(255), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+    is_locked = Column(Boolean, nullable=False, default=False, index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class PasswordRecoveryTokenORM(Base):
+    """Single-use password recovery tokens (only hashed token stored)."""
+
+    __tablename__ = "password_recovery_tokens"
+
+    token_id = Column(String(64), primary_key=True, index=True)
+    user_email = Column(String(255), nullable=False, index=True)
+    token_hash = Column(String(128), nullable=False, unique=True, index=True)
+    requested_ip = Column(String(64), nullable=True, index=True)
+    requested_user_agent = Column(String(512), nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    used_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    attempt_count = Column(Integer, nullable=False, default=0)
+    requested_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)

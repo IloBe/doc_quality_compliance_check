@@ -2,18 +2,27 @@
 from typing import Generator
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 from .config import get_settings
 
 settings = get_settings()
 
+
+def _build_connect_args(database_url: str) -> dict:
+    """Build dialect-specific SQLAlchemy connect args."""
+    dialect = make_url(database_url).get_backend_name()
+    if dialect == "sqlite":
+        return {"check_same_thread": False}
+    return {"connect_timeout": 10}
+
 # Create database engine
 engine = create_engine(
     settings.database_url,
     echo=settings.database_echo,
     pool_pre_ping=True,  # Verify connections before using
-    connect_args={"connect_timeout": 10},
+    connect_args=_build_connect_args(settings.database_url),
 )
 
 # Session factory

@@ -2,7 +2,7 @@
 
 Revision ID: 003
 Revises: 002
-Create Date: 2026-03-23 00:00:00.000000
+Create Date: 2026-03-23
 
 New fields for compliance audit trail:
 - tenant_id: Tenant identifier (multi-tenancy support)

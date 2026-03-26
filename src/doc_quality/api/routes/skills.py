@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from ...core.config import get_settings
 from ...core.database import get_db
+from ...core.session_auth import require_roles
 from ...models.skills import (
     AuditEventRecord,
     ExtractTextRequest,
@@ -58,6 +59,7 @@ async def extract_text_skill(
 async def write_finding_skill(
     request: WriteFindingRequest,
     db: Session = Depends(get_db),
+    _user=Depends(require_roles("qm_lead", "auditor", "riskmanager", "architect")),
 ) -> FindingRecord:
     """Persist a finding for a stored document."""
     try:
@@ -67,6 +69,10 @@ async def write_finding_skill(
 
 
 @router.post("/log_event", response_model=AuditEventRecord)
-async def log_event_skill(request: LogEventRequest, db: Session = Depends(get_db)) -> AuditEventRecord:
+async def log_event_skill(
+    request: LogEventRequest,
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles("qm_lead", "auditor", "riskmanager", "architect")),
+) -> AuditEventRecord:
     """Persist an audit event emitted by the orchestrator or tools."""
     return log_event(db, request)

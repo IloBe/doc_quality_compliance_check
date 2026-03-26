@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useMockStore } from '../../lib/mockStore';
+import { useCan } from '../../lib/authContext';
 import { 
   LuFileText, 
   LuLoader, 
@@ -20,6 +21,7 @@ const BridgeControl = () => {
   const router = useRouter();
   const { docId } = router.query;
   const { getDocById, acquireLock, releaseLock, updateDocStatus, isOperationsRunning } = useMockStore();
+   const canRunBridge = useCan('bridge.run');
   
   const [doc, setDoc] = useState(null);
   const [activeStep, setActiveStep] = useState(0);
@@ -97,9 +99,10 @@ const BridgeControl = () => {
            </button>
            <button 
              onClick={handleStartRun}
-             disabled={isProcessing}
+                   disabled={isProcessing || !canRunBridge}
+                   title={canRunBridge ? 'Execute Bridge Run' : 'Insufficient role permissions'}
              className={`flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition active:scale-95 uppercase text-xs tracking-widest shadow-xl shadow-blue-200 ${
-               isProcessing ? 'opacity-50 cursor-not-allowed' : ''
+                      isProcessing || !canRunBridge ? 'opacity-50 cursor-not-allowed' : ''
              }`}
            >
               {isProcessing ? (

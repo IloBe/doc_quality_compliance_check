@@ -3,7 +3,9 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
+from fastapi import Depends
 
+from ...core.session_auth import require_roles
 from ...models.document import DocumentAnalysisResult, DocumentStatus, DocumentType
 from ...models.report import ReportFormat, ReportRequest, ReportResult, ReportType
 from ...services.report_generator import generate_report
@@ -12,7 +14,10 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 
 
 @router.post("/generate", response_model=ReportResult)
-async def create_report(request: ReportRequest) -> ReportResult:
+async def create_report(
+    request: ReportRequest,
+    _user=Depends(require_roles("qm_lead", "auditor", "riskmanager")),
+) -> ReportResult:
     """Generate a report for an analyzed document."""
     # Create a minimal analysis result for demo (in production, load from storage)
     dummy_analysis = DocumentAnalysisResult(

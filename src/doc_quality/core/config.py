@@ -23,6 +23,18 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-production"
     allowed_file_types: list[str] = [".pdf", ".docx", ".md", ".txt"]
     max_file_size_mb: int = 10
+    session_cookie_name: str = "dq_session"
+    session_cookie_secure: bool = False
+    session_ttl_minutes: int = 480
+    auth_mvp_email: str = "demo@quality-station.ai"
+    auth_mvp_password: str = "change-me"
+    auth_mvp_roles: str = "qm_lead"
+    auth_mvp_org: str = "QM-CORE-STATION"
+    auth_auto_provision_mvp_user: bool = True
+    auth_recovery_ttl_minutes: int = 15
+    auth_recovery_rate_limit_count: int = 5
+    auth_recovery_rate_limit_window_minutes: int = 15
+    auth_recovery_debug_expose_token: bool = True
 
     # AI / Anthropic
     anthropic_api_key: str = ""

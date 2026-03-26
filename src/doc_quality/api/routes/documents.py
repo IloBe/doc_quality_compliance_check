@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from ...core.config import get_settings
 from ...core.database import get_db
+from ...core.session_auth import require_roles
 from ...core.security import sanitize_text, validate_file_size, validate_filename
 from ...models.document import DocumentAnalysisResult, DocumentType
 from ...services.document_analyzer import analyze_document
@@ -27,6 +28,7 @@ class AnalyzeTextRequest(BaseModel):
 async def analyze_document_text(
     request: AnalyzeTextRequest,
     db: Session = Depends(get_db),
+    _user=Depends(require_roles("qm_lead", "architect", "riskmanager", "auditor")),
 ) -> DocumentAnalysisResult:
     """Analyze a document provided as text content."""
     content = sanitize_text(request.content)
@@ -48,7 +50,11 @@ async def analyze_document_text(
 
 
 @router.post("/upload", response_model=DocumentAnalysisResult)
-async def upload_document(file: UploadFile, db: Session = Depends(get_db)) -> DocumentAnalysisResult:
+async def upload_document(
+    file: UploadFile,
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles("qm_lead", "architect", "riskmanager", "auditor")),
+) -> DocumentAnalysisResult:
     """Upload and analyze a document file."""
     settings = get_settings()
 

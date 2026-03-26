@@ -13,11 +13,13 @@ import {
   LuLayoutGrid
 } from 'react-icons/lu';
 
-const Topbar = ({ className, onOpsClick, onExitClick }) => {
+const Topbar = ({ className, onOpsClick, onExitClick, currentUser }) => {
   const isOperationsRunning = useMockStore(state => state.isOperationsRunning);
-  const currentUserId = useMockStore(state => state.currentUserId);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isFocusMode, setIsFocusMode] = useState(false);
+  const displayName = currentUser?.email ?? 'Unknown User';
+  const firstInitial = displayName?.[0]?.toUpperCase() ?? '?';
+  const primaryRole = currentUser?.roles?.[0] ?? 'user';
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -113,15 +115,15 @@ const Topbar = ({ className, onOpsClick, onExitClick }) => {
         <div className="flex items-center gap-3 pl-2 cursor-pointer group">
           <div className="flex flex-col text-right">
             <span className="text-xs font-bold text-neutral-800 leading-tight group-hover:text-blue-600 transition">
-              {currentUserId}
+              {displayName}
             </span>
             <span className="text-[10px] text-neutral-400 uppercase tracking-widest leading-tight">
-              Project Lead
+              {primaryRole}
             </span>
           </div>
           <div className="relative group-hover:ring-4 group-hover:ring-blue-50 rounded-full transition-all overflow-hidden border border-neutral-200">
              <div className="w-9 h-9 flex items-center justify-center bg-blue-100 text-blue-700 font-bold p-2 text-xs">
-                {currentUserId.split(' ')[0][0]}
+               {firstInitial}
              </div>
              <button 
                onClick={onExitClick}

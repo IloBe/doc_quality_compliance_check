@@ -26,3 +26,43 @@ The **Doc Quality Compliance Checker** addresses this by introducing a structure
 Attached browser-page view of the Document Hub:
 
 ![Doc Quality Compliance Checker - Document Hub](docs/images/DocQuality_Compliance-QA-Lab.JPG)
+
+---
+
+## Getting Started
+
+### Database Setup (Phase 0 MVP)
+
+Phase 0 requires **PostgreSQL 16** for session authentication, HITL reviews, and compliance audit trails.
+
+**Quick Start (4 steps):**
+
+1. Start PostgreSQL (Docker: `docker-compose up -d` | Local: Install PostgreSQL 16 + start service)
+2. Initialize database: `.\.venv\Scripts\python.exe init_postgres.py`
+3. Verify with login test (credentials: `demo@quality-station.ai` / `change-me`)
+4. Run tests: `pytest tests/test_auth_session_api.py -v`
+
+📖 **[Database Setup Guide](DATABASE_README.md)** — Complete walkthrough with Docker/local/cloud options, troubleshooting, and schema details.
+
+**Also See:**
+
+- [Quick Command Reference](POSTGRES_SETUP_QUICKSTART.md) — Copy/paste terminal commands
+- [Full Setup Guide](POSTGRES_SETUP.md) — Detailed configuration and verification steps
+- [Infrastructure Overview](POSTGRES_INFRASTRUCTURE_SETUP.md) — Schema, requirements alignment, deployment path
+
+### Password Recovery Flow
+
+The login page now includes a production-style recovery path:
+
+1. Open [forgot-access route](frontend/pages/forgot-access.tsx) via `/forgot-access`
+2. Request recovery token (generic anti-enumeration response)
+3. Open [reset-access route](frontend/pages/reset-access.tsx) via `/reset-access?token=...`
+4. Set new password, then sign in again at `/login`
+
+Backend endpoints are implemented in [auth route module](src/doc_quality/api/routes/auth.py):
+
+- `POST /api/v1/auth/recovery/request`
+- `POST /api/v1/auth/recovery/verify`
+- `POST /api/v1/auth/recovery/reset`
+
+Security behavior includes hashed recovery tokens, TTL + single-use validation, per-IP/per-email throttling, session revocation on reset, and audit logging.
