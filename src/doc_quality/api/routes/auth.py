@@ -224,12 +224,6 @@ async def login(request: LoginRequest, response: Response, db: Session = Depends
 
     if user is not None and user.is_active and not user.is_locked:
         valid_password = verify_password(request.password, user.password_hash)
-        if not valid_password and email == settings.auth_mvp_email.lower() and request.password == settings.auth_mvp_password:
-            # One-time bridge for existing MVP env-password users.
-            user.password_hash = hash_password(request.password)
-            db.commit()
-            valid_password = True
-
         if not valid_password:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
