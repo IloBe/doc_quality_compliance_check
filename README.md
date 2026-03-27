@@ -25,7 +25,8 @@ The **Doc Quality Compliance Checker** addresses this by introducing a structure
 
 Attached browser-page view of the Document Hub:
 
-![Doc Quality Compliance Checker - Document Hub](docs/images/DocQuality_Compliance-QA-Lab.JPG)
+<!-- markdownlint-disable-next-line MD033 -->
+<img src="docs/images/DocQuality_Compliance-QA-Lab.JPG" alt="Doc Quality Compliance Checker - Document Hub" style="max-width:100%;height:auto;" width="1200" />
 
 ---
 

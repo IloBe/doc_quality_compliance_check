@@ -31,6 +31,7 @@ class LoginRequest(BaseModel):
 
     email: str = Field(min_length=3)
     password: str = Field(min_length=1)
+    remember_me: bool = False
 
 
 class AuthUserResponse(BaseModel):
@@ -241,7 +242,13 @@ async def login(request: LoginRequest, response: Response, db: Session = Depends
         roles = parse_mvp_roles(settings.auth_mvp_roles)
         org = settings.auth_mvp_org
 
-    token = create_server_session(db, user_email=email, roles=roles, org=org)
+    token = create_server_session(
+        db,
+        user_email=email,
+        roles=roles,
+        org=org,
+        remember_me=request.remember_me,
+    )
     set_session_cookie(response, token)
 
     _log_audit_event(
@@ -251,7 +258,7 @@ async def login(request: LoginRequest, response: Response, db: Session = Depends
         actor_id=email,
         subject_type="session",
         subject_id=token.session_id,
-        payload={"roles": roles},
+        payload={"roles": roles, "remember_me": request.remember_me},
     )
     db.commit()
 

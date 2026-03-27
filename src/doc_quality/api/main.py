@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from ..core.config import get_settings
 from ..core.logging_config import configure_logging
 from ..core.session_auth import require_authenticated_user
-from .routes import auth, compliance, documents, reports, research, skills, templates
+from .routes import auth, compliance, dashboard, documents, reports, research, skills, templates
 
 logger = structlog.get_logger(__name__)
 
@@ -68,6 +68,7 @@ def create_app() -> FastAPI:
     app.include_router(templates.router, prefix=prefix, dependencies=auth_dependencies)
     app.include_router(research.router, prefix=prefix, dependencies=auth_dependencies)
     app.include_router(skills.router, prefix=prefix, dependencies=auth_dependencies)
+    app.include_router(dashboard.router, prefix=prefix, dependencies=auth_dependencies)
 
     @app.get("/health")
     async def health_check() -> dict:
