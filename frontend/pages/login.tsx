@@ -20,9 +20,10 @@ import { checkAuthServiceHealth, loginWithPassword } from '../lib/authClient';
 
 const Login = () => {
    const router = useRouter();
-  const [email, setEmail] = useState('demo@quality-station.ai');
-   const [password, setPassword] = useState('change-me');
+   const [email, setEmail] = useState('mvp-user@example.invalid');
+    const [password, setPassword] = useState('CHANGE_ME_BEFORE_USE');
   const [isLoading, setIsLoading] = useState(false);
+   const [rememberSession, setRememberSession] = useState(true);
    const [error, setError] = useState<string | null>(null);
    const [authServiceOnline, setAuthServiceOnline] = useState<boolean | null>(null);
    const [authServiceVersion, setAuthServiceVersion] = useState<string | null>(null);
@@ -52,8 +53,8 @@ const Login = () => {
     setIsLoading(true);
       setError(null);
       try {
-         await loginWithPassword(email, password);
-         router.replace('/');
+         await loginWithPassword(email, password, rememberSession);
+         router.replace('/dashboard');
       } catch (err) {
          setError(err instanceof Error ? err.message : 'Login failed');
       } finally {
@@ -86,14 +87,14 @@ const Login = () => {
                   Accelerate <span className="text-blue-600">Compliance</span> for Technical Teams.
                </h1>
                <p className="text-xl text-neutral-500 font-medium leading-relaxed max-w-xl">
-                  Connect your Technical Documentation with AAMAD Bridge to automate quality checks, compliance verification, and regulatory research in seconds.
+                  Connect your Technical Documentation with Bridge layer to automate quality checks, compliance verification, and regulatory research in seconds.
                </p>
             </div>
 
             <div className="flex items-center gap-8 animate-in fade-in slide-in-from-left-4 duration-1000 delay-300">
                <div className="flex flex-col">
                   <span className="text-2xl font-black text-neutral-900 leading-none mb-2 tracking-tight">ISO-Ready</span>
-                  <p className="text-sm font-medium text-neutral-400 uppercase tracking-widest leading-none">Standards Integrated</p>
+                  <p className="text-sm font-medium text-neutral-400 uppercase tracking-widest leading-none">ISO 9001 · ISO 27001 · EU AI Act</p>
                </div>
                <div className="h-10 w-px bg-neutral-200" />
                <div className="flex flex-col">
@@ -185,7 +186,12 @@ const Login = () => {
 
                <div className="flex items-center justify-between text-xs font-bold text-neutral-400 uppercase tracking-tight ml-1">
                   <label className="flex items-center gap-2 cursor-pointer group">
-                     <input type="checkbox" className="w-4 h-4 rounded-lg bg-neutral-100 border-none transition focus:ring-blue-400 group-hover:ring-2" defaultChecked />
+                     <input
+                        type="checkbox"
+                        checked={rememberSession}
+                        onChange={(e) => setRememberSession(e.target.checked)}
+                        className="w-4 h-4 rounded-lg bg-neutral-100 border-none transition focus:ring-blue-400 group-hover:ring-2"
+                     />
                      Remember session
                   </label>
                   <Link href="/forgot-access" className="hover:text-blue-600 transition tracking-tighter decoration-dotted underline underline-offset-4">Forgot Access?</Link>
