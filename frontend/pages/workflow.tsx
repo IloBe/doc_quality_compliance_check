@@ -1,27 +1,39 @@
 
-import React from 'react';
+import React, { useState } from 'react';
+import { useRouter } from 'next/router';
+import WhyThisPageMatters from '../components/WhyThisPageMatters';
 import { 
   LuFileSearch, 
   LuShieldAlert, 
   LuLayers, 
   LuExternalLink, 
+   LuInfo,
   LuRefreshCcw,
   LuLayoutDashboard,
-  LuTerminal,
   LuCpu
 } from 'react-icons/lu';
 
 const WorkflowInsight = () => {
+   const router = useRouter();
+   const [showWhyThisPageMatters, setShowWhyThisPageMatters] = useState(false);
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Overview Header */}
       <div className="flex items-center justify-between">
         <div>
-           <div className="flex items-center gap-2 mb-2">
-              <span className="w-2 h-2 rounded-full bg-blue-500" />
-              <span className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em]">Bridge Architecture</span>
-           </div>
-           <h1 className="text-4xl font-black text-neutral-900 tracking-tighter">Workflow Orchestration</h1>
+               <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">Bridge Architecture</div>
+               <div className="flex items-center gap-2">
+                  <h1 className="text-4xl font-black text-neutral-900 tracking-tighter">Workflow Orchestration</h1>
+                  <button
+                     type="button"
+                     onClick={() => setShowWhyThisPageMatters((prev) => !prev)}
+                     className="p-1.5 rounded-full text-neutral-400 hover:text-blue-700 hover:bg-blue-50 transition"
+                     title="Why this page matters"
+                  >
+                     <LuInfo className="w-4 h-4" />
+                  </button>
+               </div>
         </div>
         
         <div className="flex items-center gap-3">
@@ -29,12 +41,21 @@ const WorkflowInsight = () => {
               <LuRefreshCcw className="w-4 h-4" />
               Reload Agents
            </button>
-           <button className="flex items-center gap-2 px-5 py-3 bg-neutral-900 text-white font-bold rounded-2xl transition hover:bg-blue-600 uppercase text-[10px] tracking-widest">
-              <LuTerminal className="w-4 h-4" />
-              Access CLI
+           <button
+             onClick={() => router.push('/doc/DOC-001/bridge')}
+             className="flex items-center gap-2 px-5 py-3 bg-neutral-900 text-white font-bold rounded-2xl transition hover:bg-blue-600 uppercase text-[10px] tracking-widest"
+           >
+              <LuExternalLink className="w-4 h-4" />
+              Open Demo Bridge Run
            </button>
         </div>
       </div>
+
+         {showWhyThisPageMatters && (
+            <WhyThisPageMatters
+               description="The Bridge page is the orchestration view for document checks. It shows how a document moves through Inspection, Compliance, Research, and final Quality Gate steps. This helps QA, auditors, and product leads verify process sequence, understand decision context, and produce traceable evidence for audits."
+            />
+         )}
 
       {/* Hero: Live Agent Mesh Visualization Stub */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

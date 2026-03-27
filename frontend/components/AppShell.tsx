@@ -11,6 +11,7 @@ const AppShell = ({ children, currentUser }) => {
   const [isOpsOpen, setIsOpsOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('exit');
+  const [isFocusMode, setIsFocusMode] = useState(false);
   
   const isOperationsRunning = useMockStore(state => state.isOperationsRunning);
 
@@ -37,7 +38,7 @@ const AppShell = ({ children, currentUser }) => {
       <div className="fixed inset-0 pointer-events-none opacity-40 bg-gradient-to-br from-blue-100/20 via-white to-emerald-100/30" />
       
       {/* Sidebar - Fixed width, sticky scroll if needed */}
-      <Sidebar className="w-[280px] h-full border-r border-neutral-200 bg-white" />
+      {!isFocusMode && <Sidebar className="w-[280px] h-full border-r border-neutral-200 bg-white" />}
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-full relative overflow-hidden">
@@ -46,6 +47,7 @@ const AppShell = ({ children, currentUser }) => {
           className="h-16 px-8 border-b border-neutral-200 bg-white" 
           onOpsClick={() => setIsOpsOpen(!isOpsOpen)}
           onExitClick={handleExitClick}
+          onFocusModeChange={setIsFocusMode}
           currentUser={currentUser}
         />
 

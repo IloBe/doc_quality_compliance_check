@@ -50,6 +50,7 @@ Phase 0 requires **PostgreSQL 16** for session authentication, HITL reviews, and
 - [Quick Command Reference](POSTGRES_SETUP_QUICKSTART.md) — Copy/paste terminal commands
 - [Full Setup Guide](POSTGRES_SETUP.md) — Detailed configuration and verification steps
 - [Infrastructure Overview](POSTGRES_INFRASTRUCTURE_SETUP.md) — Schema, requirements alignment, deployment path
+- [Application User Handbook](APP_USER_HANDBOOK.md) — Operational guidance for stakeholders, including top menu controls and compliance relevance
 
 ### Password Recovery Flow
 

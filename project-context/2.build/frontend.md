@@ -36,6 +36,39 @@ So, this is a  multi-agent, audit-ready governance automation focused on Germany
    - EU/Germany-first governance framing (security lifecycle expectations + EU legal ecosystem),
    - Designed for Q&R workflows rather than developer-only tooling.
 
+---
+
+## Document Scope (General Frontend Requirements)
+
+This file is the **general frontend requirements baseline** across all pages.
+
+Page-specific requirements and properties are maintained in dedicated files:
+
+- [frontend_dochub.md](frontend_dochub.md)
+- [frontend_dashboard.md](frontend_dashboard.md)
+- [frontend_bridge_overview.md](frontend_bridge_overview.md)
+- [frontend_bridge_run.md](frontend_bridge_run.md)
+- [frontend_compliance.md](frontend_compliance.md)
+- [frontend_login.md](frontend_login.md)
+- [frontend_forgot_access.md](frontend_forgot_access.md)
+- [frontend_reset_access.md](frontend_reset_access.md)
+
+### General requirements that apply to every page
+
+- **Role-aware behavior:** UI actions must respect role permissions from authenticated session context; disabled actions must provide clear reason text/tooltips.
+
+- **Auditability and traceability:** User-facing workflows must expose status, decision context, and outcome history; critical actions should support evidence-first review (what, why, who, when).
+
+- **Help and explainability:** Each page must provide a concise contextual purpose (“Why this page matters”); guidance must remain domain-oriented (SOP/ISO/regulatory interpretation support).
+
+- **Consistent information architecture:** Header label style must be consistent with dashboard conventions; primary title, optional info icon, and supporting description should be visually aligned.
+
+- **Operational resilience for demo + production:** Demo mode must use mock workflows without breaking backend-integrated behavior; backend mode must remain available via existing API contracts and environment switches.
+
+- **Accessibility and clarity:** Controls must be keyboard reachable, with semantic labels and readable contrast; status indicators should use icon + text semantics (not color-only signaling).
+
+- **No-regression policy:** New UI changes must not break active routes, navigation, auth flows, or existing tests; frontend changes should preserve current visual language unless explicitly revised.
+
 
 ---
 

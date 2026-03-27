@@ -1,12 +1,10 @@
 
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   LuFilePlus, 
   LuFilter, 
-  LuLayoutGrid, 
-  LuList, 
+  LuInfo,
   LuSearch, 
-  LuChevronRight,
   LuLock,
   LuLockOpen,
   LuClock,
@@ -15,12 +13,42 @@ import {
 } from 'react-icons/lu';
 import { useMockStore } from '../lib/mockStore';
 import { useCan } from '../lib/authContext';
+import { useRouter } from 'next/router';
+import WhyThisPageMatters from '../components/WhyThisPageMatters';
 
 const DocumentHub = () => {
+  const router = useRouter();
   const documents = useMockStore(state => state.documents);
   const acquireLock = useMockStore(state => state.acquireLock);
   const canEditDocuments = useCan('doc.edit');
   const canRunBridge = useCan('bridge.run');
+  const [localFilter, setLocalFilter] = useState('');
+  const [showWhyThisPageMatters, setShowWhyThisPageMatters] = useState(false);
+
+  const queryFilter = typeof router.query.q === 'string' ? router.query.q : '';
+  const projectFilter = typeof router.query.project === 'string' ? router.query.project : '';
+
+  useEffect(() => {
+    setLocalFilter(queryFilter);
+  }, [queryFilter]);
+
+  const filteredDocuments = useMemo(() => {
+    const normalized = localFilter.trim().toLowerCase();
+
+    return documents.filter((doc) => {
+      const inProject = !projectFilter || doc.product === projectFilter;
+      if (!inProject) {
+        return false;
+      }
+
+      if (!normalized) {
+        return true;
+      }
+
+      const haystack = `${doc.id} ${doc.title} ${doc.type} ${doc.product}`.toLowerCase();
+      return haystack.includes(normalized);
+    });
+  }, [documents, localFilter, projectFilter]);
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -37,19 +65,22 @@ const DocumentHub = () => {
       {/* Header & Stats */}
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-3xl font-black text-neutral-900 tracking-tight mb-2">Document Hub</h1>
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">Home</div>
+          <div className="flex items-center gap-2 mb-2">
+            <h1 className="text-3xl font-black text-neutral-900 tracking-tight">Document Hub</h1>
+            <button
+              type="button"
+              onClick={() => setShowWhyThisPageMatters((prev) => !prev)}
+              className="p-1.5 rounded-full text-neutral-400 hover:text-blue-700 hover:bg-blue-50 transition"
+              title="Why this page matters"
+            >
+              <LuInfo className="w-4 h-4" />
+            </button>
+          </div>
           <p className="text-neutral-500 font-medium">Manage and monitor technical documentation compliance.</p>
         </div>
         
         <div className="flex items-center gap-3">
-           <div className="flex bg-white rounded-xl p-1 shadow-sm border border-neutral-200">
-             <button className="p-2 bg-neutral-100 text-neutral-800 rounded-lg shadow-inner">
-                <LuLayoutGrid className="w-5 h-5" />
-             </button>
-             <button className="p-2 text-neutral-400 hover:text-neutral-600 transition">
-                <LuList className="w-5 h-5" />
-             </button>
-           </div>
            <button
              disabled={!canEditDocuments}
              title={canEditDocuments ? 'Upload Document' : 'Insufficient role permissions'}
@@ -65,6 +96,12 @@ const DocumentHub = () => {
         </div>
       </div>
 
+      {showWhyThisPageMatters && (
+        <WhyThisPageMatters
+          description="The Document Hub is the controlled entry point for governed artifacts. It helps teams find the right document version, verify ownership and status, and start traceable review workflows before compliance or release decisions."
+        />
+      )}
+
       {/* Quick Filters */}
       <div className="flex items-center justify-between bg-white/50 backdrop-blur-md p-2 rounded-2xl border border-white shadow-xl shadow-neutral-100/50">
          <div className="flex items-center gap-2">
@@ -73,6 +110,21 @@ const DocumentHub = () => {
                <input 
                  type="text" 
                  placeholder="Filter by title..."
+                 value={localFilter}
+                 onChange={(event) => setLocalFilter(event.target.value)}
+                 onKeyDown={(event) => {
+                   if (event.key === 'Enter') {
+                     const nextQuery: Record<string, string> = {};
+                     const trimmed = localFilter.trim();
+                     if (trimmed) {
+                       nextQuery.q = trimmed;
+                     }
+                     if (projectFilter) {
+                       nextQuery.project = projectFilter;
+                     }
+                     router.replace({ pathname: '/', query: nextQuery }, undefined, { shallow: true });
+                   }
+                 }}
                  className="bg-white border border-neutral-100 pl-10 pr-4 py-2 rounded-xl text-sm w-64 outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-200 transition"
                />
             </div>
@@ -82,13 +134,20 @@ const DocumentHub = () => {
             </button>
          </div>
          <div className="text-[10px] font-black text-neutral-300 uppercase tracking-[0.2em] pr-4">
-            Total {documents.length} Assets
+            Total {filteredDocuments.length} Assets
           </div>
       </div>
 
+      {(projectFilter || queryFilter) && (
+        <div className="text-xs text-neutral-500">
+          Showing results {projectFilter ? <span>for project <strong>{projectFilter}</strong></span> : <span>across all projects</span>}
+          {queryFilter ? <span> and search <strong>"{queryFilter}"</strong></span> : null}.
+        </div>
+      )}
+
       {/* Document Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {documents.map((doc) => (
+        {filteredDocuments.map((doc) => (
           <div 
             key={doc.id} 
             className="group relative bg-white border border-neutral-200 rounded-3xl p-6 shadow-sm hover:shadow-xl hover:shadow-neutral-200/50 transition-all duration-300 hover:-translate-y-1"
@@ -176,6 +235,12 @@ const DocumentHub = () => {
           </div>
         ))}
       </div>
+
+      {filteredDocuments.length === 0 && (
+        <div className="rounded-2xl bg-white border border-neutral-200 p-8 text-center text-neutral-500">
+          No documents match the current filters.
+        </div>
+      )}
     </div>
   );
 };

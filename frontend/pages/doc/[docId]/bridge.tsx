@@ -1,32 +1,32 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useMockStore } from '../../lib/mockStore';
-import { useCan } from '../../lib/authContext';
+import { useMockStore } from '../../../lib/mockStore';
+import { useCan } from '../../../lib/authContext';
+import WhyThisPageMatters from '../../../components/WhyThisPageMatters';
 import { 
   LuFileText, 
+   LuInfo,
+   LuCheck,
+   LuX,
   LuLoader, 
-  LuCheckCircle, 
+   LuCircleCheck,
   LuPlay, 
-  LuStopCircle,
-  LuTrash2,
-  LuArrowRight,
   LuHistory,
-  LuChevronRight,
-  LuLayoutGrid,
   LuCpu
 } from 'react-icons/lu';
 
 const BridgeControl = () => {
   const router = useRouter();
   const { docId } = router.query;
-  const { getDocById, acquireLock, releaseLock, updateDocStatus, isOperationsRunning } = useMockStore();
+   const { getDocById, updateDocStatus } = useMockStore();
    const canRunBridge = useCan('bridge.run');
   
   const [doc, setDoc] = useState(null);
   const [activeStep, setActiveStep] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [logs, setLogs] = useState([]);
+   const [logs, setLogs] = useState([]);
+   const [showWhyThisPageMatters, setShowWhyThisPageMatters] = useState(false);
 
   useEffect(() => {
     if (docId) {
@@ -40,6 +40,96 @@ const BridgeControl = () => {
     { id: 'research', title: 'Research Agent', desc: 'Cross-reference external regulations.' },
     { id: 'approval', title: 'Quality Gate', desc: 'Final scoring and report generation.' }
   ];
+
+   const getComplianceChecks = () => {
+      const docType = (doc?.type ?? '').toLowerCase();
+
+      if (docType === 'sop') {
+         return [
+            { name: 'ISO 9001:2015 — Clause 7.5 (Documented Information)', passed: true },
+            { name: 'ISO 13485:2016 — Clause 4.2.4 (Control of Documents)', passed: true },
+            { name: 'SOP-QMS-DOC-001 — Document Approval Workflow', passed: false },
+         ];
+      }
+
+      if (docType === 'rmf' || docType === 'fmea') {
+         return [
+            { name: 'ISO 14971:2019 — Risk Management Process', passed: true },
+            { name: 'ISO 9001:2015 — Clause 6.1 (Risk & Opportunities)', passed: true },
+            { name: 'SOP-RISK-002 — Risk Review Sign-off', passed: false },
+         ];
+      }
+
+      return [
+         { name: 'ISO 9001:2015 — Clause 7.5 (Documented Information)', passed: true },
+         { name: 'ISO/IEC 27001:2022 — A.8.15 (Logging)', passed: false },
+         { name: 'SOP-QMS-DOC-001 — Document Approval Workflow', passed: true },
+      ];
+   };
+
+   const complianceChecks = getComplianceChecks();
+
+   const getResearchChecks = () => {
+      const docType = (doc?.type ?? '').toLowerCase();
+
+      if (docType === 'sop') {
+         return [
+            { name: 'EU AI Act — Art. 9 (Risk Management System)', passed: true },
+            { name: 'EU AI Act — Art. 12 (Record-Keeping)', passed: true },
+            { name: 'MDR 2017/745 — Annex IX (QMS Technical Documentation)', passed: false },
+         ];
+      }
+
+      if (docType === 'rmf' || docType === 'fmea') {
+         return [
+            { name: 'EU AI Act — Art. 10 (Data and Data Governance)', passed: true },
+            { name: 'EU AI Act — Art. 14 (Human Oversight)', passed: false },
+            { name: 'ISO 14971:2019 — Risk Control Verification', passed: true },
+         ];
+      }
+
+      return [
+         { name: 'EU AI Act — Annex IV (Technical Documentation)', passed: false },
+         { name: 'ISO/IEC 27001:2022 — A.5.36 (Compliance with Policies)', passed: true },
+         { name: 'NIST AI RMF — Govern Function Mapping', passed: true },
+      ];
+   };
+
+   const researchChecks = getResearchChecks();
+
+   const buildQualityGateSummary = () => {
+      const allChecks = [...complianceChecks, ...researchChecks];
+      const passed = allChecks.filter((check) => check.passed).length;
+      const failed = allChecks.length - passed;
+
+      if (isProcessing) {
+         return {
+            heading: 'Final decision pending',
+            text: 'The Quality Gate is consolidating control outcomes and evidence references from prior agents. A final score and report package will be generated after all mandatory checks are completed.',
+         };
+      }
+
+      if (activeStep < steps.length - 1) {
+         return {
+            heading: 'Awaiting Quality Gate execution',
+            text: 'Scoring has not started yet because earlier workflow stages are still in progress. Final report generation will begin once Compliance and Research checks are finalized.',
+         };
+      }
+
+      if (failed > 0) {
+         return {
+            heading: 'Conditional result: remediation required',
+            text: `The Quality Gate recorded ${passed} passed and ${failed} failed controls, so release recommendation remains restricted until remediation is documented. A report draft was generated with failure traceability for audit follow-up.`,
+         };
+      }
+
+      return {
+         heading: 'Result: quality gate passed',
+         text: `The Quality Gate recorded ${passed} passed and ${failed} failed controls, meeting the configured acceptance criteria for this artifact. A complete report package was generated with traceable evidence for release and audit review.`,
+      };
+   };
+
+   const qualityGateSummary = buildQualityGateSummary();
 
   const handleStartRun = () => {
     if (!doc) return;
@@ -77,15 +167,21 @@ const BridgeControl = () => {
               <LuFileText className="w-8 h-8" />
            </div>
            <div>
-              <div className="flex items-center gap-2 mb-1">
-                 <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest bg-neutral-100 px-2 py-0.5 rounded">
-                   BRIDGE / WORKFLOW
-                 </span>
-                 <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest px-2 py-0.5 rounded bg-amber-50 border border-amber-100">
-                    Live Session
-                 </span>
+                     <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">Bridge / Workflow</div>
+                     <div className="flex items-center gap-2 mb-1">
+                        <h1 className="text-3xl font-black text-neutral-900 tracking-tight">{doc.title}</h1>
+                        <button
+                           type="button"
+                           onClick={() => setShowWhyThisPageMatters((prev) => !prev)}
+                           className="p-1.5 rounded-full text-neutral-400 hover:text-blue-700 hover:bg-blue-50 transition"
+                           title="Why this page matters"
+                        >
+                           <LuInfo className="w-4 h-4" />
+                        </button>
+                        <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest px-2 py-0.5 rounded bg-amber-50 border border-amber-100">
+                           Live Session
+                        </span>
               </div>
-              <h1 className="text-3xl font-black text-neutral-900 tracking-tight">{doc.title}</h1>
               <p className="text-neutral-500 font-medium">Document compliance session ID: <span className="text-neutral-900 font-mono tracking-tighter">{doc.id}</span></p>
            </div>
         </div>
@@ -119,6 +215,12 @@ const BridgeControl = () => {
            </button>
         </div>
       </div>
+
+         {showWhyThisPageMatters && (
+            <WhyThisPageMatters
+               description="This page executes and documents a single Bridge run for one artifact. It provides step-level visibility and timestamped logs so teams can demonstrate how a compliance conclusion was produced for that exact document."
+            />
+         )}
 
       <div className="grid grid-cols-12 gap-8">
         {/* Workflow Track */}
@@ -158,7 +260,7 @@ const BridgeControl = () => {
                                  ? 'bg-emerald-500 text-white shadow-xl shadow-emerald-400' 
                                  : 'bg-neutral-100 text-neutral-400'
                            }`}>
-                              {isDone ? <LuCheckCircle className="w-6 h-6" /> : <span className="font-black text-lg">{idx + 1}</span>}
+                              {isDone ? <LuCircleCheck className="w-6 h-6" /> : <span className="font-black text-lg">{idx + 1}</span>}
                            </div>
 
                            <div className="flex-1">
@@ -170,6 +272,74 @@ const BridgeControl = () => {
                               <p className="text-sm font-medium text-neutral-400 group-hover:text-neutral-500 transition line-clamp-1 italic">
                                  {step.desc}
                               </p>
+
+                                             {step.id === 'compliance' && (
+                                                <div className="mt-3 space-y-2">
+                                                   <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                                                      Checked ISO/SOP controls
+                                                   </div>
+                                                   {complianceChecks.map((check) => (
+                                                      <div
+                                                         key={check.name}
+                                                         className="flex items-center justify-between gap-3 rounded-lg border border-neutral-100 bg-white/80 px-3 py-2"
+                                                      >
+                                                         <span className="text-xs font-medium text-neutral-700 leading-tight">{check.name}</span>
+                                                         <span
+                                                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${
+                                                               check.passed
+                                                                  ? 'bg-emerald-100 text-emerald-700'
+                                                                  : 'bg-rose-100 text-rose-700'
+                                                            }`}
+                                                         >
+                                                            {check.passed ? <LuCheck className="w-3 h-3" /> : <LuX className="w-3 h-3" />}
+                                                            {check.passed ? 'Passed' : 'Failed'}
+                                                         </span>
+                                                      </div>
+                                                   ))}
+                                                </div>
+                                             )}
+
+                                             {step.id === 'research' && (
+                                                <div className="mt-3 space-y-2">
+                                                   <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                                                      Cross-referenced regulations
+                                                   </div>
+                                                   {researchChecks.map((check) => (
+                                                      <div
+                                                         key={check.name}
+                                                         className="flex items-center justify-between gap-3 rounded-lg border border-neutral-100 bg-white/80 px-3 py-2"
+                                                      >
+                                                         <span className="text-xs font-medium text-neutral-700 leading-tight">{check.name}</span>
+                                                         <span
+                                                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${
+                                                               check.passed
+                                                                  ? 'bg-emerald-100 text-emerald-700'
+                                                                  : 'bg-rose-100 text-rose-700'
+                                                            }`}
+                                                         >
+                                                            {check.passed ? <LuCheck className="w-3 h-3" /> : <LuX className="w-3 h-3" />}
+                                                            {check.passed ? 'Passed' : 'Failed'}
+                                                         </span>
+                                                      </div>
+                                                   ))}
+                                                </div>
+                                             )}
+
+                                             {step.id === 'approval' && (
+                                                <div className="mt-3 space-y-2">
+                                                   <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                                                      Final result summary
+                                                   </div>
+                                                   <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                                                      <div className="text-xs font-black uppercase tracking-widest text-neutral-500 mb-1">
+                                                         {qualityGateSummary.heading}
+                                                      </div>
+                                                      <p className="text-xs text-neutral-700 leading-relaxed">
+                                                         {qualityGateSummary.text}
+                                                      </p>
+                                                   </div>
+                                                </div>
+                                             )}
                            </div>
 
                            {isActive && (

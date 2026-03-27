@@ -4,6 +4,7 @@ import {
   LuCheck,
   LuClock3,
   LuFileText,
+  LuInfo,
   LuLoader,
   LuShield,
   LuTrendingUp,
@@ -11,6 +12,7 @@ import {
 } from 'react-icons/lu';
 import { useMockStore } from '../lib/mockStore';
 import { DashboardSummary, DashboardTimeframe, fetchDashboardSummary } from '../lib/dashboardClient';
+import WhyThisPageMatters from '../components/WhyThisPageMatters';
 
 function parseTimestamp(value: string): Date | null {
   if (!value) {
@@ -75,6 +77,7 @@ const DashboardPage = () => {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showWhyThisPageMatters, setShowWhyThisPageMatters] = useState(false);
 
   // Default to demo mode (same mock source as Doc Hub).
   // Set NEXT_PUBLIC_DASHBOARD_SOURCE=backend to use live aggregation endpoint.
@@ -190,7 +193,17 @@ const DashboardPage = () => {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">Quality & Audit Insights</div>
-          <h1 className="text-3xl font-black text-neutral-900 tracking-tight">Dashboard</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-black text-neutral-900 tracking-tight">Dashboard</h1>
+            <button
+              type="button"
+              onClick={() => setShowWhyThisPageMatters((prev) => !prev)}
+              className="p-1.5 rounded-full text-neutral-400 hover:text-blue-700 hover:bg-blue-50 transition"
+              title="Why this page matters"
+            >
+              <LuInfo className="w-4 h-4" />
+            </button>
+          </div>
           <p className="text-neutral-500 font-medium mt-1">Operational overview for document compliance, risk and audit readiness.</p>
         </div>
 
@@ -212,6 +225,12 @@ const DashboardPage = () => {
           })}
         </div>
       </div>
+
+      {showWhyThisPageMatters && (
+        <WhyThisPageMatters
+          description="The Dashboard provides audit-readiness visibility at a glance. It consolidates document status, risk class, and pass/fail control results so stakeholders can prioritize remediation and make release decisions using evidence, not assumptions."
+        />
+      )}
 
       {useBackendData && isLoading && (
         <div className="bg-white border border-neutral-200 rounded-2xl p-6 flex items-center gap-3 text-neutral-600">

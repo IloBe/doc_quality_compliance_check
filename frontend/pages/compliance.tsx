@@ -1,19 +1,22 @@
 
-import React from 'react';
+import React, { useState } from 'react';
+import WhyThisPageMatters from '../components/WhyThisPageMatters';
 import { 
   LuShieldCheck, 
   LuFileCheck, 
   LuCircleAlert, 
   LuCpu, 
   LuGlobe, 
-  LuMicrochip,
   LuExternalLink,
   LuChevronRight,
   LuBookOpen,
-  LuCircleCheck
+   LuCircleCheck,
+   LuInfo
 } from 'react-icons/lu';
 
 const ComplianceStandards = () => {
+   const [showWhyThisPageMatters, setShowWhyThisPageMatters] = useState(false);
+
   const standards = [
     { 
       id: 'ISO27001', 
@@ -42,16 +45,29 @@ const ComplianceStandards = () => {
     <div className="space-y-12 animate-in fade-in duration-700">
       {/* Overview Header */}
       <div className="max-w-2xl">
-         <div className="flex items-center gap-2 mb-3">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em]">Compliance Mapping System</span>
-         </div>
-         <h1 className="text-5xl font-black text-neutral-900 tracking-tighter mb-4 leading-none">Global Governance.</h1>
+             <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">Compliance Mapping System</div>
+             <div className="flex items-center gap-2 mb-4">
+                  <h1 className="text-5xl font-black text-neutral-900 tracking-tighter leading-none">Global Governance.</h1>
+                  <button
+                     type="button"
+                     onClick={() => setShowWhyThisPageMatters((prev) => !prev)}
+                     className="p-1.5 rounded-full text-neutral-400 hover:text-blue-700 hover:bg-blue-50 transition"
+                     title="Why this page matters"
+                  >
+                     <LuInfo className="w-4 h-4" />
+                  </button>
+             </div>
          <p className="text-lg text-neutral-500 font-medium leading-relaxed">
            Manage the regulatory schemas used by agents to validate documents. 
            Connect to Perplexity-enhanced research nodes for real-time compliance updates.
          </p>
       </div>
+
+         {showWhyThisPageMatters && (
+            <WhyThisPageMatters
+               description="The Compliance page defines which standards and regulatory mappings are active for checks. It helps governance teams align validation rules with current obligations and gives reviewers a clear basis for pass/fail interpretation."
+            />
+         )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
          <div className="xl:col-span-2 space-y-6">
