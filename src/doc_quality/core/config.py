@@ -25,7 +25,11 @@ class Settings(BaseSettings):
     max_file_size_mb: int = 10
     session_cookie_name: str = "dq_session"
     session_cookie_secure: bool = False
-    session_ttl_minutes: int = 480
+    # Session TTL policy
+    # - remember_me = false -> short session
+    # - remember_me = true  -> persistent session
+    session_ttl_short_minutes: int = 120
+    session_ttl_remember_me_minutes: int = 7200
     # Override via AUTH_MVP_EMAIL env var or .env file — never commit real values  # noqa: S105
     auth_mvp_email: str = "mvp-user@example.invalid"  # nosec B105 — placeholder, not a real credential
     auth_mvp_password: str = "CHANGE_ME_BEFORE_USE"  # nosec B105 — placeholder, not a real credential

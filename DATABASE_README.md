@@ -156,7 +156,7 @@ curl.exe -i -sS -H "Content-Type: application/json" --data-binary "@$tmp" http:/
 .\.venv\Scripts\python.exe -m pytest tests/test_auth_session_api.py -v
 ```
 
-**Expected:** 5 tests passing ✓
+**Expected:** 7 tests passing ✓
 
 ---
 
@@ -182,7 +182,7 @@ user_email          VARCHAR(255)                -- e.g. you@your-domain.example
 user_roles          JSON                        -- ["qm_lead", ...]
 user_org            VARCHAR(255)                -- QM-CORE-STATION
 is_revoked          BOOLEAN DEFAULT false
-expires_at          TIMESTAMP WITH TIME ZONE   -- 8 hours default
+expires_at          TIMESTAMP WITH TIME ZONE   -- 2h default or 5d with remember_me=true
 created_at          TIMESTAMP WITH TIME ZONE
 last_seen_at        TIMESTAMP WITH TIME ZONE
 ```

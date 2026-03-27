@@ -34,6 +34,7 @@ class SessionTokens:
     session_id: str
     raw_token: str
     expires_at: datetime
+    max_age_seconds: int
 
 
 def _now_utc() -> datetime:
@@ -59,13 +60,26 @@ def parse_mvp_roles(raw_roles: str) -> list[str]:
     return roles or ["user"]
 
 
-def create_server_session(db: Session, user_email: str, roles: list[str], org: str | None) -> SessionTokens:
+def _session_ttl_minutes(remember_me: bool) -> int:
+    settings = get_settings()
+    return settings.session_ttl_remember_me_minutes if remember_me else settings.session_ttl_short_minutes
+
+
+def create_server_session(
+    db: Session,
+    user_email: str,
+    roles: list[str],
+    org: str | None,
+    *,
+    remember_me: bool,
+) -> SessionTokens:
     """Create and persist a new server-side session."""
     settings = get_settings()
+    ttl_minutes = _session_ttl_minutes(remember_me)
     session_id = secrets.token_urlsafe(24)
     raw_token = secrets.token_urlsafe(48)
     token_hash = _hash_session_token(raw_token, settings.secret_key)
-    expires_at = _now_utc() + timedelta(minutes=settings.session_ttl_minutes)
+    expires_at = _now_utc() + timedelta(minutes=ttl_minutes)
 
     row = UserSessionORM(
         session_id=session_id,
@@ -79,7 +93,12 @@ def create_server_session(db: Session, user_email: str, roles: list[str], org: s
     db.add(row)
     db.commit()
 
-    return SessionTokens(session_id=session_id, raw_token=raw_token, expires_at=expires_at)
+    return SessionTokens(
+        session_id=session_id,
+        raw_token=raw_token,
+        expires_at=expires_at,
+        max_age_seconds=ttl_minutes * 60,
+    )
 
 
 def revoke_server_session(db: Session, raw_cookie_value: str | None) -> None:
@@ -132,14 +151,13 @@ def resolve_user_from_cookie(db: Session, raw_cookie_value: str | None) -> Authe
 
 def set_session_cookie(response: Response, token: SessionTokens) -> None:
     """Attach the server session cookie to response."""
-    settings = get_settings()
     response.set_cookie(
         key=_cookie_name(),
         value=token.raw_token,
         httponly=True,
-        secure=settings.session_cookie_secure,
+        secure=get_settings().session_cookie_secure,
         samesite="lax",
-        max_age=settings.session_ttl_minutes * 60,
+        max_age=token.max_age_seconds,
         expires=token.expires_at,
         path="/",
     )
