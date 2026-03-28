@@ -54,7 +54,19 @@ def client(test_db_session) -> TestClient:
         yield test_db_session
 
     app.dependency_overrides[get_db] = override_get_db
-    yield TestClient(app, headers={"X-API-Key": os.environ["SECRET_KEY"]})
+    with TestClient(app) as test_client:
+        login = test_client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": os.environ.get("AUTH_MVP_EMAIL", "mvp-user@example.invalid"),
+                "password": os.environ.get("AUTH_MVP_PASSWORD", "CHANGE_ME_BEFORE_USE"),
+            },
+        )
+        if login.status_code != 200:
+            raise RuntimeError(f"Failed to create authenticated test client: {login.text}")
+
+        yield test_client
+
     app.dependency_overrides.clear()
 
 

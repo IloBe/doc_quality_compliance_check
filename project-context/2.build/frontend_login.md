@@ -11,7 +11,7 @@ Authenticate users and establish role-aware session context for all protected pa
 ## Functional requirements
 
 - Submit credentials to auth API and store session via secure cookie flow.
-- Redirect authenticated user to `/dashboard`.
+- Redirect authenticated user to `/` (Doc Hub landing page).
 - Provide route entry to forgot access flow (`/forgot-access`).
 - Show clear error state for failed authentication.
 
@@ -27,5 +27,5 @@ Authenticate users and establish role-aware session context for all protected pa
 
 ## Acceptance criteria
 
-- Successful sign-in opens protected app shell.
+- Successful sign-in opens protected app shell and lands on Doc Hub.
 - Failed sign-in keeps user on login with actionable feedback.

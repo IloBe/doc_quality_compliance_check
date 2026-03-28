@@ -1,5 +1,7 @@
 # Frontend implementation plan with route map of tasks (Next.js)
 
+<!-- markdownlint-disable MD007 MD022 MD029 MD032 MD058 MD060 -->
+
 **Product:** Document Quality & Compliance Check System  
 **Version:** 0.1.0  
 **Date:** 2026-3-15  
@@ -10,7 +12,7 @@
 | Area | Route | Purpose |
 |---|---|---|
 | Auth | `/login` | Branded login entry |
-| Shell | `/` → redirect | Redirect to `/dashboard` after auth |
+| Shell | `/` | Doc Hub landing page after auth |
 | Command Center | `/dashboard` | CTA + project overview + restore session |
 | Bridge | `/bridge` | Runs list |
 | Bridge | `/bridge/new` | Stepper intake/classification/result |
@@ -80,7 +82,7 @@
 
 ## Audit
 
-```Python
+```text
 persona=frontend-eng
 action=develop-fe
 timestamp=2026-3-15

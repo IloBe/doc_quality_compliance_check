@@ -51,6 +51,7 @@ Phase 0 requires **PostgreSQL 16** for session authentication, HITL reviews, and
 - [Full Setup Guide](POSTGRES_SETUP.md) — Detailed configuration and verification steps
 - [Infrastructure Overview](POSTGRES_INFRASTRUCTURE_SETUP.md) — Schema, requirements alignment, deployment path
 - [Application User Handbook](APP_USER_HANDBOOK.md) — Operational guidance for stakeholders, including top menu controls and compliance relevance
+- [Authentication and Authorization Guide](AUTHENTICATION_AUTHORIZATION_README.md) — Implemented login, session, RBAC, throttling, recovery, and security-test concepts
 
 ### Password Recovery Flow
 
@@ -68,3 +69,23 @@ Backend endpoints are implemented in [auth route module](src/doc_quality/api/rou
 - `POST /api/v1/auth/recovery/reset`
 
 Security behavior includes hashed recovery tokens, TTL + single-use validation, per-IP/per-email throttling, session revocation on reset, and audit logging.
+
+### Security environment defaults (Phase 0 hardening)
+
+| Variable | Default | Production behavior |
+| --- | --- | --- |
+| `SECRET_KEY` | `change-me-in-production` | Startup fails if unchanged |
+| `SESSION_COOKIE_SECURE` | `false` | Forced to `true` when `ENVIRONMENT != development` |
+| `AUTH_RECOVERY_DEBUG_EXPOSE_TOKEN` | `false` | Token/reset URL stays hidden unless explicitly enabled in development |
+| `GLOBAL_RATE_LIMIT_ENABLED` | `true` | Global `/api/v1/*` request limiting enforced |
+| `AUTH_LOGIN_RATE_LIMIT_COUNT` | `8` | Login throttling + lockout policy enabled |
+
+### Authorization matrix (browser users vs service clients)
+
+| Endpoint group | Browser session roles | Service API key (`service`) |
+| --- | --- | --- |
+| `/api/v1/skills/*` | `qm_lead`, `architect`, `riskmanager`, `auditor` | Allowed (explicit machine endpoints) |
+| `/api/v1/reports/*` | `qm_lead`, `riskmanager`, `auditor` | Denied |
+| `/api/v1/compliance/*` | `qm_lead`, `architect`, `riskmanager`, `auditor` | Denied |
+| `/api/v1/research/*` | `qm_lead`, `architect`, `riskmanager`, `auditor` | Denied |
+| `/api/v1/auth/me` | Any authenticated browser session | Denied (session-only endpoint) |

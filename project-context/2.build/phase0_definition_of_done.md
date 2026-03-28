@@ -1,5 +1,7 @@
 # Frontend: Initial Definition of Done (DoD) per Epic (Phase 0)
 
+<!-- markdownlint-disable MD009 MD022 MD032 MD036 -->
+
 **Product:** Document Quality & Compliance Check System  
 **Version:** 0.1.0  
 **Date:** 2026-3-15  
@@ -109,7 +111,7 @@
 
 ## Audit
 
-```Python
+```text
 persona=frontend-eng
 action=develop-fe
 timestamp=2026-3-15

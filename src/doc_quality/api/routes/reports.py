@@ -36,7 +36,10 @@ async def create_report(
 
 
 @router.get("/download/{report_id}")
-async def download_report(report_id: str) -> FileResponse:
+async def download_report(
+    report_id: str,
+    _user=Depends(require_roles("qm_lead", "auditor", "riskmanager")),
+) -> FileResponse:
     """Download a generated report by ID."""
     reports_dir = Path("reports")
     candidates = list(reports_dir.glob(f"report_{report_id}.*")) if reports_dir.exists() else []

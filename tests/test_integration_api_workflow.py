@@ -25,7 +25,7 @@ def test_protected_route_rejects_invalid_api_key(test_db_session) -> None:
             json={"query": "arc42"},
         )
         assert response.status_code == 401
-        assert response.json()["detail"] == "Authentication required"
+        assert response.json()["error"]["message"] == "Authentication required"
     finally:
         app.dependency_overrides.clear()
 
@@ -106,7 +106,7 @@ def test_extract_text_enforces_size_limit(client) -> None:
     )
 
     assert response.status_code == 400
-    assert "exceeds limit" in response.json()["detail"].lower()
+    assert "exceeds limit" in response.json()["error"]["message"].lower()
 
 
 def test_report_generation_after_analysis(client, sample_arc42_content: str) -> None:

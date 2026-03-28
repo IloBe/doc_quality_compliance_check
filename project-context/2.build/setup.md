@@ -11,7 +11,7 @@
 ## Prerequisites
 
 | Requirement | Version | Notes |
-|-------------|---------|-------|
+| --- | --- | --- |
 | Python | 3.12.x | Project runtime baseline |
 | pip | ≥ 23.x | For package installation |
 | uv (optional) | ≥ 0.1.x | Faster alternative to pip; not required |
@@ -19,6 +19,7 @@
 | Anthropic API key | Optional | Only required for LLM-enriched analysis |
 
 **Verify Python version:**
+
 ```bash
 python --version
 # Expected: Python 3.12.x
@@ -50,21 +51,25 @@ source .venv/bin/activate
 ### 3. Install Dependencies
 
 **Standard installation (with dev dependencies):**
+
 ```bash
 pip install -e ".[dev]"
 ```
 
 **Production-only installation (no dev/test dependencies):**
+
 ```bash
 pip install -e .
 ```
 
 **Alternative with uv (faster):**
+
 ```bash
 uv pip install -e ".[dev]"
 ```
 
 This installs all runtime and development dependencies defined in `pyproject.toml`:
+
 - `fastapi`, `uvicorn[standard]`, `pydantic`, `pydantic-settings`
 - `reportlab`, `structlog`, `bleach`, `anthropic`
 - `python-multipart`, `python-docx`, `pypdf`, `aiofiles`, `jinja2`, `httpx`
@@ -93,6 +98,22 @@ ENVIRONMENT="development"
 # API Configuration
 API_PREFIX="/api/v1"
 
+# Security / Authentication
+SECRET_KEY="change-me-in-production"
+SESSION_COOKIE_NAME="dq_session"
+AUTH_MVP_EMAIL="mvp-user@example.invalid"
+AUTH_MVP_PASSWORD="CHANGE_ME_BEFORE_USE"
+AUTH_MVP_ROLES="qm_lead"
+AUTH_MVP_ORG="QM-CORE-STATION"
+
+# Abuse Protection
+GLOBAL_RATE_LIMIT_ENABLED=true
+GLOBAL_RATE_LIMIT_REQUESTS=240
+GLOBAL_RATE_LIMIT_WINDOW_SECONDS=60
+AUTH_LOGIN_RATE_LIMIT_COUNT=8
+AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS=300
+AUTH_LOGIN_LOCKOUT_SECONDS=600
+
 # Logging
 LOG_LEVEL="INFO"          # DEBUG | INFO | WARNING | ERROR
 LOG_FORMAT="json"         # json | console
@@ -110,11 +131,23 @@ MAX_FILE_SIZE_MB=10       # Maximum uploaded file size in megabytes
 ### 3. Environment Variable Reference
 
 | Variable | Default | Required | Description |
-|----------|---------|----------|-------------|
+| --- | --- | --- | --- |
 | `APP_NAME` | `Doc Quality Compliance Check` | No | Application display name |
 | `APP_VERSION` | `0.1.0` | No | Application version string |
 | `ENVIRONMENT` | `development` | No | `development` \| `production` |
 | `API_PREFIX` | `/api/v1` | No | URL prefix for all API routes |
+| `SECRET_KEY` | `change-me-in-production` | Yes in production | Shared application secret; production startup fails if insecure default remains |
+| `SESSION_COOKIE_NAME` | `dq_session` | No | Name of backend-owned session cookie |
+| `AUTH_MVP_EMAIL` | `mvp-user@example.invalid` | No | Bootstrap login email for Phase 0 |
+| `AUTH_MVP_PASSWORD` | `CHANGE_ME_BEFORE_USE` | No | Bootstrap login password for Phase 0 |
+| `AUTH_MVP_ROLES` | `qm_lead` | No | Comma-separated MVP bootstrap roles |
+| `AUTH_MVP_ORG` | `QM-CORE-STATION` | No | Bootstrap organization value |
+| `GLOBAL_RATE_LIMIT_ENABLED` | `true` | No | Enables process-local global API throttling |
+| `GLOBAL_RATE_LIMIT_REQUESTS` | `240` | No | Maximum API requests per window |
+| `GLOBAL_RATE_LIMIT_WINDOW_SECONDS` | `60` | No | Global throttle window |
+| `AUTH_LOGIN_RATE_LIMIT_COUNT` | `8` | No | Failed login attempts before lockout |
+| `AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS` | `300` | No | Failed-login tracking window |
+| `AUTH_LOGIN_LOCKOUT_SECONDS` | `600` | No | Temporary login lockout duration |
 | `LOG_LEVEL` | `INFO` | No | Logging verbosity level |
 | `LOG_FORMAT` | `json` | No | `json` for structured logging, `console` for human-readable |
 | `MAX_FILE_SIZE_MB` | `10` | No | Maximum file upload size in MB |
@@ -132,7 +165,8 @@ uvicorn src.doc_quality.api.main:app --reload
 ```
 
 Expected output:
-```
+
+```text
 INFO:     Will watch for changes in these directories: ['/path/to/project']
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
 INFO:     Started reloader process
@@ -152,8 +186,10 @@ curl http://localhost:8000/health
 open http://localhost:8000/docs    # Swagger UI
 open http://localhost:8000/redoc   # ReDoc
 
-# Frontend dashboard
-open http://localhost:8000/        # HTML dashboard
+# Frontend entry points
+open http://localhost:8000/health  # Backend health check
+open http://localhost:3000/login   # Frontend login page (Next.js dev server)
+open http://localhost:3000/        # Protected app shell / Doc Hub after auth
 ```
 
 ### Custom Port and Host
@@ -177,7 +213,8 @@ pytest tests/ -v
 ```
 
 Expected output:
-```
+
+```text
 ============================= test session starts ==============================
 platform linux -- Python 3.12.x
 collected 30 items
@@ -226,7 +263,7 @@ mypy src/
 
 ## Project Structure Overview
 
-```
+```text
 doc_quality_compliance_check/
 ├── .env.example                    # Environment variable template
 ├── .env                            # Local environment (gitignored)
@@ -273,10 +310,11 @@ doc_quality_compliance_check/
 │       ├── sop_risk_assessment.md
 │       └── sop_glossary.md
 │
-├── frontend/                       # Browser dashboard
-│   ├── index.html                  # Single-page app (4 tabs)
-│   ├── css/styles.css              # Responsive styling
-│   └── js/app.js                   # Fetch API calls + UI logic
+├── frontend/                       # Next.js frontend application
+│   ├── pages/                      # Route entry points (`/`, `/login`, docs, workflow)
+│   ├── components/                 # App shell and page components
+│   ├── lib/                        # Auth/API helpers and client utilities
+│   └── ...
 │
 ├── tests/                          # Pytest unit tests
 │   ├── conftest.py                 # Shared fixtures
@@ -312,7 +350,7 @@ doc_quality_compliance_check/
 ## Dependency Reference
 
 | Package | Version | Purpose |
-|---------|---------|---------|
+| --- | --- | --- |
 | `fastapi` | ≥0.109.0 | REST API framework; async, typed, auto-docs |
 | `uvicorn[standard]` | ≥0.27.0 | ASGI server; `standard` extras include websockets, watchfiles |
 | `pydantic` | ≥2.5.0 | Data validation and serialisation (v2 API) |
@@ -353,9 +391,9 @@ doc_quality_compliance_check/
 
 ### 3. Frontend Static File Serving
 
-**Issue:** The FastAPI `StaticFiles` mount for `frontend/` uses a `try/except RuntimeError` fallback. If the `frontend/` directory does not exist, the API still starts but the dashboard is not accessible.
+**Issue:** The backend may expose fallback static serving, but current development flow primarily uses the Next.js frontend on port `3000`. If the frontend app is not running or the `frontend/` directory is missing, the protected UI/login flow is not available.
 
-**Workaround:** Ensure the `frontend/` directory exists at the project root. The directory is included in the repository.
+**Workaround:** Ensure the `frontend/` directory exists at the project root and run the frontend dev server separately for interactive login/app-shell testing.
 
 ### 4. Python 3.12 Required
 
@@ -386,20 +424,23 @@ pytest tests/ -v
 # Start server
 uvicorn src.doc_quality.api.main:app --reload
 
-# Open dashboard
-open http://localhost:8000
+# Start frontend (separate terminal)
+npm --prefix frontend run dev
+
+# Open login / app shell
+open http://localhost:3000/login
 ```
 
 ---
 
 ## Sources
 
-- Python 3.12 Release Notes, https://docs.python.org/3/whatsnew/3.12.html
-- FastAPI Tutorial — Bigger Applications, https://fastapi.tiangolo.com/tutorial/bigger-applications/
-- Pydantic v2 Migration Guide, https://docs.pydantic.dev/latest/migration/
-- uvicorn Documentation, https://www.uvicorn.org/
-- pytest Documentation, https://docs.pytest.org/en/stable/
-- uv Package Manager, https://github.com/astral-sh/uv
+- [Python 3.12 Release Notes](https://docs.python.org/3/whatsnew/3.12.html)
+- [FastAPI Tutorial — Bigger Applications](https://fastapi.tiangolo.com/tutorial/bigger-applications/)
+- [Pydantic v2 Migration Guide](https://docs.pydantic.dev/latest/migration/)
+- [uvicorn Documentation](https://www.uvicorn.org/)
+- [pytest Documentation](https://docs.pytest.org/en/stable/)
+- [uv Package Manager](https://github.com/astral-sh/uv)
 
 ---
 
@@ -409,7 +450,7 @@ open http://localhost:8000
 2. The `frontend/` directory is present in the repository root (not gitignored).
 3. The `reports/` directory will be created at runtime by the report generator service if it does not exist.
 4. An Anthropic API key is not required; the system is fully functional without it.
-5. The development server runs on `localhost:8000` by default; all frontend API calls use this base URL.
+5. The backend runs on `localhost:8000` by default and the Next.js frontend runs on `localhost:3000`; browser authentication is established through `/api/v1/auth/login` and backend-owned HTTP-only session cookies.
 
 ---
 
@@ -424,7 +465,7 @@ open http://localhost:8000
 
 ## Audit
 
-```
+```text
 persona=project-mgr
 action=setup-project
 timestamp=2025-02-23

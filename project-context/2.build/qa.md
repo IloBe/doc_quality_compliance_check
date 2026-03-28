@@ -1,5 +1,7 @@
 # QA Documentation — Doc Quality Compliance Check
 
+<!-- markdownlint-disable MD031 MD032 MD034 MD040 MD060 -->
+
 **Product:** Document Quality & Compliance Check System  
 **Version:** 0.1.0  
 **Date:** 2025-02-23  

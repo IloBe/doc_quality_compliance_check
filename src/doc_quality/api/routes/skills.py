@@ -25,7 +25,11 @@ router = APIRouter(prefix="/skills", tags=["skills"])
 
 
 @router.post("/get_document", response_model=SkillDocumentRecord)
-async def get_document_skill(request: GetDocumentRequest, db: Session = Depends(get_db)) -> SkillDocumentRecord:
+async def get_document_skill(
+    request: GetDocumentRequest,
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles("qm_lead", "auditor", "riskmanager", "architect", allow_service=True)),
+) -> SkillDocumentRecord:
     """Return a stored document by id."""
     result = get_document(db, request.document_id)
     if result is None:
@@ -37,6 +41,7 @@ async def get_document_skill(request: GetDocumentRequest, db: Session = Depends(
 async def search_documents_skill(
     request: SearchDocumentsRequest,
     db: Session = Depends(get_db),
+    _user=Depends(require_roles("qm_lead", "auditor", "riskmanager", "architect", allow_service=True)),
 ) -> SearchDocumentsResponse:
     """Search stored documents for orchestrator/tool use."""
     return search_documents(db, request)
@@ -46,6 +51,7 @@ async def search_documents_skill(
 async def extract_text_skill(
     request: ExtractTextRequest,
     db: Session = Depends(get_db),
+    _user=Depends(require_roles("qm_lead", "auditor", "riskmanager", "architect", allow_service=True)),
 ) -> ExtractTextResponse:
     """Extract text from a stored or inline document."""
     settings = get_settings()
@@ -59,7 +65,7 @@ async def extract_text_skill(
 async def write_finding_skill(
     request: WriteFindingRequest,
     db: Session = Depends(get_db),
-    _user=Depends(require_roles("qm_lead", "auditor", "riskmanager", "architect")),
+    _user=Depends(require_roles("qm_lead", "auditor", "riskmanager", "architect", allow_service=True)),
 ) -> FindingRecord:
     """Persist a finding for a stored document."""
     try:
@@ -72,7 +78,7 @@ async def write_finding_skill(
 async def log_event_skill(
     request: LogEventRequest,
     db: Session = Depends(get_db),
-    _user=Depends(require_roles("qm_lead", "auditor", "riskmanager", "architect")),
+    _user=Depends(require_roles("qm_lead", "auditor", "riskmanager", "architect", allow_service=True)),
 ) -> AuditEventRecord:
     """Persist an audit event emitted by the orchestrator or tools."""
     return log_event(db, request)

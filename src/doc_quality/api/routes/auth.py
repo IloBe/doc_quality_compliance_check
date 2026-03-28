@@ -5,13 +5,14 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import secrets
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ...core.config import get_settings
 from ...core.database import get_db
 from ...core.passwords import hash_password, verify_password
+from ...core.rate_limit import auth_login_throttle
 from ...core.session_auth import (
     AuthenticatedUser,
     clear_session_cookie,
@@ -212,11 +213,53 @@ def _find_valid_recovery_token(db: Session, raw_token: str) -> PasswordRecoveryT
     return row
 
 
+def _lockout_key_email(email: str) -> str:
+    return f"email:{email.strip().lower()}"
+
+
+def _lockout_key_ip(ip: str | None) -> str:
+    return f"ip:{(ip or 'unknown').strip()}"
+
+
+def _get_login_retry_after(email: str, ip: str | None) -> int:
+    keys = (_lockout_key_email(email), _lockout_key_ip(ip))
+    return max(auth_login_throttle.check_lockout(key=key) for key in keys)
+
+
+def _register_login_failure(email: str, ip: str | None) -> int:
+    settings = get_settings()
+    keys = (_lockout_key_email(email), _lockout_key_ip(ip))
+    lockout_for = 0
+    for key in keys:
+        remaining = auth_login_throttle.record_failure(
+            key=key,
+            max_attempts=settings.auth_login_rate_limit_count,
+            window_seconds=settings.auth_login_rate_limit_window_seconds,
+            lockout_seconds=settings.auth_login_lockout_seconds,
+        )
+        lockout_for = max(lockout_for, remaining)
+    return lockout_for
+
+
+def _clear_login_failures(email: str, ip: str | None) -> None:
+    auth_login_throttle.clear(key=_lockout_key_email(email))
+    auth_login_throttle.clear(key=_lockout_key_ip(ip))
+
+
 @router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest, response: Response, db: Session = Depends(get_db)) -> LoginResponse:
+async def login(request: LoginRequest, response: Response, http_request: Request, db: Session = Depends(get_db)) -> LoginResponse:
     """Validate credentials and issue server session cookie."""
     settings = get_settings()
     email = request.email.lower()
+    client_ip = http_request.client.host if http_request.client else None
+
+    retry_after = _get_login_retry_after(email, client_ip)
+    if retry_after > 0:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
 
     user = db.query(AppUserORM).filter(AppUserORM.email == email).first()
     if user is None:
@@ -225,6 +268,13 @@ async def login(request: LoginRequest, response: Response, db: Session = Depends
     if user is not None and user.is_active and not user.is_locked:
         valid_password = verify_password(request.password, user.password_hash)
         if not valid_password:
+            lockout_for = _register_login_failure(email, client_ip)
+            if lockout_for > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many login attempts. Try again later.",
+                    headers={"Retry-After": str(lockout_for)},
+                )
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
         roles = list(user.roles or [])
@@ -232,9 +282,18 @@ async def login(request: LoginRequest, response: Response, db: Session = Depends
     else:
         # Backward-compatible fallback when app_users row does not exist yet.
         if email != settings.auth_mvp_email.lower() or request.password != settings.auth_mvp_password:
+            lockout_for = _register_login_failure(email, client_ip)
+            if lockout_for > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many login attempts. Try again later.",
+                    headers={"Retry-After": str(lockout_for)},
+                )
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
         roles = parse_mvp_roles(settings.auth_mvp_roles)
         org = settings.auth_mvp_org
+
+    _clear_login_failures(email, client_ip)
 
     token = create_server_session(
         db,
@@ -264,11 +323,12 @@ async def login(request: LoginRequest, response: Response, db: Session = Depends
 
 @router.post("/logout", response_model=LogoutResponse)
 async def logout(
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
-    session_cookie: str | None = Cookie(default=None, alias="dq_session"),
 ) -> LogoutResponse:
     """Revoke session and clear auth cookie."""
+    session_cookie = request.cookies.get(get_settings().session_cookie_name)
     revoke_server_session(db, session_cookie)
     clear_session_cookie(response)
     return LogoutResponse(success=True)

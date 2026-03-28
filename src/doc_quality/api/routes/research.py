@@ -1,6 +1,7 @@
 """API routes for Perplexity-powered regulatory research."""
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from ...core.session_auth import require_roles
 from ...core.security import sanitize_text
 from ...models.research import ResearchRequest, ResearchResult
 from ...agents.research_agent import ResearchAgent
@@ -9,7 +10,10 @@ router = APIRouter(prefix="/research", tags=["research"])
 
 
 @router.post("/regulations", response_model=ResearchResult)
-async def research_regulations(request: ResearchRequest) -> ResearchResult:
+async def research_regulations(
+    request: ResearchRequest,
+    _user=Depends(require_roles("qm_lead", "architect", "riskmanager", "auditor")),
+) -> ResearchResult:
     """Research applicable EU/German regulations for a given product domain.
 
     Uses Perplexity Sonar (when ``PERPLEXITY_API_KEY`` is set) or a static

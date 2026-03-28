@@ -689,7 +689,7 @@ class ReportResult(BaseModel):
 
 ### Authentication Approach (Phase 0)
 
-For MVP/Phase 0, the architecture starts with API Key authentication for backend endpoints, providing simple and effective access control. Optionally, OAuth2 with a standard provider (e.g., Google, Microsoft, Auth0) can be added for user login and role-based access. This approach ensures traceability, auditability, and compliance with PRD/SAD requirements. LDAP/SAML for enterprise SSO is deferred to later phases as a future-to-do for large organizations.
+For MVP/Phase 0, the architecture uses backend-owned **email/password authentication for browser users**, issuing HTTP-only server-side session cookies after successful login. Explicit service-to-service calls continue to use API key or bearer-token authentication, but service access is restricted to explicitly allowed machine endpoints rather than acting as a blanket authorization bypass. This approach supports traceability, auditability, session revocation, and route-level RBAC at the API boundary. Enterprise SSO via OIDC/OAuth2/LDAP/SAML is deferred to later phases as a future-to-do for larger organizational deployments.
 
 | ID | Decision | Options Considered | Chosen Option | Rationale |
 |----|----------|-------------------|--------------|-----------|
@@ -741,7 +741,7 @@ The above architectural decisions are elaborated with detailed acceptance criter
 |------|-----------|--------|-------------|
 | In-memory HITL review store | Architecture | Reviews lost on restart | PostgreSQL persistence, Phase 0 |
 | No database layer | Architecture | No query/filter capability | PostgreSQL, Phase 0 |
-| No authentication | Security | Internal deployment only | OAuth2/API key, Phase 0 |
+| No enterprise SSO or distributed identity provider integration yet | Security | Larger organizations still need centralized identity integration | OIDC/OAuth2/LDAP/SAML, Phase 2+ |
 | No integration tests | Testing | Route-level bugs undetected | TestClient tests, >= Phase 1 |
 | No CI/CD pipeline | Operations | Manual test/deploy | GitHub Actions, Phase 2 |
 | No Docker image | Operations | Non-reproducible deployment | Dockerfile, Phase 2 |
@@ -845,13 +845,94 @@ All routes are versioned and documented for traceability and audit purposes.
 
 ---
 
+## Phase 0 Hardening Checklist (Production-Grade Baseline)
+
+This checklist defines the minimum hardening scope for Phase 0 so the current MVP can be used as a safe production starting point.
+
+### 1) Enforce production-safe security defaults
+
+- **Objective:** Remove insecure defaults and enforce explicit production configuration.
+- **Code changes (exact):**
+  - Update [src/doc_quality/core/config.py](src/doc_quality/core/config.py):
+    - Replace weak default `secret_key` with required non-default validation (fail startup if unchanged in `production`).
+    - Set `session_cookie_secure=True` automatically when `environment != development`.
+    - Set `auth_recovery_debug_expose_token=False` by default.
+  - Update [src/doc_quality/core/session_auth.py](src/doc_quality/core/session_auth.py):
+    - Replace hardcoded cookie alias `dq_session` in dependencies with configured cookie name from `session_cookie_name`.
+- **Documentation updates:**
+  - Add environment variable matrix and secure defaults to `README.md` and deployment docs.
+  - Document startup fail-fast behavior for insecure production config.
+
+### 2) Add global abuse protections and login throttling
+
+- **Objective:** Protect API from brute-force, scraping, and accidental request storms.
+- **Code changes (exact):**
+  - Add request rate-limiting middleware/dependency for all `/api/v1/*` routes in [src/doc_quality/api/main.py](src/doc_quality/api/main.py).
+  - Extend auth protections in [src/doc_quality/api/routes/auth.py](src/doc_quality/api/routes/auth.py):
+    - Add login attempt throttling per IP and per account.
+    - Add temporary lockout/backoff policy after repeated failed logins.
+    - Return HTTP `429` with `Retry-After` header where applicable.
+  - Add new config fields in [src/doc_quality/core/config.py](src/doc_quality/core/config.py) for global and auth-specific limits.
+- **Documentation updates:**
+  - Document rate-limit policy and lockout behavior in API docs.
+  - Add operational runbook for handling repeated `429`/lockout events.
+
+### 3) Tighten authorization policy and service-account scope
+
+- **Objective:** Ensure least-privilege access and prevent broad service bypass.
+- **Code changes (exact):**
+  - Refactor [src/doc_quality/core/session_auth.py](src/doc_quality/core/session_auth.py):
+    - Restrict `service` role bypass to explicit machine-to-machine endpoints only.
+    - Enforce endpoint-level role checks consistently via `require_roles(...)`.
+  - Review and update route guards in:
+    - [src/doc_quality/api/routes/compliance.py](src/doc_quality/api/routes/compliance.py)
+    - [src/doc_quality/api/routes/research.py](src/doc_quality/api/routes/research.py)
+    - [src/doc_quality/api/routes/reports.py](src/doc_quality/api/routes/reports.py)
+    - [src/doc_quality/api/routes/skills.py](src/doc_quality/api/routes/skills.py)
+  - Add explicit authorization policy map (role → endpoint/action matrix) in backend docs.
+- **Documentation updates:**
+  - Add a dedicated "Authorization Matrix" section in SAD + README.
+  - Document difference between browser session users and service clients.
+
+### 4) Minimize information leakage in responses and recovery flows
+
+- **Objective:** Prevent exposure of sensitive internal details or account intelligence.
+- **Code changes (exact):**
+  - Update [src/doc_quality/api/routes/auth.py](src/doc_quality/api/routes/auth.py):
+    - Keep generic recovery responses in all environments.
+    - Ensure debug token/reset URL exposure is development-only and disabled by default.
+  - Add standardized API error envelope in [src/doc_quality/api/main.py](src/doc_quality/api/main.py):
+    - Normalize `4xx/5xx` responses and avoid returning raw exception internals.
+  - Review payload fields in data-returning endpoints to avoid over-exposure (e.g., restrict full extracted text where not required).
+- **Documentation updates:**
+  - Add error-handling and disclosure policy section (what is intentionally returned vs. redacted).
+  - Document incident response guidance for suspicious data exposure.
+
+### 5) Add security verification tests (authz, throttling, disclosure)
+
+- **Objective:** Make security controls testable, repeatable, and release-gated.
+- **Code changes (exact):**
+  - Add/extend tests under `tests/`:
+    - `tests/test_auth_authorization_api.py`: negative role tests (`401`/`403`) per protected endpoint.
+    - `tests/test_auth_rate_limit_api.py`: brute-force and `429` behavior (with `Retry-After`).
+    - `tests/test_auth_recovery_api.py`: verify no token leakage outside allowed debug conditions.
+    - `tests/test_error_envelope_api.py`: ensure error payloads do not reveal internals.
+  - Integrate these tests into required CI checks for release readiness.
+- **Documentation updates:**
+  - Add a security test checklist and pass criteria (mandatory for release).
+  - Map each test module to the corresponding threat category (authz, abuse, leakage).
+
+---
+
 ## Future-To-Do Topics
 
-- LDAP/SAML authentication for enterprise SSO (recommended for large organizations, deferred to Phase 2+)
+- Enterprise SSO via OIDC/OAuth2/LDAP/SAML (recommended for large organizations, deferred to Phase 2+)
+- Persistent distributed rate limiting and shared lockout state (e.g., Redis-backed) for multi-instance deployments (Phase 2+)
 - Scheduled cleanup task for PDF file accumulation in reports/ directory (storage management, Phase 2)
 - Integration tests for route-level bugs (Phase 2)
 - CI/CD pipeline setup (Phase 2)
 - Docker image and file storage backend (Phase 2+)
+- **Search improvement (Phase 2+)**: Adopting BM25 + dense retrieval makes sense for scale and compliance evidence quality in this product context.
 - Document/Report artefacts belong to more than one project or product, being part of a general document framework that can be reused by future projects and their products; more expierence of few project requirements are needed (Phase 3+)
 - **OCR fallback enhancement (Phase 2+)**: Build upon confidence-gated extraction pipeline with:
   - Integration of SOTA OCR service (Docling, PaddleOCR, or local vLLM serving)

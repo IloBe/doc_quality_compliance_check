@@ -1,5 +1,7 @@
 # Persistence Migration Plan: In-memory to PostgreSQL
 
+<!-- markdownlint-disable MD022 MD032 MD058 MD060 -->
+
 **Source Artifacts:** SAD.md, PRD.md
 **Target Phase:** P0 (MVP Foundation for Scalability & Resilience)
 

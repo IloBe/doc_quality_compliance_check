@@ -282,14 +282,14 @@ Unlike generic document generators, this system emphasizes:
 | PDF generation | Buy (ReportLab) | Open-source, pure Python, sufficient functionality |
 | LLM document analysis | Buy (Anthropic API) | No need to train own models; Claude 3 sufficient |
 | Frontend | Build (vanilla) | Minimal UI requirements; KISS principle for MVP |
-| Authentication | Defer | MVP is internal deployment only |
+| Authentication | Build now, extend later | Phase 0 already uses email/password login with backend-owned sessions; enterprise SSO remains a later enhancement |
 
 ### 6.3 Roadmap
 
 | Milestone | Deliverable |
 |-----------|-------------|
 | **MVP (Weeks 1-6)** | Risk classification workflow, Template/SOP generation, History page, Polished UI for Q&R tasks. |
-| **Phase 2** | Full coverage of NIS2/GDPR, ALM toolchain integration (Jira/Confluence), Multi-user Role-Based Access Control. |
+| **Phase 2** | Full coverage of NIS2/GDPR, ALM toolchain integration (Jira/Confluence), enterprise SSO and advanced identity integration. |
 | **Phase 3** | Notified-body grade MDR automation, advanced cloud deployment, automated post-market monitoring integration. |
 
 
@@ -311,7 +311,7 @@ Unlike generic document generators, this system emphasizes:
 | AI Hallucinations | Medium | High | Mandatory HITL (Q&R Approval) for all outputs. |
 | In-memory review store data loss on restart | High | Medium | Document as known limitation; SQLite persistence in Phase 2 |
 | Large file processing blocks event loop | Medium | Medium | Background tasks in Phase 2; 10 MB file size limit for MVP |
-| No authentication in MVP — internal exposure | Medium | Medium | Document explicitly; add auth in Phase 2 before any non-internal deployment |
+| Enterprise SSO not yet implemented for larger organizations | Medium | Medium | Phase 0 already has email/password auth and RBAC; add OIDC/OAuth2/LDAP/SAML integration in Phase 2+ where centralized identity is required |
 | arc42 section detection false negatives | Medium | Medium | Regex patterns cover common heading styles; LLM enrichment covers edge cases |
 | PDF generation failure for malformed input | Low | Low | Fallback to text summary; bleach sanitisation prevents injection |
 | Complex PDF parsing fails | Medium | Low | NVIDIA Nemotron-Parse integration + manual fallback. |
@@ -342,7 +342,7 @@ Unlike generic document generators, this system emphasizes:
 |-------|-----------|
 | 1–2 | MVP delivered, internal QM team onboarded, usability feedback collected |
 | 3 | SQLite persistence, Docker Compose deployment, MDR/GDPR checkers |
-| 4 | Multi-user authentication (OAuth2/API key), email notifications for HITL |
+| 4 | Enterprise SSO integration (OIDC/OAuth2/LDAP/SAML), email notifications for HITL |
 | 5 | LLM-enriched analysis enabled by default, accuracy metrics collected |
 | 6 | Cloud deployment (AWS/Azure), SaaS pricing model evaluation |
 
@@ -376,7 +376,7 @@ Unlike generic document generators, this system emphasizes:
 2. Documents submitted are text-based (markdown, plain text) or standard office formats and PDFs; encrypted PDFs are out of scope for MVP.
 3. The arc42 template structure follows the canonical 12-section format; non-standard adaptations may reduce detection accuracy.
 4. OpenAI API is default setup, Anthropic Claude API availability is treated as optional; the rule-based core is self-sufficient for MVP.
-5. MVP deployment is internal-only (single organisation, no internet-facing exposure); production multi-tenant deployment requires authentication (Phase 2).
+5. Phase 0 already includes backend-owned authentication and RBAC for protected features; larger-scale enterprise or multi-tenant deployment still requires centralized SSO and distributed infrastructure hardening in later phases.
 6. EU AI Act technical requirements are stable from August 2026 enforcement date; minor guidance updates are handled via requirements engine updates, not architectural changes.
 7. "High-risk" AI system classification follows EU AI Act Annex III exactly; the system classifies based on domain keywords, not legal interpretation.
 8. The 6-week MVP timeline assumes one experienced Python developer using agentic tooling (VS Code + GitHub Copilot + AAMAD).
@@ -389,7 +389,7 @@ Unlike generic document generators, this system emphasizes:
 2. **MDR integration timeline:** When should Medical Device Regulation (MDR) requirements be added? (Candidate for 30-day priority. Not in focus of 6 week MVP)
 3. **LLM evaluation:** How should accuracy of LLM-enriched gap analysis be measured? (Proposed: expert annotation of 50 real arc42 docs.)
 4. **SaaS model:** Is a self-hosted product sufficient, or is a multi-tenant cloud SaaS required for commercial viability?
-5. **Authentication design:** OAuth2 vs API key vs LDAP integration for Phase 2 authentication?
+5. **Enterprise identity design:** Which centralized identity path should be preferred for Phase 2+ enterprise SSO: OIDC/OAuth2 provider integration vs LDAP/SAML federation?
 6. **Data retention policy:** How long should generated PDF reports and HITL review records be retained? (EU AI Act Art. 72 post-market monitoring implies multi-year retention.)
 7. **Inactive templates activation criteria:** What triggers activation of inactive SOP templates (e.g. MDR-specific templates)?
 

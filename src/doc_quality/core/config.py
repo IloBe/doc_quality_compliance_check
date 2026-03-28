@@ -1,5 +1,6 @@
 """Application configuration using Pydantic Settings."""
 from typing import Literal
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +26,10 @@ class Settings(BaseSettings):
     max_file_size_mb: int = 10
     session_cookie_name: str = "dq_session"
     session_cookie_secure: bool = False
+    # Global request rate limiting
+    global_rate_limit_enabled: bool = True
+    global_rate_limit_requests: int = 240
+    global_rate_limit_window_seconds: int = 60
     # Session TTL policy
     # - remember_me = false -> short session
     # - remember_me = true  -> persistent session
@@ -39,7 +44,11 @@ class Settings(BaseSettings):
     auth_recovery_ttl_minutes: int = 15
     auth_recovery_rate_limit_count: int = 5
     auth_recovery_rate_limit_window_minutes: int = 15
-    auth_recovery_debug_expose_token: bool = True
+    auth_recovery_debug_expose_token: bool = False
+    # Login abuse protection
+    auth_login_rate_limit_count: int = 8
+    auth_login_rate_limit_window_seconds: int = 300
+    auth_login_lockout_seconds: int = 600
 
     # AI / Anthropic
     anthropic_api_key: str = ""
@@ -63,6 +72,17 @@ class Settings(BaseSettings):
     # Example (smoke tests): sqlite:///./doc_quality.db
     database_url: str = "postgresql+psycopg2://dbuser:CHANGE_ME@localhost:5432/doc_quality"  # nosec B105
     database_echo: bool = False
+
+    @model_validator(mode="after")
+    def validate_security_defaults(self) -> "Settings":
+        """Enforce secure defaults and fail-fast production validation."""
+        if self.environment != "development":
+            self.session_cookie_secure = True
+
+        if self.environment == "production" and self.secret_key.strip() == "change-me-in-production":
+            raise ValueError("SECRET_KEY must be explicitly configured in production")
+
+        return self
 
 
 def get_settings() -> Settings:

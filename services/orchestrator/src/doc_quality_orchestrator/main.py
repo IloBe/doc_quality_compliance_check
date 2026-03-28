@@ -21,7 +21,7 @@ def require_orchestrator_auth(
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> None:
-    """Enforce API key or bearer token on orchestrator workflow endpoints."""
+    # Enforce API key or bearer token on orchestrator workflow endpoints.
     expected = settings.api_secret_key
     if not expected:
         return

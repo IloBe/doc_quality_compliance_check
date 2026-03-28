@@ -1,5 +1,7 @@
 # Frontend Implementation Documentation — Doc Quality Compliance Check
 
+<!-- markdownlint-disable MD007 MD009 MD019 MD022 MD031 MD032 MD034 MD036 MD037 -->
+
 **Product:** Document Quality & Compliance Check System  
 **Version:** 0.4.0  
 **Date:** 2026-3-23  
@@ -603,7 +605,7 @@ Template downloads are handled client-side using the `Blob` API. No separate dow
 ## Section 6 – Known Limitations and UI Stubs
 
 | Feature | Status | Phase |
-|---------|--------|-------|
+| --- | --- | --- |
 | Document Analysis (text + file upload) | ✅ Implemented | MVP |
 | EU AI Act Compliance Check | ✅ Implemented | MVP |
 | Applicable Regulations display | ✅ Implemented | MVP |
@@ -616,7 +618,7 @@ Template downloads are handled client-side using the `Blob` API. No separate dow
 | Review history table | 🔲 UI stub / "Coming Soon" | Phase 2 |
 | Full review list with filtering | 🔲 Not implemented | Phase 2 |
 | WebSocket streaming for LLM analysis | 🔲 Not implemented | Phase 3 |
-| Authentication UI (login/logout) | 🔲 Not implemented | Phase 2 |
+| Authentication UI (login/logout) | ✅ Implemented (email/password + backend sessions) | MVP |
 | Dark mode | 🔲 Not implemented | Backlog |
 | Multi-language support | 🔲 Not implemented | Backlog |
 

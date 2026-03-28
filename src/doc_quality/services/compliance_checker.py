@@ -1,4 +1,6 @@
 """Compliance checker service for EU AI Act and other regulations."""
+import hashlib
+import json
 import uuid
 
 from ..core.logging_config import get_logger
@@ -90,6 +92,30 @@ DOMAIN_REGULATION_MAP: dict[str, list[ComplianceFramework]] = {
     "hr": [ComplianceFramework.EU_AI_ACT, ComplianceFramework.GDPR],
     "general": [ComplianceFramework.EU_AI_ACT, ComplianceFramework.GDPR, ComplianceFramework.ISO_27001],
 }
+
+
+def get_eu_ai_act_requirements_catalog() -> list[dict]:
+    """Return canonical EU AI Act requirement catalog used by checker logic."""
+    return [
+        {
+            "id": req["id"],
+            "title": req["title"],
+            "description": req["description"],
+            "mandatory": req["mandatory"],
+        }
+        for req in EU_AI_ACT_REQUIREMENTS
+    ]
+
+
+def get_eu_ai_act_requirements_signature() -> str:
+    """Return stable SHA-256 fingerprint of current EU AI Act requirement catalog."""
+    canonical = json.dumps(get_eu_ai_act_requirements_catalog(), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def get_eu_ai_act_requirements_version() -> str:
+    """Return short version identifier derived from requirement catalog fingerprint."""
+    return f"eu_ai_act:{get_eu_ai_act_requirements_signature()[:12]}"
 
 
 def determine_ai_act_risk_level(domain_info: ProductDomainInfo) -> RiskLevel:

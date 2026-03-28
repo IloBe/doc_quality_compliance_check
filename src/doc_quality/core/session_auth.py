@@ -8,7 +8,7 @@ import hmac
 import secrets
 from typing import Callable
 
-from fastapi import Cookie, Depends, Header, HTTPException, Response, status
+from fastapi import Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from .config import get_settings
@@ -175,12 +175,13 @@ def clear_session_cookie(response: Response) -> None:
 
 
 def require_authenticated_user(
+    request: Request,
     db: Session = Depends(get_db),
-    session_cookie: str | None = Cookie(default=None, alias="dq_session"),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> AuthenticatedUser:
     """Enforce auth: prefer server cookie, allow API key/bearer fallback for service clients."""
+    session_cookie = request.cookies.get(_cookie_name()) if request is not None else None
     user = resolve_user_from_cookie(db, session_cookie)
     if user is not None:
         return user
@@ -202,21 +203,22 @@ def require_authenticated_user(
 
 
 def require_session_user(
+    request: Request,
     db: Session = Depends(get_db),
-    session_cookie: str | None = Cookie(default=None, alias="dq_session"),
 ) -> AuthenticatedUser:
     """Require browser session cookie only (no API key fallback)."""
+    session_cookie = request.cookies.get(_cookie_name()) if request is not None else None
     user = resolve_user_from_cookie(db, session_cookie)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     return user
 
 
-def require_roles(*allowed_roles: str) -> Callable[[AuthenticatedUser], AuthenticatedUser]:
+def require_roles(*allowed_roles: str, allow_service: bool = False) -> Callable[[AuthenticatedUser], AuthenticatedUser]:
     """Return a dependency that enforces at least one required role.
 
     Notes:
-    - `service` role bypasses role checks for service-to-service workflows.
+    - `service` role can be allowed only for explicit machine-to-machine workflows.
     - Intended for endpoint-level authorization in addition to authentication.
     """
 
@@ -224,7 +226,7 @@ def require_roles(*allowed_roles: str) -> Callable[[AuthenticatedUser], Authenti
 
     def _dependency(user: AuthenticatedUser = Depends(require_authenticated_user)) -> AuthenticatedUser:
         user_roles = {role.strip().lower() for role in user.roles}
-        if "service" in user_roles:
+        if allow_service and "service" in user_roles:
             return user
 
         if normalized.intersection(user_roles):

@@ -1,5 +1,7 @@
 # Backend Implementation Documentation — Doc Quality Compliance Check
 
+<!-- markdownlint-disable MD031 MD032 MD038 MD040 MD056 MD060 -->
+
 **Product:** Document Quality & Compliance Check System  
 **Version:** 0.2.0  
 **Date:** 2026-3-22  

@@ -54,7 +54,7 @@ const Login = () => {
       setError(null);
       try {
          await loginWithPassword(email, password, rememberSession);
-         router.replace('/dashboard');
+         router.replace('/');
       } catch (err) {
          setError(err instanceof Error ? err.message : 'Login failed');
       } finally {

@@ -269,14 +269,17 @@ The application must:
 - **View:** A dedicated "History & Reproducibility" page in the UI.
 
 **F5: HITL Review & Approval Workflow**
+
 - **Audit Trial:** Record reviewer name, decision, and rationale into metadata.
 - **Modification Request:** Structured, section-based modifications for authors.
 
 **F6: Audit-Ready PDF Evidence Export**
+
 - **Implementation:** ReportLab-driven PDF with embedded traceability metadata and review history.
 
 **F7: Multi-User RBAC (Role-Based Access Control):** 
-- **Implementation:** Enterprise security (OAuth2/LDAP) with login.
+
+- **Implementation:** Phase 0 uses email/password login with backend-managed HTTP-only sessions and route-level RBAC; enterprise SSO (OIDC/OAuth2/LDAP/SAML) is a later-phase enhancement.
 
 ### P1 — Enhanced Requirements
 

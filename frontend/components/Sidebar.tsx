@@ -3,6 +3,7 @@ import React from 'react';
 import { useMockStore } from '../lib/mockStore';
 import { 
   LuHouse,
+  LuShieldCheck,
   LuLayoutDashboard, 
   LuShuffle, 
   LuFlaskConical, 
@@ -59,6 +60,7 @@ const Sidebar = ({ className }) => {
       <nav className="flex-grow">
         <div className="space-y-0">
           <NavItem href="/" icon={LuHouse} label="Home (Doc Hub)" active={currentPath === '/'} />
+          <NavItem href="/compliance" icon={LuShieldCheck} label="Compliance Standards" active={currentPath === '/compliance'} />
         </div>
 
         <div className="mt-4">

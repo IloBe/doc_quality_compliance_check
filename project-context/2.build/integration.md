@@ -1,5 +1,7 @@
 # Integration Documentation — Doc Quality Compliance Check
 
+<!-- markdownlint-disable MD022 MD031 MD032 MD034 MD040 MD058 MD060 -->
+
 **Product:** Document Quality & Compliance Check System  
 **Version:** 0.1.0  
 **Date:** 2025-02-23  
@@ -419,9 +421,21 @@ HITL review records are stored in memory. Review IDs embedded in the frontend se
 
 The current CORS allow list (`localhost:3000`, `localhost:8000`) must be updated for any non-localhost deployment. This is a configuration change in `main.py`.
 
-### 7.4 No Authentication Middleware
+### 7.4 Authentication and Authorization Status
 
-All API endpoints are accessible without credentials. This is acceptable for localhost-only MVP deployment. Do not deploy with `--host 0.0.0.0` without first adding authentication.
+Protected API endpoints are **not public anymore**. The backend now enforces authentication on protected routes via backend-owned session handling for browser users and API key / bearer-token access for explicit service clients.
+
+Current implemented state:
+
+- Browser users authenticate with email/password via `/api/v1/auth/login`.
+- The backend issues an HTTP-only session cookie and validates it on subsequent requests.
+- `/api/v1/auth/me` is session-only and returns the authenticated browser user.
+- Service-to-service access is available for explicit machine endpoints and does not act as a blanket authorization bypass.
+- Route-level RBAC is enforced on critical areas such as documents, compliance, research, reports, bridge, and skills.
+
+Current integration limitation:
+
+- Enterprise SSO (OIDC/OAuth2/LDAP/SAML) is not implemented yet and remains a later-phase enhancement.
 
 ### 7.5 File Upload Content-Type
 
@@ -432,12 +446,12 @@ When using `multipart/form-data` (file upload), the JavaScript code intentionall
 ## Section 8 – Future Integration Work
 
 | Feature | Description | Phase |
-|---------|-------------|-------|
+| --- | --- | --- |
 | WebSocket streaming | Stream LLM analysis progress to frontend in real time | Phase 3 |
-| Authentication middleware | JWT/OAuth2 tokens on all API routes | Phase 2 |
+| Enterprise SSO integration | OIDC/OAuth2/LDAP/SAML for organization-managed login, keeping backend session abstraction | Phase 2+ |
 | Database webhook | Notify frontend when review status changes | Phase 2 |
 | File storage backend | Object storage (S3/MinIO) for PDF reports | Phase 3 |
-| Rate limiting | Prevent abuse of document analysis endpoints | Phase 2 |
+| Persistent distributed rate limiting | Replace process-local limiter with shared multi-instance throttling / lockout state | Phase 2+ |
 | OpenTelemetry tracing | Distributed tracing for agent → service calls | Phase 3 |
 
 ---
