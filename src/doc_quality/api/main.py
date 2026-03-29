@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import OperationalError
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -42,7 +43,14 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://localhost:8000"],
+        allow_origins=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://0.0.0.0:3000",
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+            "http://0.0.0.0:8000",
+        ],
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT"],
         allow_headers=["*"],
@@ -136,6 +144,19 @@ def create_app() -> FastAPI:
                 "error": {
                     "code": "validation_error",
                     "message": "Request validation failed",
+                }
+            },
+        )
+
+    @app.exception_handler(OperationalError)
+    async def database_operational_error_handler(_: Request, exc: OperationalError):
+        logger.exception("database_unavailable", error_type=type(exc).__name__)
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "error": {
+                    "code": "database_unavailable",
+                    "message": "Database unavailable. Start PostgreSQL and retry.",
                 }
             },
         )

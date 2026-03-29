@@ -5,7 +5,10 @@
 **Status:** Draft
 **Owner:** Project Manager / Business Analyst
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 1. Stakeholder Register
 
@@ -14,7 +17,10 @@
 | STK-01 | | | High/Med/Low | High/Med/Low | |
 | STK-02 | | | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 2. Stakeholder Groups
 
@@ -37,7 +43,10 @@
 | Customers / Clients | | |
 | Partners / Vendors | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 3. RACI Matrix
 
@@ -48,7 +57,10 @@
 | Compliance review | | | | |
 | Final approval | | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 4. Communication Plan
 
@@ -57,7 +69,10 @@
 | | Status update | Weekly | | |
 | | Review meeting | Monthly | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 5. Stakeholder Concerns & Mitigation
 
@@ -65,7 +80,10 @@
 |-------------|---------|-------------------|
 | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 6. Document History
 

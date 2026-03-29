@@ -5,13 +5,19 @@
 **Status:** Draft
 **Owner:** Technical Writer / Business Analyst
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## Instructions
 
 Add all project-specific terms, acronyms, and definitions below. Entries should be listed alphabetically. Include references to standards or regulations where applicable.
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## A
 
@@ -21,7 +27,10 @@ Add all project-specific terms, acronyms, and definitions below. Entries should 
 | API | Application Programming Interface — a set of defined rules for software communication | — |
 | Arc42 | A template for documenting software and system architectures | arc42.org |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## B
 
@@ -29,7 +38,10 @@ Add all project-specific terms, acronyms, and definitions below. Entries should 
 |------|-----------|-------------------|
 | Bias | Systematic error in AI model outputs that leads to unfair treatment | EU AI Act, ISO/IEC TR 24027 |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## C
 
@@ -39,7 +51,10 @@ Add all project-specific terms, acronyms, and definitions below. Entries should 
 | Compliance | Adherence to applicable laws, regulations, standards, and internal policies | — |
 | Conformity Assessment | Procedure to demonstrate AI system meets requirements | EU AI Act Art. 43 |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## D
 
@@ -48,7 +63,10 @@ Add all project-specific terms, acronyms, and definitions below. Entries should 
 | Data Governance | Framework for managing data availability, usability, integrity, and security | — |
 | Deployer | A natural or legal person using an AI system under their authority | EU AI Act Art. 3(4) |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## E
 
@@ -56,7 +74,10 @@ Add all project-specific terms, acronyms, and definitions below. Entries should 
 |------|-----------|-------------------|
 | EU AI Act | European Union Artificial Intelligence Act — Regulation 2024/1689 | EUR-Lex |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## G
 
@@ -64,7 +85,10 @@ Add all project-specific terms, acronyms, and definitions below. Entries should 
 |------|-----------|-------------------|
 | GDPR | General Data Protection Regulation — EU Regulation 2016/679 | EUR-Lex |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## H
 
@@ -73,7 +97,10 @@ Add all project-specific terms, acronyms, and definitions below. Entries should 
 | High-Risk AI System | AI system listed in Annex III of the EU AI Act | EU AI Act Annex III |
 | HITL | Human-In-The-Loop — human oversight mechanism for AI decisions | — |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## M
 
@@ -82,7 +109,10 @@ Add all project-specific terms, acronyms, and definitions below. Entries should 
 | MDR | Medical Device Regulation — EU Regulation 2017/745 | EUR-Lex |
 | Model Card | Standardised documentation for ML models | Google AI, 2019 |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## P
 
@@ -90,7 +120,10 @@ Add all project-specific terms, acronyms, and definitions below. Entries should 
 |------|-----------|-------------------|
 | Provider | A natural or legal person that develops or places an AI system on the market | EU AI Act Art. 3(3) |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## R
 
@@ -98,7 +131,10 @@ Add all project-specific terms, acronyms, and definitions below. Entries should 
 |------|-----------|-------------------|
 | Risk Management System | Continuous iterative process throughout AI system lifecycle | EU AI Act Art. 9 |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## S
 
@@ -106,7 +142,10 @@ Add all project-specific terms, acronyms, and definitions below. Entries should 
 |------|-----------|-------------------|
 | SOP | Standard Operating Procedure — documented instructions for routine activities | ISO 9001 |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## Document History
 

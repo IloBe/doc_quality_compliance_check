@@ -192,41 +192,54 @@ const ComplianceStandards = () => {
                   </button>
                </div>
             </div>
-
-                  <div className="bg-blue-50/50 rounded-[2rem] p-8 border border-blue-100/50 flex flex-col items-start">
-                     <div className="flex items-center gap-3 mb-4">
-                        <LuBookOpen className="w-5 h-5 text-blue-600" />
-                        <Link
-                           href="/doc/governance-manual"
-                           className="font-bold text-blue-900 tracking-tight underline hover:text-blue-700"
-                           title="Open full Governance Manual"
-                        >
-                           Governance Manual
-                        </Link>
-                     </div>
-                     <p className="text-xs text-blue-700/70 font-medium leading-relaxed mb-4">
-                        Phase 0 Note: Live regulatory updates require a valid PERPLEXITY_API_KEY in the backend environment.
-                     </p>
-                     <div className="flex items-center gap-2 mt-2">
-                        <span className="text-xs font-bold text-blue-900">100% Complete</span>
-                        <div className="w-20 h-2 bg-blue-100 rounded-full overflow-hidden">
-                           <div className="w-full h-full bg-blue-500 rounded-full" />
-                        </div>
-                     </div>
-                  </div>
-            {/* Request New Standard Mapping - now below Governance Manual */}
-            <div className="bg-blue-50/50 rounded-[2rem] p-4 border border-blue-100/50 flex flex-col items-center text-center space-y-2 shadow-sm relative overflow-hidden mt-2">
-              <div className="flex items-center gap-2 mb-1">
-                <LuFileCheck className="w-5 h-5 text-blue-600" />
-                <span className="font-bold text-blue-900 tracking-tight text-sm">Request New Standard Mapping</span>
-              </div>
-              <p className="text-xs text-blue-700/70 font-medium leading-relaxed mb-1">
-                Submit a specific SOP or regulatory requirement for agent training.
-              </p>
-              <button className="w-full py-1.5 bg-blue-100 text-blue-700 text-[11px] font-bold uppercase tracking-widest rounded-xl hover:bg-blue-200 transition border border-blue-200 shadow-sm">
-                Contact Architect
-              </button>
             </div>
+         </div>
+
+         {/* Bottom shortcut cards: horizontal under standards/directives */}
+         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-blue-50/50 rounded-[2rem] p-6 border border-blue-100/50 shadow-sm">
+               <div className="flex items-center gap-2 mb-2">
+                  <LuBookOpen className="w-5 h-5 text-blue-600" />
+                  <span className="font-bold text-blue-900 tracking-tight text-sm">Governance Manual</span>
+               </div>
+               <p className="text-xs text-blue-700/70 font-medium leading-relaxed mb-4">
+                  Open the full governance baseline and references used for compliance checks.
+               </p>
+               <Link
+                  href="/doc/governance-manual"
+                  className="inline-flex items-center justify-center w-full py-2 bg-blue-100 text-blue-700 text-[11px] font-bold uppercase tracking-widest rounded-xl hover:bg-blue-200 transition border border-blue-200"
+               >
+                  Open Governance Manual
+               </Link>
+            </div>
+
+            <div className="bg-blue-50/50 rounded-[2rem] p-6 border border-blue-100/50 shadow-sm">
+               <div className="flex items-center gap-2 mb-2">
+                  <LuFileCheck className="w-5 h-5 text-blue-600" />
+                  <span className="font-bold text-blue-900 tracking-tight text-sm">Request New Standard Mapping</span>
+               </div>
+               <p className="text-xs text-blue-700/70 font-medium leading-relaxed mb-4">
+                  Submit a specific SOP or regulatory requirement for agent training.
+               </p>
+               <button className="w-full py-2 bg-blue-100 text-blue-700 text-[11px] font-bold uppercase tracking-widest rounded-xl hover:bg-blue-200 transition border border-blue-200">
+                  Contact Architect
+               </button>
+            </div>
+
+            <div className="bg-blue-50/50 rounded-[2rem] p-6 border border-blue-100/50 shadow-sm">
+               <div className="flex items-center gap-2 mb-2">
+                  <LuShieldCheck className="w-5 h-5 text-blue-600" />
+                  <span className="font-bold text-blue-900 tracking-tight text-sm">Open SOPs</span>
+               </div>
+               <p className="text-xs text-blue-700/70 font-medium leading-relaxed mb-4">
+                  Browse SOP markdown templates and open each SOP document by card selection.
+               </p>
+               <Link
+                  href="/sops"
+                  className="inline-flex items-center justify-center w-full py-2 bg-blue-100 text-blue-700 text-[11px] font-bold uppercase tracking-widest rounded-xl hover:bg-blue-200 transition border border-blue-200"
+               >
+                  Open SOPs
+               </Link>
             </div>
          </div>
       </div>

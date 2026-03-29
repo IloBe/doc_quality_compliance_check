@@ -5,7 +5,10 @@
 **Status:** Draft
 **Owner:** Product Owner / Business Analyst
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 1. Executive Summary
 
@@ -14,7 +17,10 @@
 **Product Name:** _______________
 **Product Vision:** _______________
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 2. Business Context
 
@@ -35,7 +41,10 @@
 - Strategic goal 1: _______________
 - Strategic goal 2: _______________
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 3. Product Goals
 
@@ -53,7 +62,10 @@
 |---|------|----------|
 | 1 | | High / Medium / Low |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 4. Key Performance Indicators (KPIs)
 
@@ -61,7 +73,10 @@
 |-----|----------|--------|-------------------|
 | | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 5. Constraints and Assumptions
 
@@ -76,7 +91,10 @@
 1. _______________
 2. _______________
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 6. Out of Scope
 
@@ -84,7 +102,10 @@
 
 - _______________
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 7. Approval
 

@@ -142,6 +142,10 @@ class PostgreSQLInitializer:
             return False
 
         try:
+            env = os.environ.copy()
+            env["DATABASE_URL"] = self.database_url
+            env["DATABASE_ECHO"] = "true" if self.database_echo else "false"
+
             result = subprocess.run(
                 [
                     sys.executable,
@@ -153,11 +157,12 @@ class PostgreSQLInitializer:
                     "head",
                 ],
                 cwd=str(self.repo_root),
+                env=env,
                 capture_output=True,
                 text=True,
                 timeout=30,
             )
-            
+
             if result.returncode == 0:
                 log_ok("Migrations completed successfully")
                 return True
@@ -246,7 +251,7 @@ class PostgreSQLInitializer:
             print("  1. Set DATABASE_URL in .env:")
             print(f"     DATABASE_URL={self.database_url}")
             print("  2. Start backend:")
-            print(r"     .\.venv\Scripts\python.exe -m uvicorn doc_quality.api.main:app ...")
+            print(r"     .\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload")
             print("  3. Test login:")
             print("     curl -X POST http://localhost:8000/api/v1/auth/login \\")
             print("       -H 'Content-Type: application/json' \\")

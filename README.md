@@ -53,6 +53,55 @@ Phase 0 requires **PostgreSQL 16** for session authentication, HITL reviews, and
 - [Application User Handbook](APP_USER_HANDBOOK.md) — Operational guidance for stakeholders, including top menu controls and compliance relevance
 - [Authentication and Authorization Guide](AUTHENTICATION_AUTHORIZATION_README.md) — Implemented login, session, RBAC, throttling, recovery, and security-test concepts
 
+### Start the application (database + backend + frontend)
+
+Use separate terminals so PostgreSQL, the API, and the UI run at the same time.
+
+1. **Database terminal** (from `doc_quality_compliance_check/`):
+
+   Start PostgreSQL database:
+   ```powershell
+   docker compose up -d
+   .\.venv\Scripts\python.exe init_postgres.py
+   ```
+
+   Expected outcome:
+   - PostgreSQL listens on `localhost:5432`
+   - schema initialization completes without errors
+   - `.env` contains `DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality`
+
+2. **Backend terminal** (from `doc_quality_compliance_check/`):
+
+   Start uvicorn backend server:
+   ```powershell
+   .\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
+   ```
+
+   Expected log line:
+   - `Uvicorn running on http://127.0.0.1:8000`
+
+3. **Frontend terminal** (from `doc_quality_compliance_check/frontend/`):
+
+   Start frontend of browser application:
+   ```powershell
+   npm run dev
+   ```
+
+   Open:
+   - `http://localhost:3000/login`
+
+   > **Cookie note:** `NEXT_PUBLIC_API_ORIGIN` must be **empty** (the default in `frontend/.env.local`) for local
+   > development. The frontend proxies all `/api/*` and `/health` calls through Next.js to `127.0.0.1:8000`,
+   > so the session cookie stays same-origin (`localhost:3000`). Setting a direct cross-origin URL breaks
+   > `SameSite=lax` cookie delivery and makes the login button appear unresponsive after a successful
+   > authentication (silent redirect loop back to `/login`).
+
+4. **Quick verification**
+   - Database is running on `localhost:5432`
+   - Backend health (via proxy): `http://localhost:3000/health`
+   - Backend health (direct): `http://127.0.0.1:8000/health`
+   - `frontend/.env.local` → `NEXT_PUBLIC_API_ORIGIN=` (empty = proxy mode, required for local dev)
+
 ### Password Recovery Flow
 
 The login page now includes a production-style recovery path:

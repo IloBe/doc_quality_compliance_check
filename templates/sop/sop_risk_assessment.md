@@ -5,7 +5,10 @@
 **Status:** Draft
 **Owner:** Risk Manager / Quality Manager
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 1. Risk Assessment Methodology
 
@@ -25,7 +28,10 @@
 - 10–15: High (Orange) — Mitigate urgently
 - 16–25: Critical (Red) — Escalate immediately
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 2. Risk Register
 
@@ -36,7 +42,10 @@
 | RISK-03 | Security | | | | | | | | Open |
 | RISK-04 | Operational | | | | | | | | Open |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 3. AI/ML Specific Risks (if applicable)
 
@@ -48,7 +57,10 @@
 | AI-RISK-04 | Data poisoning | Art. 10 (Data Governance) | |
 | AI-RISK-05 | Model drift | Art. 9 (Risk Management) | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 4. Compliance Risks
 
@@ -58,7 +70,10 @@
 | GDPR | Personal data breach | | | |
 | MDR | CE marking failure | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 5. Risk Treatment Plan
 
@@ -66,7 +81,10 @@
 |---------|------------------|--------|-------|----------|--------|
 | | Avoid/Mitigate/Transfer/Accept | | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 6. Residual Risk Summary
 
@@ -76,7 +94,10 @@
 | Compliance | | | Yes/No |
 | Security | | | Yes/No |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 7. Risk Review Schedule
 
@@ -86,7 +107,10 @@
 | Spot check | Monthly | Risk Manager | |
 | Incident-triggered | As needed | All | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 8. Approval
 
@@ -96,7 +120,10 @@
 | Quality Manager | | | |
 | Executive Sponsor | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 9. Document History
 

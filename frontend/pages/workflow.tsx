@@ -20,20 +20,21 @@ const WorkflowInsight = () => {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Overview Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-               <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">Bridge Architecture</div>
-               <div className="flex items-center gap-2">
-                  <h1 className="text-4xl font-black text-neutral-900 tracking-tighter">Workflow Orchestration</h1>
-                  <button
-                     type="button"
-                     onClick={() => setShowWhyThisPageMatters((prev) => !prev)}
-                     className="p-1.5 rounded-full text-neutral-400 hover:text-blue-700 hover:bg-blue-50 transition"
-                     title="Why this page matters"
-                  >
-                     <LuInfo className="w-4 h-4" />
-                  </button>
-               </div>
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">Bridge Architecture</div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-black text-neutral-900 tracking-tight">Workflow Orchestration</h1>
+            <button
+              type="button"
+              onClick={() => setShowWhyThisPageMatters((prev) => !prev)}
+              className="p-1.5 rounded-full text-neutral-400 hover:text-blue-700 hover:bg-blue-50 transition"
+              title="Why this page matters"
+            >
+              <LuInfo className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-neutral-500 font-medium mt-1">Multi-agent orchestration pipeline for document compliance and quality analysis.</p>
         </div>
         
         <div className="flex items-center gap-3">

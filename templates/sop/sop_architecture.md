@@ -5,7 +5,10 @@
 **Status:** Draft
 **Owner:** System Architect / Technical Lead
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 1. Architecture Overview
 
@@ -14,7 +17,10 @@
 **Architecture Style:** (e.g., Microservices / Monolith / Event-driven)
 **Deployment Model:** (e.g., Cloud-native / On-premises / Hybrid)
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 2. System Context Diagram
 
@@ -30,7 +36,10 @@
 |-------------|------|-------------|-----------|
 | | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 3. Component Diagram
 
@@ -45,7 +54,10 @@
 |-----------|-----------|---------------|-------|
 | | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 4. Key Interfaces and APIs
 
@@ -53,7 +65,10 @@
 |-----------|------|----------|---------------|-------------|
 | | REST/gRPC/MQ | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 5. Data Flow
 
@@ -70,7 +85,10 @@
 |-----------|---------------|-----------|-----------|
 | | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 6. Technology Stack
 
@@ -82,7 +100,10 @@
 | Infrastructure | | | |
 | AI/ML | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 7. Deployment Architecture
 
@@ -94,7 +115,10 @@
 | Staging | | | |
 | Production | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 8. Architecture Decisions
 
@@ -102,7 +126,10 @@
 |----|---------|-----------|------------------------|------|
 | ADR-001 | | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 9. Non-Functional Requirements Impact
 
@@ -113,7 +140,10 @@
 | Security | | |
 | Availability | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 10. Document History
 

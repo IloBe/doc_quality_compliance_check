@@ -6,12 +6,20 @@
 **Authors:** _______________
 **Status:** Draft
 
+&nbsp;
+
+---
+&nbsp;
+
 > This template follows the arc42 documentation structure (https://arc42.org).
 > arc42 is licensed under the Creative Commons Attribution 4.0 license.
 
 > For the MVP, arc42 architecture documentation we use file-based formats only, relying on stable reviewed versions. The app shall check the appropriate version. User gets a message if the format and structure has changed to handle the existing versions appropriately for certifications and audits. The official download page is: https://arc42.org/download
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 1. Introduction and Goals
 
@@ -37,7 +45,10 @@
 |------|------|-------------|
 | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 2. Constraints
 
@@ -59,7 +70,10 @@
 |-----------|-------------|
 | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 3. Context and Scope
 
@@ -85,7 +99,10 @@
 |---------|-----------|---------|-------------|
 | | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 4. Solution Strategy
 
@@ -99,7 +116,10 @@
 1. _______________
 2. _______________
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 5. Building Block View
 
@@ -121,7 +141,10 @@
 
 > (Add additional levels as needed)
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 6. Runtime View
 
@@ -141,7 +164,10 @@ System -> Actor: Response
 |---------|-------------|-------------|
 | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 7. Deployment View
 
@@ -167,7 +193,10 @@ System -> Actor: Response
 
 > (Add additional detail as needed)
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 8. Concepts
 
@@ -202,7 +231,10 @@ System -> Actor: Response
 
 > Strategy for error handling and resilience patterns.
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 9. Architecture Decisions
 
@@ -216,7 +248,10 @@ System -> Actor: Response
 **Decision:** _______________
 **Consequences:** _______________
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 10. Quality Requirements
 
@@ -243,7 +278,10 @@ Quality
 |----|-----------------|---------|---------|--------|
 | QS-01 | | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 11. Risks and Technical Debt
 
@@ -259,7 +297,10 @@ Quality
 |----|-------------|--------|----------------|
 | TD-01 | | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## 12. Glossary
 
@@ -268,7 +309,10 @@ Quality
 | API | Application Programming Interface |
 | | |
 
+&nbsp;
+
 ---
+&nbsp;
 
 ## Document History
 
