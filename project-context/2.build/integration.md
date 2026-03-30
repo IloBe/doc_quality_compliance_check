@@ -3,8 +3,8 @@
 <!-- markdownlint-disable MD022 MD031 MD032 MD034 MD040 MD058 MD060 -->
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.1.0  
-**Date:** 2025-02-23  
+**Version:** 0.2.0  
+**Date:** 2026-3-30  
 **Author persona:** `@integration-eng`  
 **AAMAD phase:** 2.build  
 
@@ -12,390 +12,270 @@
 
 ## Overview
 
-The system integrates a vanilla JavaScript single-page frontend with a Python FastAPI backend via HTTP/JSON REST calls. The FastAPI application serves the frontend as static files, so both the UI and API share a single origin (`localhost:8000`) — no cross-origin issues arise in development. In production, CORS configuration is required if a separate web server is used.
+The current integration baseline is a **Next.js multi-page frontend** connected to a **FastAPI backend** over HTTP/JSON. The frontend uses environment-aware API clients and role-aware UI behavior, while the backend owns authentication, authorization, validation, logging, and persistence.
+
+Preferred local setup:
+
+- Next.js frontend on `localhost:3000`
+- FastAPI backend on `127.0.0.1:8000`
+- Next.js rewrites proxy `/api/*` and `/health` to the backend
+
+This preserves first-party cookie behavior in local development and keeps integration close to production routing patterns.
 
 ---
 
 ## Section 1 – Frontend ↔ Backend API Integration
 
-### 1.1 Base URL and Content Type
+### 1.1 Runtime Topology (Current)
 
-```javascript
-// frontend/js/app.js
-const API_BASE = '/api/v1';
+| Layer | Status | Notes |
+|---|---|---|
+| Frontend runtime | ✅ Implemented | Next.js pages router, AppShell, protected-route bootstrap |
+| Backend runtime | ✅ Implemented | FastAPI with `/api/v1/*` + `/health` |
+| Dev transport | ✅ Implemented | Next.js rewrites proxy API + health |
+| Legacy static serving | ⚠️ Kept for compatibility | FastAPI still mounts `frontend/` with `StaticFiles` |
 
-// All JSON API calls use the apiFetch utility
-async function apiFetch(path, options = {}) {
-    const res = await fetch(`${API_BASE}${path}`, {
-        headers: { 'Content-Type': 'application/json', ...options.headers },
-        ...options,
-    });
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || `HTTP ${res.status}`);
-    }
-    return res.json();
-}
+### 1.2 API Base Resolution and Credentials
+
+Current frontend clients use this pattern:
+
+```typescript
+const _rawOrigin = (process.env.NEXT_PUBLIC_API_ORIGIN ?? '').replace(/\/$/, '');
+const API_ORIGIN = _rawOrigin;
+const API_BASE = _rawOrigin ? `${_rawOrigin}/api/v1` : '/api/v1';
 ```
 
-**File uploads** use `fetch()` directly with `FormData` (no `Content-Type` header override — browser sets `multipart/form-data; boundary=...` automatically).
+Behavior:
 
-### 1.2 CORS Configuration
+- If `NEXT_PUBLIC_API_ORIGIN` is unset: use relative `/api/v1` (local proxy mode)
+- If `NEXT_PUBLIC_API_ORIGIN` is set: call backend directly (remote/staging mode)
+- Browser calls use `credentials: 'include'` for session cookie transport
+
+### 1.3 CORS Configuration
 
 Defined in `src/doc_quality/api/main.py`:
 
 ```python
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8000"],
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT"],
-    allow_headers=["*"],
+  CORSMiddleware,
+  allow_origins=[
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://0.0.0.0:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://0.0.0.0:8000",
+  ],
+  allow_credentials=True,
+  allow_methods=["GET", "POST", "PUT"],
+  allow_headers=["*"],
 )
 ```
 
-| Environment | Allowed Origins | Notes |
-|-------------|----------------|-------|
-| Development (FastAPI serving frontend) | `localhost:8000` | Same-origin; CORS not triggered |
-| Development (separate frontend server) | `localhost:3000` | Explicit allow; e.g. `python -m http.server 3000` |
-| Production | TBD | Must be updated before production deployment |
+### 1.4 Auth + RBAC Handshake
 
-**Known issue:** The `allow_origins` list is hardcoded. For production deployment behind a reverse proxy, this list must be updated to include the public domain name. This is a documented configuration change, not a code change.
+Current implemented state:
+
+- `_app.tsx` validates session via `GET /api/v1/auth/me` for all non-public pages.
+- Public pages are `/login`, `/forgot-access`, `/reset-access`.
+- Protected API routers require authentication with backend-owned session logic.
+- Route-level role checks are enforced by backend dependencies (`require_roles(...)`).
+- Service clients may use API key/bearer fallback for explicit machine flows.
 
 ---
 
-## Section 2 – Request/Response Flow by Tab
+## Section 2 – Request/Response Flow by Current Pages
 
-### 2.1 Document Analysis Tab
+### 2.1 Session + Access Recovery (Implemented)
 
-**Flow:**
+Frontend integration points:
+
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/me`
+- `POST /api/v1/auth/recovery/request`
+- `POST /api/v1/auth/recovery/verify`
+- `POST /api/v1/auth/recovery/reset`
+
+Flow:
 
 ```
-User enters text / uploads file
+Login page submits email/password
     │
-    ├── Text input path:
-    │   JS: POST /api/v1/documents/analyze
-    │       Body: {"content": "...", "filename": "doc.md", "doc_type": "arc42" | null}
-    │   FastAPI: validates body as AnalyzeTextRequest (Pydantic)
-    │   → sanitize_text(content), validate_filename(filename)
-    │   → document_analyzer.analyze_document(content, filename, doc_type)
-    │   → returns DocumentAnalysisResult JSON
+    ├── POST /api/v1/auth/login
+    │   → backend creates server session
+    │   → backend sets HTTP-only cookie
     │
-    └── File upload path:
-        JS: POST /api/v1/documents/upload  (multipart/form-data)
-        FastAPI: reads UploadFile, validate_filename, validate_file_size
-        → decodes bytes → sanitize_text → analyze_document
-        → returns DocumentAnalysisResult JSON
+    └── App bootstrap calls GET /api/v1/auth/me
+        → success: render protected route in AppShell
+        → failure: redirect to /login
 ```
 
-**DocumentAnalysisResult JSON structure:**
+### 2.2 Bridge Run (Implemented, Backend Mode Toggle)
+
+Bridge execution is enabled when `NEXT_PUBLIC_BRIDGE_SOURCE=backend`.
+
+Frontend calls:
+
+```http
+POST /api/v1/bridge/run/eu-ai-act
+GET /api/v1/bridge/alerts/eu-ai-act/{document_id}
+```
+
+Bridge request payload (current):
 
 ```json
 {
-  "document_id": "uuid-string",
-  "filename": "architecture.md",
-  "document_type": "arc42",
-  "status": "partial",
-  "sections_found": [
-    {"name": "Introduction and Goals", "present": true, "content_snippet": null},
-    {"name": "Constraints", "present": false, "content_snippet": null}
-  ],
-  "uml_diagrams": ["system context diagram", "component diagram"],
-  "overall_score": 0.75,
-  "issues": ["Missing section: Constraints", "Missing section: Glossary"],
-  "recommendations": ["Add a Constraints section (arc42 Section 2)", "..."],
-  "analyzed_at": "2025-02-23T10:00:00+00:00"
+  "document_id": "DOC-001",
+  "domain_info": {
+    "domain": "quality management",
+    "description": "...",
+    "uses_ai_ml": true,
+    "intended_use": "...",
+    "target_market": "EU"
+  }
 }
 ```
 
-**Frontend rendering:**
-1. Section table: iterate `sections_found` → green row (present=true) / red row (present=false)
-2. Score badge: `Math.round(overall_score * 100) + "%"`
-3. Issues list: iterate `issues` → `<li>` elements
-4. Recommendations list: iterate `recommendations` → `<li>` elements
-5. Auto-populate: `document.getElementById('reportDocId').value = result.document_id`
+### 2.3 Dashboard Aggregation (Implemented, Backend Mode Toggle)
 
-### 2.2 Compliance Check Tab
+Dashboard backend mode is enabled when `NEXT_PUBLIC_DASHBOARD_SOURCE=backend`.
 
-**Flow:**
-
-```
-User fills in domain form
-    │
-    JS: POST /api/v1/compliance/check/eu-ai-act
-        Body: {
-          "domain_name": "Medical AI Diagnostics",
-          "domain_description": "...",
-          "uses_ai_ml": true,
-          "intended_use": "..."
-        }
-    FastAPI: validates as ProductDomainInfo (Pydantic)
-    → compliance_checker.check_eu_ai_act_compliance(domain_info)
-    → returns ComplianceCheckResult JSON
+```http
+GET /api/v1/dashboard/summary?timeframe=week|month|year
 ```
 
-**ComplianceCheckResult JSON structure:**
+If backend mode is disabled, dashboard uses mock data from frontend state.
+
+### 2.4 Governance Library Pages (Implemented, Build-Time Markdown)
+
+These pages currently render markdown from repository files via `getStaticProps` (no runtime backend fetch):
+
+- `/doc/governance-manual`
+- `/sops`
+- `/architecture`
+
+### 2.5 Document / Compliance / Templates / Reports APIs (Partially Integrated)
+
+Backend endpoints are implemented and protected:
+
+- `POST /api/v1/documents/analyze`
+- `POST /api/v1/documents/upload`
+- `POST /api/v1/compliance/check/eu-ai-act`
+- `POST /api/v1/compliance/applicable-regulations`
+- `GET /api/v1/templates/`
+- `GET /api/v1/templates/index`
+- `GET /api/v1/templates/{template_id}`
+- `POST /api/v1/reports/generate`
+- `GET /api/v1/reports/download/{report_id}`
+
+Current UI status:
+
+- Bridge and Dashboard are actively wired to backend through explicit mode switches.
+- Doc Hub and workflow UX remain mock-first for several interactions.
+- Templates and report endpoints are available but not yet fully represented by dedicated Next.js API-driven pages.
+
+---
+
+## Section 3 – Serving and Routing Integration
+
+### 3.1 Next.js Proxy Routing (Preferred)
+
+`frontend/next.config.js` rewrites:
+
+- `/api/:path*` → `${NEXT_PUBLIC_API_ORIGIN || 'http://127.0.0.1:8000'}/api/:path*`
+- `/health` → `${NEXT_PUBLIC_API_ORIGIN || 'http://127.0.0.1:8000'}/health`
+
+This avoids cross-site cookie failures during local development and keeps frontend/backend coupling explicit.
+
+### 3.2 Backend StaticFiles Mount (Legacy-Compatible)
+
+FastAPI still mounts `frontend/` via `StaticFiles(directory="frontend", html=True)`.
+
+Current interpretation:
+
+- Preserved for compatibility with legacy static assets (`index.html`, `js/app.js`, `css/styles.css`)
+- Not the primary integration path for current Next.js pages
+- API routes still take precedence
+
+### 3.3 Health Endpoint
+
+`GET /health` remains the canonical backend health endpoint for frontend checks and operational diagnostics.
+
+---
+
+## Section 4 – Security and Compliance Integration
+
+### 4.1 Authentication Boundary
+
+- Backend owns session creation, revocation, and validation.
+- Session token is in HTTP-only cookie.
+- Protected routes are no longer public.
+- Browser identity checks use `auth/me` (session only).
+
+### 4.2 Authorization Boundary
+
+- Route-level authorization uses required roles (`qm_lead`, `architect`, `riskmanager`, `auditor`, etc.).
+- Frontend permission checks (`useCan(...)`) improve UX but do not replace backend authorization.
+
+### 4.3 Request Logging + Rate Limiting
+
+- Structured request logging middleware emits `http_request` events.
+- Global API rate limiting can return HTTP `429` with `Retry-After`.
+
+This aligns with SAD requirements for traceability, oversight, and operational control.
+
+---
+
+## Section 5 – Error and Validation Integration
+
+### 5.1 Backend Error Envelope (Current)
+
+Custom exception handlers return a standard envelope:
 
 ```json
 {
-  "check_id": "uuid-string",
-  "framework": "EU AI Act",
-  "risk_level": "high",
-  "role": "provider",
-  "requirements": [
-    {
-      "id": "EUAIA-1",
-      "title": "Risk Management System",
-      "mandatory": true,
-      "description": "Establish, implement, document and maintain a risk management system (Art. 9)",
-      "met": true,
-      "evidence": null,
-      "gap_description": null
-    },
-    {
-      "id": "EUAIA-6",
-      "title": "Human Oversight",
-      "mandatory": true,
-      "met": false,
-      "gap_description": "No human oversight mechanisms described in the provided information"
-    }
-  ],
-  "compliance_score": 0.67,
-  "gaps": ["EUAIA-6: Human Oversight", "EUAIA-8: Conformity Assessment"],
-  "met_requirements": ["EUAIA-1: Risk Management System", "..."],
-  "applicable_regulations": ["EU AI Act", "MDR"],
-  "checked_at": "2025-02-23T10:05:00+00:00"
+  "error": {
+    "code": "validation_error",
+    "message": "Request validation failed"
+  }
 }
 ```
 
-**Frontend rendering:**
-1. Risk badge: `result.risk_level` → CSS class `risk-${result.risk_level}` (colour-coded)
-2. Role badge: `result.role.toUpperCase()`
-3. Score: `Math.round(result.compliance_score * 100) + "%"`
-4. Requirements table: iterate `requirements` → "✅ Met" / "❌ Gap" with `gap_description`
-5. Gaps list: iterate `result.gaps`
-6. Auto-populate: `document.getElementById('reportComplianceId').value = result.check_id`
+Common codes include:
 
-**Applicable Regulations sub-flow:**
+- `authentication_required`
+- `forbidden`
+- `not_found`
+- `validation_error`
+- `rate_limited`
+- `database_unavailable`
+- `internal_error`
 
-```
-JS: POST /api/v1/compliance/applicable-regulations
-    Body: ProductDomainInfo (same as above)
-→ compliance_checker.get_applicable_regulations(domain_info)
-→ returns ["EU AI Act", "MDR", "GDPR"] (list of strings)
-```
+### 5.2 Frontend Error Translation
 
-Displayed as an expandable list below the main compliance results panel.
+Frontend API clients map backend payloads to operator-friendly messages, including local recovery guidance (backend offline, auth DB unavailable, auth route missing).
 
-### 2.3 Templates Tab
+### 5.3 File Upload Content-Type Rule
 
-**Flow:**
-
-```
-Page load:
-    JS: GET /api/v1/templates/
-    → template_manager.list_templates()
-    → returns list of template metadata dicts
-
-User clicks "View Template":
-    JS: GET /api/v1/templates/{template_id}
-    → template_manager.get_template_by_id(template_id)
-    → returns {"id": "...", "title": "...", "content": "# SOP ...\n...", "active": true}
-    → displayed in modal
-```
-
-**Template list item JSON structure:**
-
-```json
-{
-  "id": "business_goals",
-  "title": "Business and Product Goals",
-  "file": "sop_business_goals.md",
-  "active": true
-}
-```
-
-**Template detail JSON structure:**
-
-```json
-{
-  "id": "business_goals",
-  "title": "Business and Product Goals",
-  "content": "# Business and Product Goals SOP\n\n## Purpose\n...",
-  "active": true
-}
-```
-
-**Inactive template behaviour:**  
-Inactive templates return `active: false` and content is the placeholder text:  
-`"# Test Strategy\n\n*This template is inactive and not yet available.*\n"`
-
-Frontend shows "Coming Soon" badge for inactive templates and disables the download button.
-
-### 2.4 Reports Tab
-
-**Flow:**
-
-```
-User fills report form (IDs auto-populated from previous tabs):
-    JS: POST /api/v1/reports/generate
-        Body: {
-          "document_analysis_id": "uuid-from-analysis",
-          "compliance_check_id": "uuid-from-compliance",  (optional)
-          "reviewer_name": "Maria Schmidt"               (optional)
-        }
-    → report_generator.generate_report(...)
-    → PDF written to reports/report_{uuid}.pdf
-    → returns {"id": "uuid", "file_path": "reports/report_uuid.pdf", "generated_at": "..."}
-
-User clicks "Download":
-    JS: GET /api/v1/reports/download/{report_id}
-    → FileResponse(path, media_type="application/pdf")
-    → Browser triggers PDF download
-```
-
-**HITL Review flow:**
-
-```
-User submits review form:
-    JS: POST /api/v1/compliance/review
-        Body: {
-          "document_id": "uuid",
-          "reviewer_name": "Maria Schmidt",
-          "reviewer_role": "QM Lead",
-          "comments": "Section 11 needs more detail",
-          "modifications": [
-            {
-              "section_name": "Risks and Technical Debt",
-              "description": "Missing probability/impact matrix",
-              "priority": "high"
-            }
-          ]
-        }
-    → hitl_workflow.create_review(...)
-    → returns ReviewRecord JSON
-    → Frontend shows confirmation toast with review ID
-```
+When sending `multipart/form-data`, the frontend must not manually set `Content-Type`; the browser must inject boundary metadata automatically.
 
 ---
 
-## Section 3 – Static File Serving
+## Section 6 – Integration Status Matrix
 
-The FastAPI application serves the frontend directly via `StaticFiles`:
-
-```python
-# src/doc_quality/api/main.py
-try:
-    app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
-except RuntimeError:
-    pass  # frontend/ directory not found; API-only mode
-```
-
-**Routing precedence:** FastAPI evaluates API routes before the static file mount. The mount at `/` only matches requests that do not match any explicit API route.
-
-**File resolution:**
-| URL | Resolved to | Notes |
-|-----|-------------|-------|
-| `GET /` | `frontend/index.html` | `html=True` enables `index.html` fallback |
-| `GET /css/styles.css` | `frontend/css/styles.css` | |
-| `GET /js/app.js` | `frontend/js/app.js` | |
-| `GET /api/v1/health` | FastAPI route | API routes take precedence |
-| `GET /health` | FastAPI route | Health check |
-| `GET /docs` | FastAPI Swagger UI | Built-in auto-documentation |
-
----
-
-## Section 4 – Health Check
-
-```python
-@app.get("/health")
-async def health_check() -> dict:
-    return {"status": "healthy", "version": settings.app_version}
-```
-
-**Response:**
-```json
-{"status": "healthy", "version": "0.1.0"}
-```
-
-The frontend calls `GET /health` on page load (not via `apiFetch` because it's not under `/api/v1`):
-```javascript
-async function checkHealth() {
-    const dot = document.querySelector('.status-dot');
-    const text = document.querySelector('.status-text');
-    try {
-        const data = await fetch('/health').then(r => r.json());
-        dot.className = 'status-dot online';
-        text.textContent = `API v${data.version}`;
-    } catch {
-        dot.className = 'status-dot offline';
-        text.textContent = 'API offline';
-    }
-}
-```
-
----
-
-## Section 5 – Request Logging Middleware
-
-Every HTTP request through the FastAPI app is logged with structlog:
-
-```python
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    start = time.time()
-    response = await call_next(request)
-    duration = time.time() - start
-    logger.info(
-        "http_request",
-        method=request.method,
-        path=request.url.path,
-        status=response.status_code,
-        duration_ms=round(duration * 1000, 1),
-    )
-    return response
-```
-
-**Sample log output (JSON format):**
-```json
-{"event": "http_request", "method": "POST", "path": "/api/v1/documents/analyze", "status": 200, "duration_ms": 245.3, "level": "info", "timestamp": "2025-02-23T10:00:00+00:00"}
-```
-
-This log stream provides an audit trail for all API operations, satisfying EU AI Act Art. 12 logging requirements for the compliance check tool itself.
-
----
-
-## Section 6 – Error Handling
-
-### 6.1 FastAPI Error Responses
-
-All error responses from the API use the FastAPI default format:
-```json
-{"detail": "Human-readable error message"}
-```
-
-| HTTP Status | Condition | Example |
-|-------------|-----------|---------|
-| 400 Bad Request | Invalid filename or request validation error | `"Unsafe filename: '../etc/passwd'"` |
-| 404 Not Found | Report or template not found | `"Report not found: {report_id}"` |
-| 413 Request Entity Too Large | File exceeds `MAX_FILE_SIZE_MB` | `"File size 12MB exceeds 10 MB limit"` |
-| 422 Unprocessable Entity | Pydantic model validation failure | FastAPI auto-generated field error details |
-| 500 Internal Server Error | Unhandled exception | `"Internal server error"` |
-
-### 6.2 Frontend Error Handling
-
-```javascript
-try {
-    const result = await apiFetch('/documents/analyze', { method: 'POST', body: JSON.stringify(body) });
-    displayAnalysisResult(result);
-    showToast('Analysis complete!', 'success');
-} catch (err) {
-    showToast(`Error: ${err.message}`, 'error');
-    // err.message contains the FastAPI `detail` field value
-}
-```
-
-All errors are shown as toast notifications. The UI does not crash on API errors.
+| Area | Status | Notes |
+|---|---|---|
+| Next.js app shell + protected routes | ✅ Implemented | Session bootstrap + redirect to login |
+| Auth API integration | ✅ Implemented | Login/logout/me + recovery flows wired |
+| Bridge backend integration | ✅ Implemented (toggle) | `NEXT_PUBLIC_BRIDGE_SOURCE=backend` |
+| Dashboard backend integration | ✅ Implemented (toggle) | `NEXT_PUBLIC_DASHBOARD_SOURCE=backend` |
+| Document analysis UI integration | 🟡 Partial | Backend endpoint ready; UI still mixed with mock-first flows |
+| Compliance check UI integration | 🟡 Partial | Backend endpoint ready; progressive wiring pending |
+| Templates API-driven UI | 🟡 Partial | Backend routes available; markdown pages currently build-time |
+| Reports generate/download UX | 🟡 Partial | Backend routes available; richer page flow pending |
+| HITL review HTTP routes | 🔴 Not yet implemented | Service/ORM persistence exists, route layer pending |
+| Enterprise SSO integration | 🔴 Not yet implemented | Planned in later phase |
 
 ---
 
@@ -409,17 +289,17 @@ Generated PDF reports are stored in the `reports/` directory on the server files
 
 Then `GET /api/v1/reports/download/{report_id}` returns HTTP 404.
 
-**Mitigation:** Download reports immediately after generation. Phase 2 will add persistent storage.
+**Mitigation:** Download reports immediately after generation. Phase 2/3 should add persistent object storage.
 
-### 7.2 In-Memory Review Store
+### 7.2 HITL API Surface Gap
 
-HITL review records are stored in memory. Review IDs embedded in the frontend session are invalid after server restart.
+Review persistence exists in backend services/ORM, but dedicated public route coverage for full HITL review lifecycle is still incomplete in the current route set.
 
-**Mitigation:** SQLite persistence in Phase 2.
+**Mitigation:** Add explicit review create/list/update endpoints and wire UI actions to these routes.
 
 ### 7.3 CORS Origins for Production
 
-The current CORS allow list (`localhost:3000`, `localhost:8000`) must be updated for any non-localhost deployment. This is a configuration change in `main.py`.
+The current CORS allow list is localhost-focused and must be updated for non-localhost deployment domains.
 
 ### 7.4 Authentication and Authorization Status
 
@@ -450,9 +330,9 @@ When using `multipart/form-data` (file upload), the JavaScript code intentionall
 | WebSocket streaming | Stream LLM analysis progress to frontend in real time | Phase 3 |
 | Enterprise SSO integration | OIDC/OAuth2/LDAP/SAML for organization-managed login, keeping backend session abstraction | Phase 2+ |
 | Database webhook | Notify frontend when review status changes | Phase 2 |
-| File storage backend | Object storage (S3/MinIO) for PDF reports | Phase 3 |
+| File storage backend | Object storage (S3/MinIO) for PDF reports and immutable evidence bundles | Phase 3 |
 | Persistent distributed rate limiting | Replace process-local limiter with shared multi-instance throttling / lockout state | Phase 2+ |
-| OpenTelemetry tracing | Distributed tracing for agent → service calls | Phase 3 |
+| OpenTelemetry tracing | Distributed tracing for agent → service → persistence flow | Phase 3 |
 
 ---
 
@@ -461,40 +341,41 @@ When using `multipart/form-data` (file upload), the JavaScript code intentionall
 - FastAPI — CORS Middleware, https://fastapi.tiangolo.com/tutorial/cors/
 - FastAPI — StaticFiles, https://fastapi.tiangolo.com/tutorial/static-files/
 - FastAPI — Request Body, https://fastapi.tiangolo.com/tutorial/body/
+- FastAPI — Error Handling, https://fastapi.tiangolo.com/tutorial/handling-errors/
+- Next.js — Rewrites, https://nextjs.org/docs/pages/api-reference/config/next-config-js/rewrites
 - MDN Web Docs — Using Fetch, https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch
 - MDN Web Docs — FormData, https://developer.mozilla.org/en-US/docs/Web/API/FormData
-- Starlette — Middleware, https://www.starlette.io/middleware/
 
 ---
 
 ## Assumptions
 
-1. The frontend and API are always served from the same origin in MVP deployment (FastAPI StaticFiles). Separate server deployment requires CORS origin update.
-2. `GET /health` is the canonical health check endpoint used by the frontend and any external monitoring.
-3. All API responses use JSON content type (`application/json`) except PDF download (`application/pdf`).
-4. The `document_id` and `check_id` fields auto-populate from analysis/compliance results in the frontend session only — they are not persisted across page refreshes.
-5. FastAPI Pydantic validation errors (HTTP 422) are surfaced to the user via toast notifications as the `detail` field content.
+1. Local development primarily uses Next.js (`localhost:3000`) + FastAPI (`127.0.0.1:8000`) with rewrite-based API proxying.
+2. `GET /health` remains the canonical backend health endpoint.
+3. API error responses follow the standardized `error.code` + `error.message` envelope.
+4. For MVP, some frontend workflows intentionally remain mock-first while backend integrations are progressively activated.
+5. Full HITL review lifecycle routes and UI wiring remain a planned integration increment.
 
 ---
 
 ## Open Questions
 
-1. **WebSocket streaming:** When LLM analysis is enabled, users may wait 10–30 seconds. Should a WebSocket connection stream intermediate analysis results?
-2. **Pagination:** Template list and review history will grow over time. Should pagination be added to `GET /api/v1/templates/` and `GET /api/v1/compliance/reviews`?
-3. **API versioning strategy:** Should `v2` API routes maintain backward compatibility with `v1`, or is breaking change acceptable?
-4. **Frontend build pipeline:** When should a build pipeline (Vite/esbuild) be introduced to support TypeScript, bundling, and tree-shaking?
-5. **Health check depth:** Should `/health` perform a deep health check (filesystem write test, optional Claude API ping) or remain a shallow check (always returns healthy)?
+1. **Bridge progress streaming:** Should bridge run progress move from polling/simulated stages to WebSocket or SSE streaming?
+2. **Templates API strategy:** Should SOP and arc42 pages continue build-time filesystem loading, or migrate to backend API retrieval with version pinning?
+3. **HITL route model:** Should review APIs live under `/compliance/reviews` or a dedicated `/hitl/*` namespace?
+4. **API versioning policy:** Should `/api/v2` preserve strict compatibility contracts with `/api/v1`?
+5. **Health depth:** Should `/health` stay shallow or include dependency checks (database/connectivity) under a separate readiness endpoint?
 
 ---
 
 ## Audit
 
-```
+```Python
 persona=integration-eng
-action=integrate-api
-timestamp=2025-02-23
+action=review-and-align-integration-doc
+timestamp=2026-3-30
 adapter=AAMAD-vscode
 artifact=project-context/2.build/integration.md
-version=0.1.0
-status=complete
+version=0.2.0
+status=updated
 ```
