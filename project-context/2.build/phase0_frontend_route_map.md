@@ -8,6 +8,8 @@
 **Author persona:** `@frontend-eng`  
 **AAMAD phase:** 2.build  
 
+> Scope note: This is a **Phase-0 planning artifact**. For current implemented frontend routes and behavior, use `project-context/2.build/frontend.md` and the page-specific `frontend_*.md` documents.
+
 ## 1 Route map (Phase 0)
 | Area | Route | Purpose |
 |---|---|---|

@@ -1,8 +1,8 @@
 # Setup Documentation — Doc Quality Compliance Check
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.1.0  
-**Date:** 2025-02-23  
+**Version:** 0.2.0  
+**Date:** 2026-3-31  
 **Author persona:** `@project-mgr`  
 **AAMAD phase:** 2.build  
 
@@ -375,13 +375,11 @@ doc_quality_compliance_check/
 
 ## Known Issues and Workarounds
 
-### 1. In-Memory Review Store (Data Loss on Restart)
+### 1. Review Persistence (Current State)
 
-**Issue:** HITL review records are stored in an in-memory Python dict (`_review_store` in `hitl_workflow.py`). All review records are lost when the server restarts.
+**Current state:** Review/workflow-related persistence now uses database-backed storage paths in the current backend baseline; the prior in-memory-only `_review_store` limitation is no longer the primary architecture.
 
-**Workaround (MVP):** This is a documented known limitation. Do not restart the server during an active review session in production use. SQLite persistence is planned for Phase 2.
-
-**Workaround (Development):** Use the API endpoints to recreate reviews as needed during testing.
+**Operational note:** For local development, keep PostgreSQL available to preserve session and review-related records across restarts.
 
 ### 2. PDF Reports Filesystem Storage
 
@@ -389,11 +387,11 @@ doc_quality_compliance_check/
 
 **Workaround:** Regenerate reports if the filesystem is cleared. Phase 2 will add persistent file storage.
 
-### 3. Frontend Static File Serving
+### 3. Frontend Runtime Mode
 
-**Issue:** The backend may expose fallback static serving, but current development flow primarily uses the Next.js frontend on port `3000`. If the frontend app is not running or the `frontend/` directory is missing, the protected UI/login flow is not available.
+**Current state:** The primary frontend runtime is the Next.js app on port `3000`. Backend static mount behavior remains legacy-compatible and should not be treated as the default interactive UX path.
 
-**Workaround:** Ensure the `frontend/` directory exists at the project root and run the frontend dev server separately for interactive login/app-shell testing.
+**Workaround:** Ensure the `frontend/` directory exists at the project root and run the frontend dev server separately for login/app-shell workflows.
 
 ### 4. Python 3.12 Required
 
@@ -405,7 +403,7 @@ doc_quality_compliance_check/
 
 **Issue:** Very large documents (close to the 10 MB limit) may cause noticeable latency because analysis is synchronous.
 
-**Workaround:** For MVP, the 10 MB limit (`MAX_FILE_SIZE_MB=10`) is sufficient for typical arc42 documents. Phase 2 will add FastAPI `BackgroundTasks` for async processing.
+**Workaround:** The current 10 MB limit (`MAX_FILE_SIZE_MB=10`) is sufficient for typical arc42/model-card/SOP inputs; very large files may still require asynchronous processing enhancements in later phases.
 
 ---
 
@@ -468,9 +466,9 @@ open http://localhost:3000/login
 ```text
 persona=project-mgr
 action=setup-project
-timestamp=2025-02-23
+timestamp=2026-3-31
 adapter=AAMAD-vscode
 artifact=project-context/2.build/setup.md
-version=0.1.0
+version=0.2.0
 status=complete
 ```

@@ -3,8 +3,8 @@
 <!-- markdownlint-disable MD031 MD032 MD034 MD040 MD060 -->
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.1.0  
-**Date:** 2025-02-23  
+**Version:** 0.2.0  
+**Date:** 2026-3-31  
 **Author persona:** `@qa-eng`  
 **AAMAD phase:** 2.build  
 
@@ -13,6 +13,8 @@
 ## Overview
 
 The QA strategy for MVP is **unit test first**: all five service modules are covered by dedicated pytest unit test files. Integration tests (FastAPI TestClient) and end-to-end tests are backlog items deferred to Phase 2. All 30 unit tests pass with 0 failures.
+
+> **Consistency note (2026-3-31):** This file preserves the initial Phase-0 QA baseline snapshot. The current codebase has expanded beyond this original scope (including auth/session/rate-limit and API-route tests). Treat this document as historical baseline context; for current coverage, use the active `tests/` directory and latest CI/test outputs.
 
 ---
 
@@ -294,7 +296,7 @@ CodeQL static analysis was run against the repository. No security alerts were i
 - `validate_filename()` regex whitelist → prevents path traversal
 - `validate_file_size()` → prevents resource exhaustion
 - No subprocess calls with user-supplied arguments
-- No SQL queries (no database in MVP → no SQL injection risk)
+- SQLAlchemy/PostgreSQL-backed paths now exist; use parameterized ORM/database access controls and migration discipline to mitigate SQL-injection risks.
 - No pickle/eval/exec on user-supplied data
 - Secrets via environment variables only (`ANTHROPIC_API_KEY`) — not hardcoded
 
@@ -381,13 +383,9 @@ def test_analyze_text_endpoint(client):
 
 ## Section 8 – Test Maintenance Notes
 
-### 8.1 In-Memory Store State Between Tests
+### 8.1 Historical Note on In-Memory Review Tests
 
-The `_review_store` dict in `hitl_workflow.py` persists across tests in the same pytest session (module-level global). Tests that create reviews accumulate entries.
-
-**Current mitigation:** Each test uses a unique `document_id` (e.g., `doc-1`, `doc-2`) to avoid cross-test interference. The `list_reviews_for_document` test creates its own isolated document ID.
-
-**Phase 2 fix:** Add a `@pytest.fixture(autouse=True)` that clears `_review_store` before each test.
+The earlier Phase-0 test baseline referenced module-level in-memory review state. Current backend persistence has moved to database-backed paths for core auth/session/review workflows, so this note is historical and should not be treated as the current architecture contract.
 
 ### 8.2 Filesystem-Dependent Tests
 
@@ -418,10 +416,10 @@ The `_review_store` dict in `hitl_workflow.py` persists across tests in the same
 
 ## Assumptions
 
-1. All 30 tests are run from the repository root directory (`pytest tests/ -v`).
+1. Tests are run from the repository root directory (`pytest tests/ -v`).
 2. The `templates/sop/` directory contains all 6 active SOP template files at test time.
 3. The `reports/` directory is writable by the test process; it is created automatically by the report generator service if absent.
-4. The `_review_store` module-level dict does not cause test interference because each test uses unique document IDs.
+4. Where persistence-backed tests are used, test data isolation is handled by fixtures/database setup strategy rather than relying on module-level in-memory stores.
 5. Python 3.12 is required; the test suite was validated on Python 3.12.3.
 6. No Anthropic API key is required to run the tests; all tests use the rule-based engine only.
 
@@ -442,12 +440,12 @@ The `_review_store` dict in `hitl_workflow.py` persists across tests in the same
 ```
 persona=qa-eng
 action=qa
-timestamp=2025-02-23
+timestamp=2026-3-31
 adapter=AAMAD-vscode
 artifact=project-context/2.build/qa.md
-version=0.1.0
+version=0.2.0
 status=complete
-tests_passed=30
-tests_failed=0
+tests_passed=historical-baseline-30
+tests_failed=historical-baseline-0
 codeql_alerts=0
 ```

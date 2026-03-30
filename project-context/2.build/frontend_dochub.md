@@ -1,35 +1,49 @@
-# Frontend Page Requirements — Doc Hub
+# Frontend Page Documentation — Document Hub
 
-**Page label:** Home / Doc Hub  
+**Page label:** Home  
 **Route:** `/`  
-**Owner persona:** `@frontend-eng`
+**Protection:** Protected route inside `AppShell`  
+**Owner persona:** `@frontend-eng`  
+**Status:** Implemented, mock-backed workspace entry page
 
 ## Purpose
 
-The Doc Hub is the operational entry point for governed documentation assets. Users identify, filter, and start controlled workflows from this page.
+Serve as the operational landing page for governed documentation assets so users can filter records, inspect ownership/status, acquire locks, and launch Bridge workflows.
 
-## Functional requirements
+## Current implementation
 
-- Show pre-title label **Home** with dashboard-style label typography.
-- Show page title **Document Hub** and an info icon (`LuInfo`) to toggle the "Why this page matters" panel.
-- Support search and project filtering via query params (`q`, `project`) and local filter input.
-- Render document cards from mock store in demo mode.
-- Expose `Acquire Lock` action with role-aware disabled states.
-- Expose navigation to per-document Bridge run.
+- Shows pre-title label `Home` and title `Document Hub`.
+- Shows a `LuInfo` icon that toggles the `Why this page matters` helper panel.
+- Supports query-based filtering through `q` and `project` URL params.
+- Mirrors query param `q` into local filter state for input editing.
+- Renders document cards from the Zustand mock store.
+- Exposes `Upload Document`, `Acquire Lock`, and Bridge-launch actions.
 
-## Data and state
+## Data sources and permissions
 
-- Source: `useMockStore().documents`.
-- Security: role checks from `useCan('doc.edit')` and `useCan('bridge.run')`.
+- Document source is `useMockStore(state => state.documents)`.
+- Lock acquisition uses `useMockStore(state => state.acquireLock)`.
+- Edit permission is controlled by `useCan('doc.edit')`.
+- Bridge-launch permission is controlled by `useCan('bridge.run')`.
 
-## UX properties
+## UX and behavior contract
 
-- Evidence-first metadata on each card (ID, status, updatedBy, updatedAt, schema).
-- Empty state when no records match filters.
-- Status badges must remain clear and color-semantic.
+- Search input filters by document ID, title, type, and product.
+- Pressing `Enter` updates the route query without a full navigation refresh.
+- Upload is currently a permission-gated UI action, not a fully wired document-ingest workflow on this page.
+- Lock buttons show either `Acquire Lock` or `Locked by ...` state.
+- Bridge entry links to `/doc/{docId}/bridge` when the role permits it.
+- An explicit empty state is shown when filters produce no matches.
+
+## Known boundaries
+
+- Document Hub still uses mock data rather than the live documents API.
+- Project filtering is query-driven but still works against the local mock dataset.
+- Upload and lock behavior are demo-friendly UI flows, not yet full backend document orchestration.
 
 ## Acceptance criteria
 
-- Doc Hub opens with active filters reflected in UI.
-- Users can start a Bridge workflow from any permitted document.
-- Role-restricted actions are visibly disabled with reason text.
+- Existing query filters are reflected in the visible UI state.
+- Role-restricted actions are disabled rather than silently hidden.
+- Users with `bridge.run` permission can open a document Bridge session.
+- Empty-state and card metadata remain clear and audit-oriented.

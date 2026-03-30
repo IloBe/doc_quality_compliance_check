@@ -1,29 +1,42 @@
-# Frontend Page Requirements — Forgot Access
+# Frontend Page Documentation — Forgot Access
 
-**Page label:** Access Recovery Request  
+**Page label:** Recover Access  
 **Route:** `/forgot-access`  
-**Owner persona:** `@frontend-eng`
+**Protection:** Public route, intentionally outside `AppShell`  
+**Owner persona:** `@frontend-eng`  
+**Status:** Implemented, backend recovery-request page
 
 ## Purpose
 
-Start a secure, anti-enumeration password recovery process.
+Start the password recovery flow in a way that avoids exposing whether an account exists.
 
-## Functional requirements
+## Current implementation
 
-- Accept email input and call recovery request endpoint.
-- Always show generic response message regardless of account existence.
-- Provide guidance for next step (`/reset-access?token=...`).
+- Renders a single-form recovery request page.
+- Accepts work-email input and submits it through `requestPasswordRecovery(email)`.
+- Shows the backend-provided generic message after submission.
+- Provides a route back to `/login`.
 
-## Data and state
+## Data sources and state
 
-- Backend source: `POST /api/v1/auth/recovery/request`.
+- Backend endpoint: `POST /api/v1/auth/recovery/request`.
+- The response may include `reset_url` in development-oriented flows.
 
-## UX properties
+## UX and behavior contract
 
-- Security-first language (no identity leakage).
-- Clean single-action form for low-friction recovery initiation.
+- Response messaging must remain generic and non-enumerating.
+- The page should stay simple and low-friction.
+- If the backend returns `reset_url`, the page may show a dev-mode recovery link for local testing.
+- Errors are shown inline without leaking account-existence details.
+
+## Known boundaries
+
+- The optional debug recovery link is for development/test workflows and should not be documented as a production-facing feature.
+- This page initiates recovery only; it does not verify tokens or set a new password.
 
 ## Acceptance criteria
 
-- Request is submitted successfully with generic confirmation.
-- No account existence hints are exposed in UI text.
+- Submitting the form returns a visible confirmation message.
+- UI text does not expose whether the email belongs to an account.
+- The page can optionally surface a dev-mode reset link when supplied by the backend.
+- Users can navigate back to `/login` cleanly.

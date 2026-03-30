@@ -1,209 +1,437 @@
 # Implementation Plan — Doc Quality & Compliance Check System
 
-**Project:** Document Quality & Compliance Check System
-**Version:** 1.0
-**Duration:** 6 Weeks
-**Owner:** Development Team
+**Project:** Document Quality & Compliance Check System  
+**Version:** 2.0  
+**Date:** 2026-03-31  
+**Owner:** Development Team  
+**Purpose:** Align the implementation plan with the code that is already delivered and define the remaining delivery path.
 
 ---
 
 ## Overview
 
-This document describes the 6-week implementation plan for delivering the Document Quality & Compliance Check System — an AI-assisted platform for analysing technical documentation against arc42, Model Card, and SOP templates, with automated EU AI Act compliance verification.
+This document replaces the earlier time-boxed 6-week rollout view with a **current-state implementation plan** based on the actual repository contents.
+
+The system is no longer a lightweight prototype with mostly planned features. The codebase now already includes:
+
+- a **FastAPI backend** with protected `/api/v1/*` routes,
+- a **Next.js frontend** with login, dashboard, workflow/bridge, compliance, and governance pages,
+- **PostgreSQL-backed persistence** for sessions, audit events, review records, documents, and findings,
+- **server-side session authentication** with role-based authorization,
+- **rate limiting, recovery flow safeguards, and structured logging**,
+- a separate **CrewAI orchestrator service** that uses the backend as its Skills API/system of record.
+
+Accordingly, the plan below is organized by **implemented workstreams**, **partially completed workstreams**, and **remaining delivery phases**.
 
 ---
 
-## Week 1: Foundation & Core Architecture
+## 1. Current Implementation Baseline
 
-**Goal:** Project setup, core domain models, and basic document analysis.
+### 1.1 Runtime topology
+
+| Area | Current state | Status |
+| --- | --- | --- |
+| Frontend | Next.js pages-router application in `frontend/` | ✅ Implemented |
+| Backend | FastAPI app in `src/doc_quality/api/main.py` | ✅ Implemented |
+| Persistence | PostgreSQL as primary persistence layer; SQLite available for smoke tests | ✅ Implemented |
+| Auth model | Backend-issued HTTP-only session cookies + explicit service authentication | ✅ Implemented |
+| Authorization | Role-based route protection via backend dependencies | ✅ Implemented |
+| Observability | Structured logging + audit trail persistence | ✅ Implemented |
+| Orchestration | Standalone CrewAI orchestrator service via Skills API | 🟡 Partially integrated |
+| Legacy UI compatibility | FastAPI `StaticFiles` mount for legacy frontend assets | ⚠️ Compatibility only |
+
+### 1.2 Primary code paths
+
+- **Backend app:** `src/doc_quality/api/main.py`
+- **Route modules:** `src/doc_quality/api/routes/`
+- **Core services:** `src/doc_quality/services/`
+- **Core security/runtime:** `src/doc_quality/core/`
+- **ORM + Pydantic models:** `src/doc_quality/models/`
+- **Frontend pages:** `frontend/pages/`
+- **Frontend API clients:** `frontend/lib/`
+- **Orchestrator service:** `services/orchestrator/`
+
+---
+
+## 2. Delivered Workstreams
+
+## 2.1 Platform foundation and backend architecture
+
+**Goal:** Establish the backend platform, configuration model, core services, and API runtime.
+
+| Item | Current state |
+| --- | --- |
+| Python project scaffold (`pyproject.toml`, uv-based workflow) | ✅ Delivered |
+| FastAPI application factory and route registration | ✅ Delivered |
+| Pydantic settings / environment configuration | ✅ Delivered |
+| Structured logging bootstrap | ✅ Delivered |
+| Shared security helpers (sanitization, validation) | ✅ Delivered |
+| Standardized error envelope and exception handling | ✅ Delivered |
+| Health endpoint (`/health`) | ✅ Delivered |
+
+**Result:** The project already has a production-shaped backend runtime rather than a minimal prototype.
+
+---
+
+## 2.2 Persistence and database implementation
+
+**Goal:** Replace temporary/in-memory persistence assumptions with real database-backed storage.
+
+### Delivered persistence scope
+
+| Item | Current state |
+| --- | --- |
+| PostgreSQL persistence path | ✅ Delivered |
+| Alembic migrations | ✅ Delivered |
+| `init_postgres.py` bootstrap script | ✅ Delivered |
+| `user_sessions` persistence | ✅ Delivered |
+| `hitl_reviews` persistence | ✅ Delivered |
+| `audit_events` persistence | ✅ Delivered |
+| `skill_documents` persistence | ✅ Delivered |
+| `skill_findings` persistence | ✅ Delivered |
+| SQLite smoke-test mode | ✅ Delivered as dev convenience |
+
+### Notes
+
+- PostgreSQL is now the **primary persistence layer**, not a future milestone.
+- SQLite remains useful only for quick local checks and should not be treated as the architecture target for release validation.
+- The previous plan item “replace in-memory stores with DB” is obsolete and has been completed.
+
+**Result:** Persistence is materially ahead of the original plan and already satisfies the main storage/audit/session requirements for the MVP baseline.
+
+---
+
+## 2.3 Authentication, authorization, and security hardening
+
+**Goal:** Secure browser and service access with a hardened authn/authz model.
+
+### Delivered security controls
+
+| Item | Current state |
+| --- | --- |
+| Email/password login | ✅ Delivered |
+| Server-side session creation and revocation | ✅ Delivered |
+| HTTP-only session cookie transport | ✅ Delivered |
+| Remember-me TTL policy | ✅ Delivered |
+| Password hashing + verification | ✅ Delivered |
+| Bootstrap MVP user via config | ✅ Delivered |
+| Password recovery request / verify / reset flow | ✅ Delivered |
+| Recovery token hashing, TTL, single-use enforcement | ✅ Delivered |
+| Session revocation after password reset | ✅ Delivered |
+| Browser RBAC (`qm_lead`, `architect`, `riskmanager`, `auditor`) | ✅ Delivered |
+| Service authentication via API key / bearer | ✅ Delivered |
+| Restricted machine access on explicit endpoints only | ✅ Delivered |
+| Global API rate limiting | ✅ Delivered |
+| Login throttling / temporary lockout | ✅ Delivered |
+| Recovery-flow throttling | ✅ Delivered |
+
+### Changed from old plan
+
+The earlier plan treated these topics as future work using **JWT / OAuth2**. That is no longer accurate.
+
+Current implementation uses:
+
+- **server-side session cookies for browser flows**, and
+- **API key / bearer authentication for explicit service flows**.
+
+JWT and enterprise SSO remain possible future enhancements, but they are **not** the current implementation baseline.
+
+**Result:** Authentication/authorization is already one of the most mature areas of the system and should be documented as completed hardening work, not a pending phase.
+
+---
+
+## 2.4 Observability, audit trail, and operational safeguards
+
+**Goal:** Provide traceability and operational diagnostics aligned with compliance expectations.
+
+### Delivered observability controls
+
+| Item | Current state |
+| --- | --- |
+| `structlog`-based structured logging | ✅ Delivered |
+| App startup/shutdown logs | ✅ Delivered |
+| Request logging middleware (`http_request`) | ✅ Delivered |
+| Standardized operational error logging | ✅ Delivered |
+| Audit trail persistence in `audit_events` | ✅ Delivered |
+| Service-level logging in report, research, HITL, template services | ✅ Delivered |
+| Orchestrator event logging through Skills API | ✅ Delivered |
+| Correlation fields (`trace_id`, `correlation_id`) in audit model | ✅ Delivered |
+
+### Remaining enhancement
+
+| Item | Status |
+| --- | --- |
+| OpenTelemetry / distributed tracing | 📋 Planned |
+| Centralized metrics dashboards | 📋 Planned |
+
+**Result:** Observability exists now and should be treated as implemented MVP infrastructure with future expansion for distributed tracing.
+
+---
+
+## 2.5 Core domain services and APIs
+
+**Goal:** Deliver document analysis, compliance checking, research, reporting, and template APIs.
+
+### Delivered backend services
+
+| Service area | Current state |
+| --- | --- |
+| Document analysis | ✅ Delivered |
+| Document upload | ✅ Delivered |
+| EU AI Act compliance checking | ✅ Delivered |
+| Regulation applicability mapping | ✅ Delivered |
+| Report generation/download | ✅ Delivered |
+| Template listing and retrieval | ✅ Delivered |
+| Research service | ✅ Delivered |
+| Dashboard summary aggregation | ✅ Delivered |
+| Bridge run + regulatory alert endpoints | ✅ Delivered |
+| HITL workflow service layer | ✅ Delivered |
+
+### Delivered route groups
+
+- `/api/v1/auth/*`
+- `/api/v1/documents/*`
+- `/api/v1/compliance/*`
+- `/api/v1/bridge/*`
+- `/api/v1/dashboard/*`
+- `/api/v1/reports/*`
+- `/api/v1/research/*`
+- `/api/v1/templates/*`
+- `/api/v1/skills/*`
+
+### Partially complete
+
+| Area | Current state |
+| --- | --- |
+| HITL HTTP lifecycle exposure | 🟡 Service/ORM complete; public route surface still incomplete |
+| Additional framework depth (GDPR/MDR/ISO 27001 beyond current baseline) | 🟡 Partial / evolving |
+
+**Result:** Most core backend capabilities are already shipped. The remaining work is now integration completeness and depth, not first implementation.
+
+---
+
+## 2.6 Frontend implementation
+
+**Goal:** Deliver the operator-facing application and connect it to the backend.
+
+### Delivered frontend scope
+
+| Item | Current state |
+| --- | --- |
+| Next.js frontend scaffold | ✅ Delivered |
+| Protected-route bootstrap in `_app.tsx` | ✅ Delivered |
+| Login page with Auth API status badge | ✅ Delivered |
+| Password recovery pages | ✅ Delivered |
+| Document Hub page | ✅ Delivered |
+| Dashboard page | ✅ Delivered |
+| Workflow / bridge UI | ✅ Delivered |
+| Compliance page | ✅ Delivered |
+| Governance manual / SOPs / architecture pages | ✅ Delivered |
+| Role-aware frontend helpers (`useCan`, RBAC helper layer) | ✅ Delivered |
+| Mock-store fallback for MVP interactions | ✅ Delivered |
+| Backend client wrappers for auth, bridge, dashboard | ✅ Delivered |
+
+### Important implementation correction
+
+The old plan described a **vanilla HTML/CSS/JS frontend** as the target. That is no longer correct.
+
+Current frontend is:
+
+- **Next.js + React + TypeScript**,
+- using environment-aware API clients,
+- with selected backend-connected pages and selected mock-first pages.
+
+### Remaining frontend gaps
+
+| Area | Current state |
+| --- | --- |
+| Bridge page backend integration | ✅ Implemented behind explicit backend mode |
+| Dashboard backend integration | ✅ Implemented behind explicit backend mode |
+| Templates/report/documents/compliance pages as fully API-driven UX | 🟡 Partial |
+| Legacy static frontend retirement | 📋 Planned |
+
+**Result:** Frontend work is materially more advanced than the old plan suggests, but some UI flows remain intentionally mock-first or partially wired.
+
+---
+
+## 2.7 Orchestrator and agent integration
+
+**Goal:** Support multi-agent workflows while keeping the backend as policy and persistence boundary.
+
+### Delivered
+
+| Item | Current state |
+| --- | --- |
+| Standalone orchestrator runtime in `services/orchestrator/` | ✅ Delivered |
+| CrewAI-based workflow package | ✅ Delivered |
+| Skills API boundary | ✅ Delivered |
+| Provider adapter abstraction | ✅ Delivered |
+| Anthropic adapter | ✅ Delivered |
+| OpenAI-compatible adapter scaffold | ✅ Delivered |
+| Nemotron scaffold adapter | ✅ Delivered |
+| Workflow routing modes / kill switch | ✅ Delivered |
+| Audit/event logging from orchestrator to backend | ✅ Delivered |
+
+### Still partial
+
+| Area | Current state |
+| --- | --- |
+| Broader production workflow catalog | 🟡 Partial |
+| Full UI integration of orchestrator workflows | 🟡 Partial |
+| Mature automated tests for orchestrator package | 🟡 Partial |
+
+**Result:** The orchestrator is no longer a speculative future item. It exists and should now be treated as an active subsystem that needs expansion and tighter integration.
+
+---
+
+## 3. Current Gaps and Delivery Priorities
+
+## 3.1 Phase A — Complete MVP integration surface
+
+**Priority:** High
+
+### Phase B objectives
+
+- Finish the remaining API-driven UI flows.
+- Close the most visible gaps between shipped backend capability and frontend exposure.
+
+### Phase B tasks
+
+| # | Task | Owner | Status |
+| --- | --- | --- | --- |
+| A.1 | Expose HITL review lifecycle through dedicated HTTP routes | Backend | 📋 Planned |
+| A.2 | Add corresponding frontend HITL review UX | Frontend | 📋 Planned |
+| A.3 | Wire document analysis/upload flows more directly into Next.js pages | Frontend | 📋 Planned |
+| A.4 | Add richer templates browser backed by current templates API | Frontend | 📋 Planned |
+| A.5 | Add report generation/download flow into page UX | Frontend | 📋 Planned |
+| A.6 | Reduce reliance on mock-first interactions where real APIs already exist | Frontend | 📋 Planned |
+
+### Phase B deliverables
+
+- End-to-end review workflow visible in browser UX
+- API-driven document/compliance/report/template flows
+- Reduced mismatch between backend capabilities and operator UI
+
+---
+
+## 3.2 Phase B — Production-readiness hardening
+
+**Priority:** High
+
+### Phase C objectives
+
+- Finish the hardening work that remains environment-specific or operational.
+
+### Phase C tasks
+
+| # | Task | Owner | Status |
+| --- | --- | --- | --- |
+| B.1 | Expand CORS/environment policy for staging/production deployment model | Backend | 📋 Planned |
+| B.2 | Strengthen secrets/config guidance for non-dev environments | Backend / DevOps | 📋 Planned |
+| B.3 | Add broader integration and regression test coverage for secured route groups | QA | 📋 Planned |
+| B.4 | Add deployment packaging and runtime verification for backend/frontend/orchestrator | DevOps | 📋 Planned |
+| B.5 | Review role specialization on currently authenticated-only routes (`dashboard`, `templates`) | Backend | 📋 Planned |
+| B.6 | Formalize production runbooks for DB/auth/recovery support paths | Ops | 📋 Planned |
+
+### Deliverables
+
+- Production-ready configuration profile
+- Better environment-specific security controls
+- Broader operational readiness for deployment and support
+
+---
+
+## 3.3 Phase C — Workflow depth and analytics
+
+**Priority:** Medium
+
+### Objectives
+
+- Improve workflow richness, analytics depth, and operator experience.
 
 ### Tasks
 
 | # | Task | Owner | Status |
-|---|------|-------|--------|
-| 1.1 | Repository setup, CI/CD pipeline (GitHub Actions) | DevOps | ✅ Done |
-| 1.2 | Python project scaffold (FastAPI, pyproject.toml) | Backend | ✅ Done |
-| 1.3 | Core Pydantic models: Document, Compliance, Report, Review | Backend | ✅ Done |
-| 1.4 | Structured logging with structlog | Backend | ✅ Done |
-| 1.5 | Configuration management (pydantic-settings, .env) | Backend | ✅ Done |
-| 1.6 | Security utilities: input sanitization, filename validation | Backend | ✅ Done |
-| 1.7 | arc42 document analyzer (12-section checker) | Backend | ✅ Done |
-| 1.8 | Model Card analyzer (9-section checker) | Backend | ✅ Done |
-| 1.9 | Unit tests for document analyzer | QA | ✅ Done |
-
-### Deliverables
-- Working document analysis service
-- FastAPI app with `/documents/analyze` and `/documents/upload` endpoints
-- Test coverage >80% for core services
+| --- | --- | --- | --- |
+| C.1 | Add richer dashboard analytics and trend reporting | Backend / Frontend | 📋 Planned |
+| C.2 | Improve bridge progress reporting / streaming UX | Frontend / Backend | 📋 Planned |
+| C.3 | Expand orchestrator workflow catalog beyond current flagship path | Backend / AI | 📋 Planned |
+| C.4 | Add object-storage strategy for generated artifacts/reports if required | Backend / DevOps | 📋 Planned |
+| C.5 | Improve research + compliance cross-linking in UI | Frontend | 📋 Planned |
 
 ---
 
-## Week 2: Compliance Engine & EU AI Act
+## 3.4 Phase D — Strategic extensions
 
-**Goal:** Implement EU AI Act compliance checking and regulation mapping.
+**Priority:** Medium / Long-term
 
-### Tasks
+### Candidate roadmap items
 
-| # | Task | Owner | Status |
-|---|------|-------|--------|
-| 2.1 | EU AI Act risk level classifier (Annex III categories) | Backend | ✅ Done |
-| 2.2 | EU AI Act role detector (Provider / Deployer / Both) | Backend | ✅ Done |
-| 2.3 | 9 EU AI Act requirement checkers (Art. 9–15, 43, 49) | Backend | ✅ Done |
-| 2.4 | Domain-to-regulation mapping (Medical, Finance, HR, General) | Backend | ✅ Done |
-| 2.5 | Compliance API routes (`/compliance/check/eu-ai-act`) | Backend | ✅ Done |
-| 2.6 | Unit tests for compliance checker | QA | ✅ Done |
-| 2.7 | MDR / GDPR / ISO 9001 framework stubs | Backend | 🔄 In Progress |
+- Enterprise SSO / OIDC integration
+- OpenTelemetry distributed tracing
+- Expanded regulatory frameworks and deeper rule packs
+- Webhook/event integrations
+- Confluence / SharePoint integration
+- Bulk document processing
+- Multi-language support
 
-### Deliverables
-- Full EU AI Act compliance check endpoint
-- Regulation applicability detection
-- Compliance score calculation
+These should remain roadmap items, not be presented as currently missing MVP essentials.
 
 ---
 
-## Week 3: Report Generation & HITL Workflow
+## 4. Updated Architecture Decisions
 
-**Goal:** PDF report generation and Human-In-The-Loop review workflow.
-
-### Tasks
-
-| # | Task | Owner | Status |
-|---|------|-------|--------|
-| 3.1 | PDF report generator using ReportLab | Backend | ✅ Done |
-| 3.2 | Section checklist table in PDF | Backend | ✅ Done |
-| 3.3 | Compliance results in PDF report | Backend | ✅ Done |
-| 3.4 | Report download endpoint | Backend | ✅ Done |
-| 3.5 | HITL review workflow service (in-memory) | Backend | ✅ Done |
-| 3.6 | Review record CRUD (create, read, update) | Backend | ✅ Done |
-| 3.7 | Modification request model with importance levels | Backend | ✅ Done |
-| 3.8 | Unit tests for report generator and HITL workflow | QA | ✅ Done |
-| 3.9 | HTML report format (future milestone) | Backend | 📋 Planned |
-
-### Deliverables
-- Downloadable PDF compliance reports
-- HITL review API
-- Full test suite for reports and reviews
+| ADR | Decision | Current rationale |
+| --- | --- | --- |
+| ADR-001 | FastAPI as main backend framework | Still correct; central API, policy, and integration boundary |
+| ADR-002 | Pydantic settings/models | Still correct; shared validation and config backbone |
+| ADR-003 | `structlog` for structured logging | Implemented and actively used |
+| ADR-004 | PostgreSQL as primary persistence target | Implemented for sessions, audit, reviews, documents, findings |
+| ADR-005 | SQLite as smoke-test path only | Useful for quick local validation, not the main architecture target |
+| ADR-006 | Server-side session cookies for browser auth | Implemented and preferred over JWT for current browser model |
+| ADR-007 | Explicit service auth for machine clients | Implemented via API key / bearer on allowed machine flows |
+| ADR-008 | Next.js frontend instead of vanilla JS | Implemented; replaces earlier frontend assumption |
+| ADR-009 | Backend as Skills API / system of record for orchestrator | Implemented and important for guardrails |
+| ADR-010 | Provider adapter layer for model integrations | Implemented; keeps orchestrator vendor-neutral |
 
 ---
 
-## Week 4: AI Agent Integration & Template Management
+## 5. Risk Review and Mitigation
 
-**Goal:** Anthropic Claude integration for AI-enhanced analysis; SOP template management.
-
-### Tasks
-
-| # | Task | Owner | Status |
-|---|------|-------|--------|
-| 4.1 | DocumentCheckAgent with LLM enrichment | AI | ✅ Done |
-| 4.2 | ComplianceCheckAgent wrapping compliance service | AI | ✅ Done |
-| 4.3 | Anthropic API key configuration and error handling | Backend | ✅ Done |
-| 4.4 | 6 active SOP templates (markdown) | Content | ✅ Done |
-| 4.5 | Template manager service (list, get by ID, index) | Backend | ✅ Done |
-| 4.6 | Template API routes | Backend | ✅ Done |
-| 4.7 | Unit tests for template manager | QA | ✅ Done |
-| 4.8 | arc42 full template document | Content | ✅ Done |
-| 4.9 | Inactive template stubs (test_strategy, deployment, etc.) | Content | ✅ Done |
-
-### Deliverables
-- AI-enhanced document analysis (optional, requires API key)
-- 6 fully documented SOP templates
-- arc42 reference template
+| Risk | Current mitigation |
+| --- | --- |
+| Backend unavailable during frontend demos | Login page health badge + direct health check path |
+| Brute-force or abusive auth behavior | Global limiter + login throttling + recovery throttling |
+| Unauthorized machine access | `allow_service=True` only on explicitly allowed endpoints |
+| Audit trail gaps | `audit_events` persistence + structured logging already in place |
+| UI/backend drift | Remaining Phase A work focuses on wiring already-implemented APIs into pages |
+| Orchestrator bypassing policy | Skills API boundary prevents direct DB access |
 
 ---
 
-## Week 5: Frontend Dashboard & Integration
+## 6. Immediate Next Actions
 
-**Goal:** Build the web dashboard and connect all backend services.
+The most accurate short-term delivery focus is now:
 
-### Tasks
-
-| # | Task | Owner | Status |
-|---|------|-------|--------|
-| 5.1 | HTML/CSS/JS frontend dashboard | Frontend | ✅ Done |
-| 5.2 | Document analysis form (paste text + file upload) | Frontend | ✅ Done |
-| 5.3 | EU AI Act compliance check form | Frontend | ✅ Done |
-| 5.4 | Template browser with live preview | Frontend | ✅ Done |
-| 5.5 | Report generation and download UI | Frontend | ✅ Done |
-| 5.6 | API health status indicator | Frontend | ✅ Done |
-| 5.7 | Drag-and-drop file upload | Frontend | ✅ Done |
-| 5.8 | XSS protection (escapeHtml utility) | Frontend | ✅ Done |
-| 5.9 | Responsive design (mobile-friendly) | Frontend | ✅ Done |
-| 5.10 | Static file serving via FastAPI | Backend | ✅ Done |
-
-### Deliverables
-- Fully functional web dashboard
-- End-to-end integration of all backend APIs
-- Mobile-responsive UI
+1. **Complete HITL route/UI exposure**
+2. **Finish API-driven page integration for documents, compliance, templates, and reports**
+3. **Tighten production-readiness for deployment, CORS, secrets, and regression coverage**
+4. **Expand orchestrator/UI integration beyond the current flagship workflow**
 
 ---
 
-## Week 6: Testing, Security & Production Hardening
+## 7. Summary
 
-**Goal:** Final QA, security review, documentation, and deployment preparation.
+The implementation is **substantially ahead** of the earlier plan in several key areas:
 
-### Tasks
+- PostgreSQL persistence is already implemented.
+- Authentication and authorization are already implemented and hardened.
+- Observability and audit logging already exist.
+- The frontend is already a Next.js application, not a simple static dashboard.
+- The orchestrator service already exists.
 
-| # | Task | Owner | Status |
-|---|------|-------|--------|
-| 6.1 | Integration tests for all API endpoints | QA | 📋 Planned |
-| 6.2 | Security audit: input validation, CORS, rate limiting | Security | 📋 Planned |
-| 6.3 | Performance benchmarking (load testing with locust) | QA | 📋 Planned |
-| 6.4 | Database persistence layer (replace in-memory stores) | Backend | 📋 Planned |
-| 6.5 | Authentication & authorisation (JWT / OAuth2) | Backend | 📋 Planned |
-| 6.6 | CrewAI orchestrator service with one end-to-end workflow | Backend | 📋 Planned |
-| 6.7 | Model adapter interface (`AnthropicAdapter`, `NemotronAdapter` scaffold) | Backend | 📋 Planned |
-| 6.8 | Enforce Skills API boundary for agent/orchestrator tool access | Backend | 📋 Planned |
-| 6.9 | Docker containerisation | DevOps | 📋 Planned |
-| 6.10 | Deployment to staging environment | DevOps | 📋 Planned |
-| 6.11 | Final documentation review | All | 📋 Planned |
-| 6.12 | Stakeholder demo and sign-off | PM | 📋 Planned |
+The plan should therefore be interpreted as:
 
-### Deliverables
-- Production-ready deployment package
-- Docker Compose / Kubernetes manifests
-- Security hardening report
-- Final stakeholder sign-off
-
----
-
-## Architecture Decisions
-
-| ADR | Decision | Rationale |
-|-----|---------|-----------|
-| ADR-001 | FastAPI as web framework | High performance, async-native, automatic OpenAPI docs |
-| ADR-002 | Pydantic v2 for data validation | Type safety, performance, serialization |
-| ADR-003 | Structlog for logging | Structured JSON logs, easier observability |
-| ADR-004 | ReportLab for PDF generation | Mature Python PDF library, no external dependencies |
-| ADR-005 | In-memory store for HITL reviews (v1) | Simplicity for initial implementation; replaced by DB in v2 |
-| ADR-006 | Anthropic Claude for LLM analysis | Best-in-class document analysis capabilities |
-| ADR-007 | Vanilla JS frontend | No build toolchain required, simpler deployment |
-| ADR-008 | Hybrid CrewAI orchestration over Skills API | Enables multi-step workflows with minimal rewrite and strong guardrails |
-| ADR-009 | Provider adapter layer for LLM/VLM access | Keeps orchestration vendor-neutral; allows Nemotron support via adapter |
-
----
-
-## Risk Mitigation
-
-| Risk | Mitigation |
-|------|-----------|
-| Anthropic API unavailable | Rule-based analysis works independently of LLM |
-| Large file uploads | File size validation (50MB limit), async processing |
-| Compliance interpretation errors | Human review required for all compliance decisions |
-| In-memory data loss | Documented as v1 limitation; DB persistence planned for v2 |
-
----
-
-## Future Milestones (Post Week 6)
-
-- [ ] Database persistence (PostgreSQL / SQLite)
-- [ ] User authentication (JWT)
-- [ ] Additional SOP templates (Test Strategy, Deployment, Data Governance, Security)
-- [ ] GDPR / MDR / ISO 27001 full compliance checkers
-- [ ] Bulk document processing
-- [ ] Webhook notifications on review completion
-- [ ] Integration with Confluence / SharePoint
-- [ ] Multi-language support (German, French)
-- [ ] Advanced AI agent with multi-step reasoning
-- [ ] Dedicated `services/orchestrator/` runtime with CrewAI flow packaging
-- [ ] Nemotron provider adapter promoted from scaffold to production integration
-- [ ] Dashboard analytics and trend reporting
+- **completed foundation + security + persistence**,
+- **partially completed UI/orchestrator integration**,
+- **remaining delivery work focused on integration completeness, production hardening, and workflow expansion**.

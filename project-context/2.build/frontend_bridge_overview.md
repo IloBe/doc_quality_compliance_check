@@ -1,32 +1,43 @@
-# Frontend Page Requirements — Bridge Overview
+# Frontend Page Documentation — Workflow / Bridge Overview
 
 **Page label:** Bridge Architecture  
-**Route:** `/bridge` (alias to workflow overview)  
-**Owner persona:** `@frontend-eng`
+**Route:** `/workflow` with `/bridge` as alias  
+**Protection:** Protected route inside `AppShell`  
+**Owner persona:** `@frontend-eng`  
+**Status:** Implemented overview page, largely informational/demo-oriented
 
 ## Purpose
 
-Explain and monitor the orchestration model used for document checks before running a document-specific workflow.
+Explain the orchestration model used for document checks and provide a clear entry from overview context into a document-level Bridge run.
 
-## Functional requirements
+## Current implementation
 
-- Show pre-title label in dashboard-style typography.
-- Show page title with info icon toggle for "Why this page matters".
-- Display orchestration overview cards (Inspection, Compliance, Template Core, Research).
-- Provide action to open demo Bridge run (`/doc/DOC-001/bridge`).
-- Avoid non-operational controls (no generic CLI action in UI).
+- `frontend/pages/workflow.tsx` is the canonical page.
+- `frontend/pages/bridge.tsx` simply re-exports the workflow page.
+- Shows pre-title label `Bridge Architecture` and title `Workflow Orchestration`.
+- Shows a `LuInfo` toggle for the `Why this page matters` panel.
+- Renders four overview cards: Inspection, Compliance, Template Core, and Research RAG.
+- Provides a button that navigates to `/doc/DOC-001/bridge`.
+- Shows a large `Dynamic Agent Routing` status card with static summary metrics.
 
-## Data and state
+## Data sources and state
 
-- Demo-oriented informational page; static summary values are acceptable.
-- Must integrate with existing app shell navigation and role context.
+- Current counts and metrics are static/presentational values in the page component.
+- No backend orchestration feed is currently fetched on this overview page.
 
-## UX properties
+## UX and behavior contract
 
-- Clarify workflow intent for QA, auditors, and product leads.
-- Preserve modern visual style while maintaining audit-domain clarity.
+- The page must communicate orchestration purpose clearly for QA, auditors, and product leads.
+- The demo Bridge entry button must remain a reliable path into a document-level session.
+- The `Reload Agents` button is currently presentational and should not be documented as a live backend refresh action.
+
+## Known boundaries
+
+- Crew/infrastructure metrics on this page are currently illustrative, not live operational telemetry.
+- This page frames the workflow; it does not itself execute the Bridge run.
 
 ## Acceptance criteria
 
-- User can navigate from overview to an executable Bridge session.
-- Overview communicates workflow purpose without ambiguity.
+- Users can navigate from the overview to an executable Bridge session.
+- The page explains the four-step orchestration concept without ambiguity.
+- Documentation does not overstate backend runtime integration on the overview route.

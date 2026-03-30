@@ -3,8 +3,8 @@
 <!-- markdownlint-disable MD022 MD031 MD032 MD034 MD040 MD058 MD060 -->
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.2.0  
-**Date:** 2026-3-30  
+**Version:** 0.3.0  
+**Date:** 2026-3-31  
 **Author persona:** `@integration-eng`  
 **AAMAD phase:** 2.build  
 
@@ -33,7 +33,7 @@ This preserves first-party cookie behavior in local development and keeps integr
 | Frontend runtime | ✅ Implemented | Next.js pages router, AppShell, protected-route bootstrap |
 | Backend runtime | ✅ Implemented | FastAPI with `/api/v1/*` + `/health` |
 | Dev transport | ✅ Implemented | Next.js rewrites proxy API + health |
-| Legacy static serving | ⚠️ Kept for compatibility | FastAPI still mounts `frontend/` with `StaticFiles` |
+| Legacy static serving | ⚠️ Compatibility-only path | FastAPI static mount exists, but Next.js runtime is the primary UX path |
 
 ### 1.2 API Base Resolution and Credentials
 
@@ -209,7 +209,7 @@ Current interpretation:
 ### 4.1 Authentication Boundary
 
 - Backend owns session creation, revocation, and validation.
-- Session token is in HTTP-only cookie.
+- Browser session is carried in a backend-owned HTTP-only cookie.
 - Protected routes are no longer public.
 - Browser identity checks use `auth/me` (session only).
 

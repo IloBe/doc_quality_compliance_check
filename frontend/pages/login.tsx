@@ -18,6 +18,8 @@ import {
 } from 'react-icons/lu';
 import { checkAuthServiceHealth, loginWithPassword } from '../lib/authClient';
 
+const HEALTH_CHECK_ENABLED = process.env.NEXT_PUBLIC_ENABLE_AUTH_HEALTH_CHECK !== 'false';
+
 const Login = () => {
    const router = useRouter();
    const [email, setEmail] = useState('mvp-user@example.invalid');
@@ -27,8 +29,38 @@ const Login = () => {
    const [error, setError] = useState<string | null>(null);
    const [authServiceOnline, setAuthServiceOnline] = useState<boolean | null>(null);
    const [authServiceVersion, setAuthServiceVersion] = useState<string | null>(null);
+   const [lastHealthCheckedAt, setLastHealthCheckedAt] = useState<number | null>(null);
+   const [healthCheckedAgoLabel, setHealthCheckedAgoLabel] = useState<string>('—');
 
    useEffect(() => {
+      if (!HEALTH_CHECK_ENABLED || lastHealthCheckedAt === null) {
+         return;
+      }
+
+      const updateLabel = () => {
+         const seconds = Math.max(0, Math.floor((Date.now() - lastHealthCheckedAt) / 1000));
+         if (seconds < 5) {
+            setHealthCheckedAgoLabel('just now');
+            return;
+         }
+         if (seconds < 60) {
+            setHealthCheckedAgoLabel(`${seconds}s ago`);
+            return;
+         }
+         const minutes = Math.floor(seconds / 60);
+         setHealthCheckedAgoLabel(`${minutes}m ago`);
+      };
+
+      updateLabel();
+      const ticker = setInterval(updateLabel, 1000);
+      return () => clearInterval(ticker);
+   }, [lastHealthCheckedAt]);
+
+   useEffect(() => {
+      if (!HEALTH_CHECK_ENABLED) {
+         return;
+      }
+
       let mounted = true;
 
       const refreshHealth = async () => {
@@ -38,6 +70,7 @@ const Login = () => {
          }
          setAuthServiceOnline(health.online);
          setAuthServiceVersion(health.version ?? null);
+         setLastHealthCheckedAt(Date.now());
       };
 
       refreshHealth();
@@ -124,23 +157,26 @@ const Login = () => {
                <p className="text-neutral-400 text-sm font-medium leading-relaxed">
                   Sign in with your corporate SSO or project email.
                </p>
-                      <div className={`inline-flex items-center gap-2 mt-2 rounded-full px-3 py-1 text-[11px] font-bold ${
-                         authServiceOnline === true
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                            : authServiceOnline === false
-                               ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                               : 'bg-neutral-100 text-neutral-600 border border-neutral-200'
-                      }`}>
-                         {authServiceOnline === true
-                            ? <LuWifi className="w-3.5 h-3.5" />
-                            : authServiceOnline === false
-                               ? <LuWifiOff className="w-3.5 h-3.5" />
-                               : <LuLoader className="w-3.5 h-3.5 animate-spin" />}
-                         <span>
-                            Auth API: {authServiceOnline === true ? 'Online' : authServiceOnline === false ? 'Offline' : 'Checking...'}
-                            {authServiceVersion ? ` (v${authServiceVersion})` : ''}
-                         </span>
-                      </div>
+                      {HEALTH_CHECK_ENABLED && (
+                         <div className={`inline-flex items-center gap-2 mt-2 rounded-full px-3 py-1 text-[11px] font-bold ${
+                            authServiceOnline === true
+                               ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                               : authServiceOnline === false
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                                  : 'bg-neutral-100 text-neutral-600 border border-neutral-200'
+                         }`}>
+                            {authServiceOnline === true
+                               ? <LuWifi className="w-3.5 h-3.5" />
+                               : authServiceOnline === false
+                                  ? <LuWifiOff className="w-3.5 h-3.5" />
+                                  : <LuLoader className="w-3.5 h-3.5 animate-spin" />}
+                            <span>
+                               Auth API: {authServiceOnline === true ? 'Online' : authServiceOnline === false ? 'Offline' : 'Checking...'}
+                               {authServiceVersion ? ` (v${authServiceVersion})` : ''}
+                               {lastHealthCheckedAt ? ` • checked ${healthCheckedAgoLabel}` : ''}
+                            </span>
+                         </div>
+                      )}
             </div>
 
             <form onSubmit={handleLogin} className="space-y-6">

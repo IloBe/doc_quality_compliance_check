@@ -7,6 +7,8 @@
 **AAMAD phase:** 2.build  
 **Related artifacts:** `project-context/1.define/sad.md`, `project-context/2.build/backend.md`, `project-context/2.build/persistence_migration.md`
 
+> Scope note: This document defines the **Phase-0 persistence acceptance baseline**. For current implemented persistence behavior and constraints, refer to `project-context/2.build/backend.md`, `DATABASE_README.md`, and `IMPLEMENTATION_PLAN.md`.
+
 ---
 
 ## Purpose

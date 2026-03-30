@@ -2,6 +2,14 @@
 
 AI-assisted compliance and quality assurance platform for software documentation.
 
+Current implementation baseline:
+
+- **Frontend:** Next.js + React + TypeScript browser app in `frontend/`
+- **Backend:** FastAPI API in `src/doc_quality/api/main.py`
+- **Persistence:** PostgreSQL primary path for sessions, reviews, audit events, documents, and findings
+- **Authentication:** backend-issued HTTP-only session cookies with role-based authorization
+- **Orchestration:** optional standalone CrewAI orchestrator in `services/orchestrator/`
+
 ## Business context summary
 
 Software teams in regulated or audit-heavy environments (healthcare, fintech, enterprise SaaS or critical infrastructure) often lose significant time during releases because documentation quality and compliance checks are manual, inconsistent and late in the delivery cycle.
@@ -62,6 +70,7 @@ Use separate terminals so PostgreSQL, the API, and the UI run at the same time.
 1. **Database terminal** (from `doc_quality_compliance_check/`):
 
    Start PostgreSQL database:
+
    ```powershell
    docker compose up -d
    .\.venv\Scripts\python.exe init_postgres.py
@@ -75,6 +84,7 @@ Use separate terminals so PostgreSQL, the API, and the UI run at the same time.
 2. **Backend terminal** (from `doc_quality_compliance_check/`):
 
    Start uvicorn backend server:
+
    ```powershell
    .\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
    ```
@@ -85,6 +95,7 @@ Use separate terminals so PostgreSQL, the API, and the UI run at the same time.
 3. **Frontend terminal** (from `doc_quality_compliance_check/frontend/`):
 
    Start frontend of browser application:
+
    ```powershell
    npm run dev
    ```
@@ -98,11 +109,30 @@ Use separate terminals so PostgreSQL, the API, and the UI run at the same time.
    > `SameSite=lax` cookie delivery and makes the login button appear unresponsive after a successful
    > authentication (silent redirect loop back to `/login`).
 
+   > **Auth API badge note:** the login page can show a live Auth API status badge. For stable local demos, keep
+   > `NEXT_PUBLIC_ENABLE_AUTH_HEALTH_CHECK=true` and point `NEXT_PUBLIC_HEALTH_ORIGIN=http://127.0.0.1:8000` so the
+   > badge checks backend health directly without relying on the Next.js proxy path.
+
 4. **Quick verification**
    - Database is running on `localhost:5432`
    - Backend health (via proxy): `http://localhost:3000/health`
    - Backend health (direct): `http://127.0.0.1:8000/health`
    - `frontend/.env.local` → `NEXT_PUBLIC_API_ORIGIN=` (empty = proxy mode, required for local dev)
+
+### Optional: start the orchestrator service
+
+If you want to exercise the CrewAI orchestration runtime as well, use a fourth terminal.
+
+1. **Orchestrator terminal** (from `doc_quality_compliance_check/services/orchestrator/`):
+
+   ```powershell
+   uv run python -m doc_quality_orchestrator
+   ```
+
+2. **Verify orchestrator health:**
+   - `http://localhost:8010/health`
+
+The orchestrator is optional for the core login/dashboard/document flows. The backend remains the system of record and exposes the Skills API used by orchestrator workflows.
 
 ### Password Recovery Flow
 

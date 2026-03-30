@@ -8,6 +8,8 @@
 **Author persona:** `@frontend-eng`  
 **AAMAD phase:** 2.build 
 
+> Scope note: This document captures the **initial Phase-0 DoD baseline**. Current implementation status is tracked in `IMPLEMENTATION_PLAN.md` plus `project-context/2.build/frontend.md` and related page docs.
+
 ## Epic A — App shell, auth entry, theming (Next.js + Tailwind)
 **DoD**
 - [ ] Branded `/login` page exists (white/blue/green calm layout; Inter/Open Sans).

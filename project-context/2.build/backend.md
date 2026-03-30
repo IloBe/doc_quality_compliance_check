@@ -3,8 +3,8 @@
 <!-- markdownlint-disable MD031 MD032 MD038 MD040 MD056 MD060 -->
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.2.0  
-**Date:** 2026-3-22  
+**Version:** 0.3.0  
+**Date:** 2026-3-31  
 **Author persona:** `@backend-eng`  
 **AAMAD phase:** 2.build  
 
@@ -15,11 +15,12 @@
 The backend is a Python 3.12 FastAPI application using a hybrid layered architecture:
 
 ```text
-API Routes → Service Layer / Skills API → [AI Agent Layer] → [CrewAI Orchestrator for complex workflows]
-                                      └→ [Model Provider Adapter Layer]
+API Routes → Service Layer / Skills API → Persistence / Audit Trail
+                                      └→ Optional agent wrappers / CrewAI orchestrator
+                                      └→ Model provider adapter layer
 ```
 
-All data flows through Pydantic v2 models. All service functions use full Python type hints. All operations are logged via structlog. User-supplied content is sanitised with bleach at the API boundary.
+All data flows through Pydantic v2 models. All service functions use full Python type hints. All operations are logged via structlog. User-supplied content is sanitised at the API boundary before persistence or downstream processing.
 
 ---
 
@@ -33,7 +34,7 @@ The system implements a CrewAI-style multi-agent pattern with two specialised ag
 - keep all production-system access in the backend **Skills API / service layer**,
 - route model access through a **provider adapter interface** so workflow code does not depend on a specific SDK.
 
-**Phase 0 status:** Wrapper-based path is production-ready; CrewAI orchestrator is a Phase 0 implementation target that extends (not rewrites) the existing Skills API service layer.
+**Phase 0 status:** Wrapper-based path is production-ready and the standalone CrewAI orchestrator service already exists. It extends (not rewrites) the existing Skills API service layer.
 
 **Prompt Governance & Traceability (AD-11, Phase 0 mandatory):** All LLM prompts (provider-agnostic, including Anthropic/OpenAI/other adapters) must be managed as versioned artifacts in `prompts/` with traceable change rationale and version identifiers. No inline production prompts are permitted.
 
@@ -281,8 +282,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 ```python
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8000"],
-    allow_credentials=False,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://0.0.0.0:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://0.0.0.0:8000",
+    ],
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT"],
     allow_headers=["*"],
 )
@@ -300,13 +308,15 @@ async def log_requests(request: Request, call_next):
     return response
 ```
 
-**Static file serving:**
+**Static file serving (legacy compatibility):**
 ```python
 try:
     app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 except RuntimeError:
     pass  # Frontend directory not found; skip static serving
 ```
+
+This mount is preserved for compatibility with legacy assets, but the preferred frontend runtime is the separate Next.js application in `frontend/`.
 
 **Health check:**
 ```python
@@ -358,14 +368,11 @@ async def health_check() -> dict:
 | Response | `list[str]` — names of applicable regulations detected |
 | Frameworks | EU AI Act, MDR, GDPR, ISO 9001, ISO 27001, BSI Grundschutz |
 
-**HITL Review Endpoints:**
+**HITL review exposure status:**
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/compliance/review` | POST | Create a new HITL review record |
-| `/api/v1/compliance/review/{review_id}` | GET | Retrieve a review by ID |
-| `/api/v1/compliance/review/{review_id}` | PUT | Update review status |
-| `/api/v1/compliance/reviews` | GET | List all review records |
+- The HITL persistence and service layer are implemented in `src/doc_quality/services/hitl_workflow.py`.
+- A dedicated public HTTP route surface for full HITL review lifecycle management is **not yet fully exposed** in the current API.
+- This remains one of the main integration gaps between implemented backend capability and browser-facing workflows.
 
 ### 3.3 Reports Routes (`/api/v1/reports`)
 
@@ -537,38 +544,53 @@ Returns persisted review records as a list, with filtering/pagination support in
 class Settings(BaseSettings):
     app_name: str = "Doc Quality Compliance Check"
     app_version: str = "0.1.0"
-    environment: str = "development"
+    environment: Literal["development", "staging", "production"] = "development"
     api_prefix: str = "/api/v1"
+    secret_key: str = "change-me-in-production"
     log_level: str = "INFO"
-    log_format: str = "json"
+    log_format: Literal["json", "console"] = "console"
     max_file_size_mb: int = 10
-    anthropic_api_key: str | None = None
-    anthropic_model: str = "claude-3-haiku-20240307"
+    session_cookie_name: str = "dq_session"
+    session_cookie_secure: bool = False
+    global_rate_limit_enabled: bool = True
+    global_rate_limit_requests: int = 240
+    global_rate_limit_window_seconds: int = 60
+    auth_login_rate_limit_count: int = 8
+    auth_login_rate_limit_window_seconds: int = 300
+    auth_login_lockout_seconds: int = 600
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-3-5-sonnet-20241022"
+    perplexity_api_key: str = ""
+    perplexity_model: str = "sonar-pro"
+    reports_output_dir: str = "reports"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-@lru_cache
 def get_settings() -> Settings:
     return Settings()
 ```
 
-`get_settings()` is cached via `@lru_cache` — only one `Settings` instance per process.
+Production validation also forces `SESSION_COOKIE_SECURE=true` outside development and rejects the default `SECRET_KEY` in production.
 
 ### 5.2 Structured Logging (`src/doc_quality/core/logging_config.py`)
 
 ```python
-def configure_logging(log_level: str = "INFO", log_format: str = "json") -> None:
+def configure_logging(log_level: str = "INFO", log_format: str = "console") -> None:
+    shared_processors = [
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+    ]
+
+    if log_format == "json":
+        processors = shared_processors + [structlog.processors.JSONRenderer()]
+    else:
+        processors = shared_processors + [structlog.dev.ConsoleRenderer()]
+
     structlog.configure(
-        processors=[
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.add_logger_name,
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.JSONRenderer() if log_format == "json"
-            else structlog.dev.ConsoleRenderer(),
-        ],
-        wrapper_class=structlog.BoundLogger,
-        context_class=dict,
-        logger_factory=structlog.stdlib.LoggerFactory(),
+        processors=processors,
+        logger_factory=structlog.PrintLoggerFactory(),
+        cache_logger_on_first_use=True,
     )
 
 def get_logger(name: str) -> structlog.BoundLogger:
@@ -583,7 +605,7 @@ Every service function logs at key decision points: function entry with input ID
 
 ```python
 def sanitize_text(text: str) -> str:
-    return bleach.clean(text, tags=[], attributes={}, strip=True)
+    return bleach.clean(text, tags=[], strip=True)
 ```
 
 Strips all HTML tags. Called on all user-supplied text content before any processing.
@@ -599,7 +621,7 @@ def validate_filename(filename: str) -> str:
     return filename
 ```
 
-Whitelist regex: alphanumeric, hyphens, dots, underscores, spaces. Rejects path traversal characters (`../`, `\`, etc.). Raises `ValueError` → converted to HTTP 400 by route handler.
+Whitelist regex: alphanumeric, hyphens, dots, underscores, spaces. Validation also restricts file extensions to `.pdf`, `.docx`, `.md`, and `.txt`. Raises `ValueError` → converted to HTTP 400 by route handler.
 
 **`validate_file_size(size_bytes: int, max_mb: int) -> None`**
 
@@ -624,7 +646,7 @@ Raises `ValueError` → converted to HTTP 413 by route handler.
 | No `print()` statements | All output goes through structlog |
 | No global mutable state | Persistence-backed services avoid module-level mutable stores |
 | Enum types | `DocumentType`, `DocumentStatus`, `RiskLevel`, `AIActRole`, `ReviewStatus` |
-| `@lru_cache` | `get_settings()` — single Settings instance per process |
+| Settings via `BaseSettings` | Environment-driven configuration with production validation |
 
 ---
 
@@ -677,10 +699,10 @@ return result
 ## Assumptions
 
 1. The service layer is stateless from an API caller perspective; persistence is delegated to the database layer. Services can be called directly in tests without mocking the FastAPI request context.
-2. `get_settings()` returns a cached `Settings` instance; tests that need custom settings must clear the LRU cache or use dependency injection override.
+2. `get_settings()` returns a fresh `Settings` instance per call; tests that need custom settings should manage environment overrides carefully.
 3. Pydantic v2 strict mode is not enabled globally; field validators use lenient coercion by default.
 4. The `reports/` directory is created by `report_generator.py` if it does not exist; no pre-creation step is required in deployment.
-5. Claude API calls use the model specified by `ANTHROPIC_MODEL` (default: `claude-3-haiku-20240307`); other Claude models are interchangeable.
+5. Claude API calls use the model specified by `ANTHROPIC_MODEL` (default: `claude-3-5-sonnet-20241022`); other Claude models are interchangeable.
 6. All datetime objects use `timezone.utc` to avoid timezone-naive comparison issues.
 
 ---
@@ -715,9 +737,9 @@ return result
 ```python
 persona=backend-eng
 action=develop-be
-timestamp=2026-3-22
+timestamp=2026-3-31
 adapter=AAMAD-vscode
 artifact=project-context/2.build/backend.md
-version=0.2.
+version=0.3.0
 status=complete
 ```

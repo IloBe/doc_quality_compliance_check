@@ -6,6 +6,8 @@
 **Author persona:** `@backend-eng`  
 **AAMAD phase:** 2.build  
 
+> Scope note: This is a **Phase-0 orchestration DoD baseline**. Use `project-context/2.build/backend.md` and `IMPLEMENTATION_PLAN.md` for current shipped/backend integration status.
+
 ---
 
 ## Scope
