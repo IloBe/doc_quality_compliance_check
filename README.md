@@ -52,6 +52,8 @@ Phase 0 requires **PostgreSQL 16** for session authentication, HITL reviews, and
 - [Infrastructure Overview](POSTGRES_INFRASTRUCTURE_SETUP.md) — Schema, requirements alignment, deployment path
 - [Application User Handbook](APP_USER_HANDBOOK.md) — Operational guidance for stakeholders, including top menu controls and compliance relevance
 - [Authentication and Authorization Guide](AUTHENTICATION_AUTHORIZATION_README.md) — Implemented login, session, RBAC, throttling, recovery, and security-test concepts
+- [Observability and Logging Guide](OBSERVABILITY_LOGGING_README.md) — Structured logging, audit trail persistence, request instrumentation, rate limiting, and compliance monitoring
+- [Project Structure Guide](PROJECT_STRUCTURE.md) — Complete tree-style overview of codebase layout with inline component descriptions
 
 ### Start the application (database + backend + frontend)
 
