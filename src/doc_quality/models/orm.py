@@ -123,6 +123,26 @@ class AuditScheduleORM(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), index=True)
 
 
+class BridgeHumanReviewORM(Base):
+    """Persistent HITL decision for a specific bridge run and document."""
+
+    __tablename__ = "bridge_human_reviews"
+
+    review_id = Column(String(64), primary_key=True, index=True)
+    run_id = Column(String(64), nullable=False, index=True)
+    document_id = Column(String(64), nullable=False, index=True)
+    decision = Column(String(32), nullable=False, index=True)  # approved|rejected
+    reason = Column(String(4000), nullable=False)
+    reviewer_email = Column(String(255), nullable=False, index=True)
+    reviewer_roles = Column(JSON, nullable=False, default=list)
+    reviewed_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    next_task_type = Column(String(64), nullable=True, index=True)  # rerun_bridge|manual_follow_up
+    next_task_assignee = Column(String(255), nullable=True, index=True)
+    next_task_instructions = Column(String(4000), nullable=True)
+    assignee_notified = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+
+
 class UserSessionORM(Base):
     """Persistent server-side user session (email/password MVP)."""
 

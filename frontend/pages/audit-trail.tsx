@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
 import { LuClock3, LuDatabase, LuFileSearch, LuInfo, LuLoader, LuRefreshCw, LuShieldCheck, LuUserCog } from 'react-icons/lu';
 import FooterInfoCard from '../components/FooterInfoCard';
 import PageHeaderWithWhy from '../components/PageHeaderWithWhy';
@@ -142,6 +143,7 @@ function deriveEventDetailLines(event: AuditTrailEvent): string[] {
 }
 
 const AuditTrailPage = () => {
+  const router = useRouter();
   const [windowHours, setWindowHours] = useState(24 * 7);
   const [internalAuditDate, setInternalAuditDate] = useState(formatDateInputValue(new Date(Date.now() + 1000 * 60 * 60 * 24 * 21)));
   const [externalAuditDate, setExternalAuditDate] = useState(formatDateInputValue(new Date(Date.now() + 1000 * 60 * 60 * 24 * 45)));
@@ -163,6 +165,7 @@ const AuditTrailPage = () => {
 
   const mockEvents = useMemo<AuditTrailEvent[]>(() => {
     const now = Date.now();
+    // Generate events within multiple windows; filtering by windowHours will show only relevant ones
     return [
       {
         event_id: 'evt-001',
@@ -240,14 +243,60 @@ const AuditTrailPage = () => {
         tenant_id: 'default_tenant',
         org_id: 'qm',
         project_id: 'doc-quality',
-        event_time: new Date(now - 1000 * 60 * 420).toISOString(),
+        event_time: new Date(now - 1000 * 60 * 2000).toISOString(),
         payload: { severity: 'medium', regulation: 'EU AI Act Art. 14' },
-        created_at: new Date(now - 1000 * 60 * 420).toISOString(),
+        created_at: new Date(now - 1000 * 60 * 2000).toISOString(),
+      },
+      {
+        event_id: 'evt-006',
+        event_type: 'bridge.run.completed',
+        actor_type: 'agent',
+        actor_id: 'orchestrator',
+        subject_type: 'workflow',
+        subject_id: 'wf-mdm-2026-042',
+        trace_id: 'trc-bridge-006',
+        correlation_id: 'cor-bridge-006',
+        tenant_id: 'default_tenant',
+        org_id: 'qm',
+        project_id: 'doc-quality',
+        event_time: new Date(now - 1000 * 60 * 60 * 24 * 10).toISOString(),
+        payload: { status: 'done', document_id: 'MDM-2026-042', findings: 0 },
+        created_at: new Date(now - 1000 * 60 * 60 * 24 * 10).toISOString(),
+      },
+      {
+        event_id: 'evt-007',
+        event_type: 'bridge.run.completed',
+        actor_type: 'agent',
+        actor_id: 'orchestrator',
+        subject_type: 'workflow',
+        subject_id: 'wf-sop-qms-2026-015',
+        trace_id: 'trc-bridge-007',
+        correlation_id: 'cor-bridge-007',
+        tenant_id: 'default_tenant',
+        org_id: 'qm',
+        project_id: 'doc-quality',
+        event_time: new Date(now + 1000 * 60 * 60 * 24 * 11).toISOString(),
+        payload: { status: 'done', document_id: 'SOP-QMS-2026-015', findings: 2 },
+        created_at: new Date(now + 1000 * 60 * 60 * 24 * 11).toISOString(),
       },
     ];
   }, []);
 
-  const effectiveEvents = events;
+  // Filter events by the selected time window and separate by backend/demo mode
+  const effectiveEvents = useMemo(() => {
+    if (useBackendData) {
+      return events;
+    }
+    // Demo mode: filter mock events to only show those within the selected window (past only)
+    const now = Date.now();
+    const windowMs = windowHours * 1000 * 60 * 60;
+    return mockEvents.filter((event) => {
+      const eventTime = new Date(event.event_time).getTime();
+      const ageSinceNow = now - eventTime;
+      // Include only past events (ageSinceNow >= 0) within the window
+      return ageSinceNow >= 0 && ageSinceNow <= windowMs;
+    });
+  }, [events, mockEvents, useBackendData, windowHours]);
 
   const nearestFutureAudit = useMemo(
     () => getNearestFutureAudit(internalAuditDate, externalAuditDate, externalNotifiedBody),
@@ -408,6 +457,13 @@ const AuditTrailPage = () => {
         whyDescription="Audit Trail is a governance and compliance evidence view, not a performance telemetry screen. It provides immutable event chronology with actor, subject, and trace context for review boards, auditors, and post-incident forensics."
         rightContent={
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.push('/auditor-workstation')}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-neutral-200 bg-white text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
+            >
+              Open Auditor Workstation
+            </button>
             <div className="flex items-center gap-1 bg-white border border-neutral-200 rounded-xl p-1">
               {windows.map((option) => {
                 const active = option.value === windowHours;
@@ -445,6 +501,10 @@ const AuditTrailPage = () => {
           to load persisted audit events from PostgreSQL.
         </div>
       )}
+
+      <div className="bg-neutral-50 border border-neutral-200 rounded-2xl p-3 text-xs text-neutral-700 font-semibold">
+        Read-only governance view: use Auditor Workstation for approve/reject actions and follow-up assignment.
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="bg-white border border-neutral-200 rounded-2xl p-5">

@@ -4,9 +4,12 @@ import { useMockStore } from '../lib/mockStore';
 import { useCan } from '../lib/authContext';
 import WhyThisPageMatters from './WhyThisPageMatters';
 import {
+  BridgeHumanReviewResponse,
   BridgeRunResponse,
   executeBridgeEuAiActRun,
   fetchBridgeEuAiActAlert,
+  fetchBridgeHumanReview,
+  submitBridgeHumanReview,
 } from '../lib/bridgeClient';
 import {
   LuTriangle,
@@ -25,7 +28,7 @@ const DocBridgePage = () => {
   const router = useRouter();
   const { docId } = router.query;
 
-  const { getDocById, updateDocStatus } = useMockStore();
+  const { getDocById, updateDocStatus, currentUserId } = useMockStore();
   const canRunBridge = useCan('bridge.run');
 
   const [doc, setDoc] = useState<any>(null);
@@ -34,6 +37,14 @@ const DocBridgePage = () => {
   const [logs, setLogs] = useState<string[]>([]);
   const [showWhyThisPageMatters, setShowWhyThisPageMatters] = useState(false);
   const [backendRun, setBackendRun] = useState<BridgeRunResponse | null>(null);
+  const [humanReview, setHumanReview] = useState<BridgeHumanReviewResponse | null>(null);
+  const [reviewDecision, setReviewDecision] = useState<'approved' | 'rejected'>('approved');
+  const [reviewReason, setReviewReason] = useState('');
+  const [nextTaskType, setNextTaskType] = useState<'rerun_bridge' | 'manual_follow_up'>('rerun_bridge');
+  const [nextTaskAssignee, setNextTaskAssignee] = useState('');
+  const [nextTaskInstructions, setNextTaskInstructions] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const [bridgeError, setBridgeError] = useState<string | null>(null);
   const [showRegulatoryPopup, setShowRegulatoryPopup] = useState(false);
   const [runStartedAtLeastOnce, setRunStartedAtLeastOnce] = useState(false);
@@ -46,6 +57,9 @@ const DocBridgePage = () => {
       autoRunStarted.current = false;
       setRunStartedAtLeastOnce(false);
       setBackendRun(null);
+      setHumanReview(null);
+      setReviewReason('');
+      setReviewError(null);
       setActiveStep(0);
       setLogs([]);
 
@@ -87,6 +101,31 @@ const DocBridgePage = () => {
       mounted = false;
     };
   }, [doc, useBackendBridge]);
+
+  useEffect(() => {
+    if (!useBackendBridge || !backendRun?.run_id) {
+      return;
+    }
+
+    let mounted = true;
+    const loadHumanReview = async () => {
+      try {
+        const existing = await fetchBridgeHumanReview(backendRun.run_id);
+        if (mounted) {
+          setHumanReview(existing);
+        }
+      } catch {
+        if (mounted) {
+          setHumanReview(null);
+        }
+      }
+    };
+
+    loadHumanReview();
+    return () => {
+      mounted = false;
+    };
+  }, [backendRun?.run_id, useBackendBridge]);
 
   const steps = [
     { id: 'inspect', title: 'Inspection Agent', desc: 'Scan text for logical structure and quality.' },
@@ -187,7 +226,10 @@ const DocBridgePage = () => {
   const researchChecks = getResearchChecks();
 
   const qualityGateSummary = useMemo(() => {
-    const allChecks = [...complianceChecks, ...researchChecks];
+    // In backend mode use only the real compliance checks so the passed/failed
+    // count matches compliance_score from the backend run.
+    // In demo mode merge both check sets (all simulated).
+    const allChecks = backendRun ? [...complianceChecks] : [...complianceChecks, ...researchChecks];
     const passed = allChecks.filter((check) => check.passed).length;
     const failed = allChecks.length - passed;
 
@@ -216,7 +258,86 @@ const DocBridgePage = () => {
       heading: 'Result: quality gate passed',
       text: `The Quality Gate recorded ${passed} passed and ${failed} failed controls, meeting the configured acceptance criteria for this artifact. A complete report package was generated with traceable evidence for release and audit review.`,
     };
-  }, [activeStep, complianceChecks, isProcessing, researchChecks]);
+  }, [activeStep, backendRun, complianceChecks, isProcessing, researchChecks]);
+
+  const formatDateTime = (value: string | null | undefined) => {
+    if (!value) {
+      return 'n/a';
+    }
+    const dt = new Date(value);
+    return Number.isNaN(dt.getTime()) ? value : dt.toLocaleString();
+  };
+
+  const localAutomaticRecommendation = useMemo<'approved' | 'rejected'>(() => {
+    const allChecks = [...complianceChecks, ...researchChecks];
+    const failedCount = allChecks.filter((check) => !check.passed).length;
+    return failedCount === 0 ? 'approved' : 'rejected';
+  }, [complianceChecks, researchChecks]);
+
+  const activeAutomaticRecommendation = backendRun?.automatic_recommendation ?? localAutomaticRecommendation;
+  const shouldShowHumanReviewPanel = runStartedAtLeastOnce && !isProcessing && activeStep >= steps.length - 1;
+  const humanReviewPending = shouldShowHumanReviewPanel && !humanReview;
+
+  const handleSubmitHumanReview = async () => {
+    if (!doc) {
+      return;
+    }
+
+    const trimmedReason = reviewReason.trim();
+    if (trimmedReason.length < 5) {
+      setReviewError('Please provide a reason with at least 5 characters.');
+      return;
+    }
+
+    if (reviewDecision === 'rejected' && nextTaskType === 'manual_follow_up' && !nextTaskAssignee.trim()) {
+      setReviewError('Please provide the responsible person for manual follow-up.');
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    setReviewError(null);
+
+    try {
+      const saved = useBackendBridge && backendRun
+        ? await submitBridgeHumanReview(backendRun.run_id, {
+            document_id: doc.id,
+            decision: reviewDecision,
+            reason: trimmedReason,
+            next_task_type: reviewDecision === 'rejected' ? nextTaskType : undefined,
+            next_task_assignee: reviewDecision === 'rejected' && nextTaskType === 'manual_follow_up' ? nextTaskAssignee.trim() : undefined,
+            next_task_instructions: reviewDecision === 'rejected' ? nextTaskInstructions.trim() || undefined : undefined,
+            assignee_notified: reviewDecision === 'rejected',
+          })
+        : {
+            review_id: `local-${Date.now()}`,
+            run_id: backendRun?.run_id || `local-run-${doc.id}`,
+            document_id: doc.id,
+            decision: reviewDecision,
+            reason: trimmedReason,
+            reviewer_email: currentUserId,
+            reviewer_roles: ['local'],
+            reviewed_at: new Date().toISOString(),
+            next_task_type: reviewDecision === 'rejected' ? nextTaskType : null,
+            next_task_assignee: reviewDecision === 'rejected' && nextTaskType === 'manual_follow_up' ? nextTaskAssignee.trim() : null,
+            next_task_instructions: reviewDecision === 'rejected' ? nextTaskInstructions.trim() || null : null,
+            assignee_notified: reviewDecision === 'rejected',
+          };
+
+      setHumanReview(saved);
+      if (saved.decision === 'approved') {
+        updateDocStatus(doc.id, 'Approved');
+      } else {
+        updateDocStatus(doc.id, 'In Review');
+      }
+      addLog(`Human HITL review completed: ${saved.decision.toUpperCase()} by ${saved.reviewer_email}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to submit human review';
+      setReviewError(message);
+      addLog(`Human HITL review failed: ${message}`);
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
 
   const handleStartRun = async () => {
     if (!doc) {
@@ -227,7 +348,9 @@ const DocBridgePage = () => {
     setActiveStep(0);
     setLogs([]);
     setBridgeError(null);
+    setReviewError(null);
     setBackendRun(null);
+    setHumanReview(null);
     setIsProcessing(true);
     setShowRegulatoryPopup(false);
     addLog(`Initiating Bridge Run for ${doc.id}...`);
@@ -242,21 +365,30 @@ const DocBridgePage = () => {
         if (useBackendBridge && current === 1) {
           runResult = await executeBridgeEuAiActRun(doc.id, inferDomainInfo());
           setBackendRun(runResult);
+          setReviewDecision(runResult.automatic_recommendation === 'approved' ? 'approved' : 'rejected');
+          setReviewReason('');
+          setNextTaskType('rerun_bridge');
+          setNextTaskAssignee('');
+          setNextTaskInstructions('');
           addLog(`EU AI Act check complete. Score: ${Math.round((runResult.compliance_score || 0) * 100)}%.`);
         }
 
         await sleep(1200);
       }
 
-      if (runResult && runResult.approved) {
-        updateDocStatus(doc.id, 'Approved');
-      }
-
       if (runResult?.regulatory_update?.requires_document_update) {
         setShowRegulatoryPopup(true);
       }
 
-      addLog('Bridge Run successfully completed. Generating Report.');
+      if (!runResult) {
+        setReviewDecision(localAutomaticRecommendation);
+      }
+
+      if (runResult?.human_review_required) {
+        addLog('Bridge Run completed. Human HITL approval/rejection is now required.');
+      } else {
+        addLog('Bridge Run successfully completed. Generating Report.');
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Bridge run failed';
       setBridgeError(message);
@@ -347,6 +479,157 @@ const DocBridgePage = () => {
       {useBackendBridge && (
         <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-semibold text-blue-700">
           Backend mode: EU AI Act compliance checks are executed via API and persisted with run evidence.
+        </div>
+      )}
+
+      {shouldShowHumanReviewPanel && (
+        <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-5 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-1">Mandatory HITL review</div>
+              <h3 className="text-lg font-black text-neutral-900">Human approval is required before final acceptance</h3>
+              <p className="text-sm text-neutral-600 mt-1">
+                Automatic recommendation: <span className="font-semibold uppercase">{activeAutomaticRecommendation}</span>
+              </p>
+              {!useBackendBridge && (
+                <p className="text-xs text-neutral-500 mt-1">
+                  Demo mode: decision is saved in the current session for workflow rehearsal.
+                </p>
+              )}
+            </div>
+            {humanReview ? (
+              <span
+                className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${
+                  humanReview.decision === 'approved'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-rose-50 text-rose-700 border-rose-200'
+                }`}
+              >
+                Human {humanReview.decision}
+              </span>
+            ) : (
+              <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
+                Pending human action
+              </span>
+            )}
+          </div>
+
+          {humanReview ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
+                <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-1">Reason</div>
+                <div className="text-neutral-700">{humanReview.reason}</div>
+              </div>
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
+                <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-1">Reviewed</div>
+                <div className="text-neutral-700">{humanReview.reviewer_email} · {formatDateTime(humanReview.reviewed_at)}</div>
+              </div>
+              {humanReview.decision === 'rejected' && (
+                <>
+                  <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-1">Next task</div>
+                    <div className="text-neutral-700">{humanReview.next_task_type || 'n/a'}</div>
+                  </div>
+                  <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-1">Assignee / instructions</div>
+                    <div className="text-neutral-700">
+                      {(humanReview.next_task_assignee || 'n/a')}
+                      {humanReview.next_task_instructions ? ` · ${humanReview.next_task_instructions}` : ''}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setReviewDecision('approved')}
+                  className={`px-4 py-2 rounded-xl border text-xs font-black uppercase tracking-widest transition ${
+                    reviewDecision === 'approved'
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                      : 'bg-white border-neutral-200 text-neutral-500 hover:bg-neutral-50'
+                  }`}
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReviewDecision('rejected')}
+                  className={`px-4 py-2 rounded-xl border text-xs font-black uppercase tracking-widest transition ${
+                    reviewDecision === 'rejected'
+                      ? 'bg-rose-50 border-rose-300 text-rose-700'
+                      : 'bg-white border-neutral-200 text-neutral-500 hover:bg-neutral-50'
+                  }`}
+                >
+                  Reject
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-2">Reason (required)</label>
+                <textarea
+                  value={reviewReason}
+                  onChange={(event) => setReviewReason(event.target.value)}
+                  rows={3}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="Document your approval/rejection rationale for audit reproducibility."
+                />
+              </div>
+
+              {reviewDecision === 'rejected' && (
+                <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">Next task proposal</label>
+                    <select
+                      value={nextTaskType}
+                      onChange={(event) => setNextTaskType(event.target.value as 'rerun_bridge' | 'manual_follow_up')}
+                      className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm bg-white"
+                    >
+                      <option value="rerun_bridge">Another automatic bridge run</option>
+                      <option value="manual_follow_up">Manual follow-up by specific person</option>
+                    </select>
+                  </div>
+
+                  {nextTaskType === 'manual_follow_up' && (
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">Responsible person</label>
+                      <input
+                        value={nextTaskAssignee}
+                        onChange={(event) => setNextTaskAssignee(event.target.value)}
+                        className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm bg-white"
+                        placeholder="e.g. sven.riskmanager@qm.local"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">Task instructions</label>
+                    <input
+                      value={nextTaskInstructions}
+                      onChange={(event) => setNextTaskInstructions(event.target.value)}
+                      className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm bg-white"
+                      placeholder="Optional remediation instructions"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {reviewError && <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">{reviewError}</div>}
+
+              <button
+                type="button"
+                onClick={handleSubmitHumanReview}
+                disabled={isSubmittingReview || !humanReviewPending}
+                className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-white transition ${
+                  isSubmittingReview || !humanReviewPending ? 'bg-neutral-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                {isSubmittingReview ? 'Saving HITL decision...' : 'Submit human review decision'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

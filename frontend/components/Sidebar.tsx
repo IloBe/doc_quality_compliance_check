@@ -115,6 +115,7 @@ const Sidebar = ({ className }) => {
           <div className="space-y-0">
             <NavItem href="/exports" icon={LuHistory} label="Exports Registry" active={currentPath === '/exports'} />
             <NavItem href="/audit-trail" icon={LuLibrary} label="Audit Trail" active={currentPath === '/audit-trail'} />
+            <NavItem href="/auditor-workstation" icon={LuShieldAlert} label="Auditor Workstation" active={currentPath === '/auditor-workstation'} />
           </div>
         </div>
 

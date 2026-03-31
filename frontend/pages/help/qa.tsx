@@ -68,6 +68,15 @@ const entries: QaEntry[] = [
       'Example 2 (compliance): Demonstrating that a released document satisfies required EU AI Act and SOP controls, with evidence proving each mandatory check passed.',
     ],
   },
+  {
+    id: 'hitl-bridge-process-explained',
+    question: 'How does the HITL process for bridge run works, how is it connected with the automatic process?',
+    answer:
+      'The Bridge run starts with automatic checks: the system analyzes the document, checks key rules, and prepares a suggested result. After that, a human review step is required: a person must approve or reject and give a short reason. If rejected, the reviewer proposes the next action, such as running the check again or assigning a specific person for manual follow-up. This keeps the process fast through automation, but safe and accountable through human decision-making.',
+    examples: [
+      'Main parts in order: automatic analysis → quality gate summary → human approval/rejection with reason → optional follow-up task and assignment if rejected → stored audit record (who decided, when, and why).',
+    ],
+  },
 ];
 
 const HelpQaPage = () => {

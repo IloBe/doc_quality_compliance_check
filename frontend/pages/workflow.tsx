@@ -100,6 +100,13 @@ const WorkflowInsight = () => {
                <div className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Active Credits</div>
             </div>
          </div>
+
+         <div className="mt-10 rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4">
+            <div className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-1">HITL handoff</div>
+            <p className="text-sm text-blue-800 leading-relaxed">
+               After the Quality Gate step is finished on the run page, a mandatory human approval/rejection block appears with required reason and follow-up task proposal.
+            </p>
+         </div>
       </div>
     </div>
   );
