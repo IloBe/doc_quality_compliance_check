@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 import time
+from uuid import uuid4
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -7,16 +8,23 @@ import structlog
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import OperationalError
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ..core.config import get_settings
 from ..core.logging_config import configure_logging
+from ..core.observability import (
+    build_metrics_response,
+    configure_observability,
+    get_trace_id_hex,
+    get_tracer,
+    observe_http_request,
+)
 from ..core.rate_limit import api_global_limiter
 from ..core.session_auth import require_authenticated_user
-from .routes import auth, bridge, compliance, dashboard, documents, reports, research, skills, templates
+from .routes import auth, bridge, compliance, dashboard, documents, observability, reports, research, skills, stakeholders, templates
 
 logger = structlog.get_logger(__name__)
 
@@ -26,6 +34,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan: startup and shutdown tasks."""
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_format)
+    configure_observability(settings)
     logger.info("application_starting", version=settings.app_version, env=settings.environment)
     yield
     logger.info("application_stopping")
@@ -59,6 +68,12 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def log_requests(request: Request, call_next):  # type: ignore[no-untyped-def]
         settings = get_settings()
+        request_id = request.headers.get("x-request-id") or uuid4().hex
+        correlation_id = request.headers.get("x-correlation-id") or request_id
+
+        structlog.contextvars.clear_contextvars()
+        structlog.contextvars.bind_contextvars(request_id=request_id, correlation_id=correlation_id)
+
         if request.url.path.startswith(f"{settings.api_prefix}/") and settings.global_rate_limit_enabled:
             client_ip = request.client.host if request.client else "unknown"
             decision = api_global_limiter.check(
@@ -79,15 +94,46 @@ def create_app() -> FastAPI:
                 )
 
         start = time.time()
-        response = await call_next(request)
+        tracer = get_tracer(__name__)
+        span_name = f"{request.method} {request.url.path}"
+        if tracer is None:
+            response = await call_next(request)
+        else:
+            with tracer.start_as_current_span(span_name) as span:
+                span.set_attribute("http.method", request.method)
+                span.set_attribute("http.target", request.url.path)
+                span.set_attribute("http.scheme", request.url.scheme)
+                span.set_attribute("http.user_agent", request.headers.get("user-agent", "unknown"))
+                try:
+                    response = await call_next(request)
+                except Exception as exc:
+                    span.record_exception(exc)
+                    span.set_attribute("error", True)
+                    raise
+
         duration = time.time() - start
+        trace_id = get_trace_id_hex()
+        if trace_id:
+            structlog.contextvars.bind_contextvars(trace_id=trace_id)
+
         logger.info(
             "http_request",
             method=request.method,
             path=request.url.path,
             status=response.status_code,
             duration_ms=round(duration * 1000, 1),
+            trace_id=trace_id,
         )
+
+        if settings.metrics_enabled:
+            observe_http_request(request.method, request.url.path, response.status_code, duration)
+
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Correlation-ID"] = correlation_id
+        if trace_id:
+            response.headers["X-Trace-ID"] = trace_id
+
+        structlog.contextvars.clear_contextvars()
         return response
 
     @app.exception_handler(HTTPException)
@@ -184,11 +230,17 @@ def create_app() -> FastAPI:
     app.include_router(templates.router, prefix=prefix, dependencies=auth_dependencies)
     app.include_router(research.router, prefix=prefix, dependencies=auth_dependencies)
     app.include_router(skills.router, prefix=prefix, dependencies=auth_dependencies)
+    app.include_router(observability.router, prefix=prefix, dependencies=auth_dependencies)
+    app.include_router(stakeholders.router, prefix=prefix, dependencies=auth_dependencies)
     app.include_router(dashboard.router, prefix=prefix, dependencies=auth_dependencies)
 
     @app.get("/health")
     async def health_check() -> dict:
         return {"status": "healthy", "version": settings.app_version}
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics() -> Response:
+        return build_metrics_response()
 
     # Serve frontend static files if available
     try:

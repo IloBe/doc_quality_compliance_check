@@ -17,6 +17,8 @@ import {
   LuLibrary, 
   LuCircleHelp, 
   LuSettings,
+  LuActivity,
+  LuUsers,
   LuLogOut 
 } from 'react-icons/lu';
 import { useRouter } from 'next/router';
@@ -35,6 +37,20 @@ const NavItem = ({ href, icon: Icon, label, active }) => (
   </a>
 );
 
+const SubNavItem = ({ href, icon: Icon, label, active }) => (
+  <a
+    href={href}
+    className={`ml-9 mt-1 flex items-center gap-2 px-3 py-1.5 text-xs rounded transition-colors ${
+      active
+        ? 'bg-blue-50 text-blue-700 font-semibold'
+        : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900'
+    }`}
+  >
+    <Icon className={`w-3.5 h-3.5 ${active ? 'text-blue-700' : 'text-neutral-400'}`} />
+    <span>{label}</span>
+  </a>
+);
+
 const SectionLabel = ({ label }) => (
   <div className="px-4 mb-1.5 text-xs font-bold uppercase tracking-widest text-neutral-400 leading-none">
     {label}
@@ -44,6 +60,7 @@ const SectionLabel = ({ label }) => (
 const Sidebar = ({ className }) => {
   const router = useRouter();
   const currentPath = router.pathname;
+  const adminActive = currentPath.startsWith('/admin');
 
   return (
     <aside className={`${className} flex flex-col pt-6 pb-4 overflow-y-auto`}>
@@ -102,7 +119,9 @@ const Sidebar = ({ className }) => {
           <SectionLabel label="Support" />
           <div className="space-y-0">
             <NavItem href="/help" icon={LuCircleHelp} label="Help & Snippets" active={currentPath === '/help'} />
-            <NavItem href="/admin" icon={LuSettings} label="Admin" active={currentPath === '/admin'} />
+            <NavItem href="/admin" icon={LuSettings} label="Admin" active={adminActive} />
+            <SubNavItem href="/admin/observability" icon={LuActivity} label="Observability" active={currentPath === '/admin/observability'} />
+            <SubNavItem href="/admin/stakeholders" icon={LuUsers} label="Stakeholders & Rights" active={currentPath === '/admin/stakeholders'} />
           </div>
         </div>
       </nav>

@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 import uuid
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, Integer, String, Text
 
 from ..core.database import Base
 
@@ -152,3 +152,55 @@ class PasswordRecoveryTokenORM(Base):
     used_at = Column(DateTime(timezone=True), nullable=True, index=True)
     attempt_count = Column(Integer, nullable=False, default=0)
     requested_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class QualityObservationORM(Base):
+    """Persistent quality and evaluation telemetry for production monitoring."""
+
+    __tablename__ = "quality_observations"
+
+    observation_id = Column(String(64), primary_key=True, index=True)
+    event_time = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    source_component = Column(String(100), nullable=False, index=True)
+    aspect = Column(String(50), nullable=False, index=True)
+    outcome = Column(String(20), nullable=False, index=True)
+    score = Column(Float, nullable=True)
+    latency_ms = Column(Float, nullable=True)
+    error_type = Column(String(100), nullable=True, index=True)
+    hallucination_flag = Column(Boolean, nullable=False, default=False, index=True)
+    evaluation_dataset = Column(String(100), nullable=True, index=True)
+    evaluation_metric = Column(String(100), nullable=True)
+    subject_type = Column(String(50), nullable=True, index=True)
+    subject_id = Column(String(100), nullable=True, index=True)
+    trace_id = Column(String(64), nullable=True, index=True)
+    correlation_id = Column(String(64), nullable=True, index=True)
+    payload = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class StakeholderProfileORM(Base):
+    """Persistent stakeholder role template and rights matrix profile."""
+
+    __tablename__ = "stakeholder_profiles"
+
+    profile_id = Column(String(64), primary_key=True, index=True)
+    title = Column(String(120), nullable=False)
+    description = Column(String(2000), nullable=False)
+    permissions = Column(JSON, nullable=False, default=list)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+    created_by = Column(String(255), nullable=True)
+    updated_by = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), index=True)
+
+
+class StakeholderEmployeeAssignmentORM(Base):
+    """Persistent assignment of named employees to stakeholder role profiles."""
+
+    __tablename__ = "stakeholder_employee_assignments"
+
+    assignment_id = Column(String(64), primary_key=True, index=True)
+    profile_id = Column(String(64), nullable=False, index=True)
+    employee_name = Column(String(255), nullable=False, index=True)
+    created_by = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)

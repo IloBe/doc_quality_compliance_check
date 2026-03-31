@@ -156,15 +156,24 @@ JWT and enterprise SSO remain possible future enhancements, but they are **not**
 | Service-level logging in report, research, HITL, template services | ✅ Delivered |
 | Orchestrator event logging through Skills API | ✅ Delivered |
 | Correlation fields (`trace_id`, `correlation_id`) in audit model | ✅ Delivered |
+| OpenTelemetry request span instrumentation | ✅ Delivered |
+| Prometheus metrics endpoint (`/metrics`) | ✅ Delivered |
+| Quality telemetry ingestion (`/api/v1/observability/quality-observations`) | ✅ Delivered |
+| Quality/evaluation summary API (`/api/v1/observability/quality-summary`) | ✅ Delivered |
+| LLM trace capture API (`/api/v1/observability/llm-traces`) + `rich_payload` extraction | ✅ Delivered |
+| Workflow component breakdown API (`/api/v1/observability/workflow-components`) | ✅ Delivered |
+| `quality_observations` PostgreSQL table (migration 006) | ✅ Delivered |
+| Admin Observability page — demo mode (env-flag gated, same pattern as Dashboard) | ✅ Delivered |
+| Admin Observability page — backend live mode (`NEXT_PUBLIC_OBSERVABILITY_SOURCE=backend`) | ✅ Delivered |
+| `/metrics` proxy rewrite in `next.config.js` | ✅ Delivered |
 
 ### Remaining enhancement
 
 | Item | Status |
 | --- | --- |
-| OpenTelemetry / distributed tracing | 📋 Planned |
-| Centralized metrics dashboards | 📋 Planned |
+| Centralized dashboards and alert policies | 📋 Planned |
 
-**Result:** Observability exists now and should be treated as implemented MVP infrastructure with future expansion for distributed tracing.
+**Result:** Observability now includes structured logs, trace context, Prometheus metrics, and quality/evaluation telemetry. Remaining work is dashboarding and alert policy hardening.
 
 ---
 
@@ -198,6 +207,7 @@ JWT and enterprise SSO remain possible future enhancements, but they are **not**
 - `/api/v1/research/*`
 - `/api/v1/templates/*`
 - `/api/v1/skills/*`
+- `/api/v1/observability/*`
 
 ### Partially complete
 
@@ -230,6 +240,11 @@ JWT and enterprise SSO remain possible future enhancements, but they are **not**
 | Role-aware frontend helpers (`useCan`, RBAC helper layer) | ✅ Delivered |
 | Mock-store fallback for MVP interactions | ✅ Delivered |
 | Backend client wrappers for auth, bridge, dashboard | ✅ Delivered |
+| Admin Observability page (demo + backend mode, workflow breakdown, rich GenAI payload) | ✅ Delivered |
+| Admin Stakeholders & Rights page (role-template matrix + persistent employee assignment) | ✅ Delivered |
+| `stakeholder_profiles` PostgreSQL table (migration 007) | ✅ Delivered |
+| `stakeholder_employee_assignments` PostgreSQL table (migration 008) | ✅ Delivered |
+| Bulk-add mode for employee assignment (textarea, deduplication, parallel async POST) | ✅ Delivered |
 
 ### Important implementation correction
 
@@ -393,6 +408,8 @@ These should remain roadmap items, not be presented as currently missing MVP ess
 | ADR-008 | Next.js frontend instead of vanilla JS | Implemented; replaces earlier frontend assumption |
 | ADR-009 | Backend as Skills API / system of record for orchestrator | Implemented and important for guardrails |
 | ADR-010 | Provider adapter layer for model integrations | Implemented; keeps orchestrator vendor-neutral |
+| ADR-011 | Observability page defaults to demo mode | Same env-flag pattern as Dashboard; zero risk to production audit trail during demos |
+| ADR-012 | Stakeholder employee assignments persisted in PostgreSQL | Governance record must survive restarts and be queryable for audit evidence; migration 008 |
 
 ---
 

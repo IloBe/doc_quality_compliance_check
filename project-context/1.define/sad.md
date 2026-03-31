@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD040 MD060 MD032 MD022 MD058 MD034 -->
 # System Architecture Document (SAD) — Doc Quality Compliance Check
 
 **Product:** Document Quality & Compliance Check System  
@@ -238,10 +239,11 @@ The system architecture supports a hybrid agentic decision framework combining a
 
 | Stakeholder | Primary Concerns | Architectural Viewpoints |
 |-------------|-----------------|-------------------------|
-| **Quality Manager (Maria)** | Documents meet EU AI Act compliance standards; audit reports are downloadable PDF; HITL review trail is auditable | Functional, Process, Deployment |
+| **Quality Manager (Maria)** | Documents meet EU AI Act compliance standards; audit reports are downloadable PDF; HITL review trail is auditable; employee assignments to governance roles are persisted and queryable for audit evidence | Functional, Process, Deployment |
 | **Riskmanager (Sven)** | Responsible for high-risk product/issue risk management and approval; ensures compliance with EU AI Act and ISO standards; maintains audit trail and escalation logs; member of QM department | Functional, Process, Data |
-| **System Architect (Jan)** | arc42 sections complete; UML diagrams present; modification requests are actionable | Functional, Logical |
-| **Compliance Auditor (Elke)** | EU AI Act requirements correctly assessed; risk level classification is accurate; HITL trail demonstrates Art. 14 compliance | Functional, Data |
+| **System Architect (Jan)** | arc42 sections complete; UML diagrams present; modification requests are actionable; observability telemetry shows per-component latency and quality signal | Functional, Logical |
+| **Compliance Auditor (Elke)** | EU AI Act requirements correctly assessed; risk level classification is accurate; HITL trail demonstrates Art. 14 compliance; stakeholder role assignments are evidence-quality records | Functional, Data |
+| **Technical Service / Admin** | AI quality telemetry (workflow component breakdown, GenAI trace payloads, Prometheus snapshot) is accessible in the Admin Observability page; demo mode ensures the page works during demonstrations before production telemetry flows are active | Operational, Monitoring |
 | **Developer / ML Engineer** | SOP templates provide clear guidance; modification requests are specific (section + priority + description) | Functional |
 | **DevOps / Project Manager** | Deployment is simple (single `uvicorn` command); logging is structured; security is hardened; tests all pass | Deployment, Process |
 | **Security Reviewer** | No secret storage in code; XSS prevented; filename validation; no PII in logs | Security (cross-cutting) |
@@ -706,6 +708,8 @@ For MVP/Phase 0, the architecture uses backend-owned **email/password authentica
 | **AD-11** | Prompt management | Inline strings, DB-stored prompts, versioned files | **Versioned prompt files in `prompts/` directory** | Auditability, reproducibility, rollback support, and lower prompt drift risk across releases |
 | **AD-12** | OCR fallback architecture | Text-only extraction, legacy OCR pipeline, SOTA VLM OCR pipeline | **Confidence-gated OCR fallback with transcribe+structure+grounding** | Better robustness on scanned/complex layouts; improved reading order; lower extraction-induced hallucinations; supports output-specific downstream workflows |
 | **AD-13** | Audit persistence scaling | Mutable current-state only, event log without archival tiers, append-only event log + snapshots + tiered archival | **Append-only event log + immutable snapshots + hot/warm/cold archival** | Preserves provenance/non-repudiation, keeps recent investigations fast, and reduces long-term storage cost while retaining queryability |
+| **AD-14** | Observability page default data source | Always live backend, always blank, env-flag-gated demo mode | **Demo mode by default (`NEXT_PUBLIC_OBSERVABILITY_SOURCE=backend` to opt into live)** | The `quality_observations` table is empty before workflow flows run; demo mode ensures the page is never blank during demonstrations and never pollutes the production audit trail with synthetic data |
+| **AD-15** | Stakeholder employee assignment persistence | Local UI state only, shared backend config file, PostgreSQL relational table | **PostgreSQL table `stakeholder_employee_assignments` (migration 008)** | Assignments are governance evidence — they must survive restarts, be queryable for audit reports, and carry provenance fields (`created_by`, `created_at`, `profile_id`); a local UI store is insufficient for a regulated context |
 
 #### Phase 0 Implementation Specifications
 

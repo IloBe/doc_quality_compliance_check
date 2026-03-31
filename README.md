@@ -29,6 +29,30 @@ The **Doc Quality Compliance Checker** addresses this by introducing a structure
 - **Higher team productivity** by reducing repetitive manual document checks.
 - **Stronger governance visibility** for product leads, QA, and compliance stakeholders.
 
+### Observability and AI quality telemetry (Admin — technical service)
+
+The **Observability** admin module provides production-grade AI workflow tracing for QM leads, architects, and technical service teams performing quality inspections or preparing for external audits. It visualizes:
+
+- **Quality summary KPIs** — total observations, average quality score, P95 latency, and hallucination report count within a selectable 24 h / 7 d / 30 d window.
+- **Quality aspect breakdown** — pass / warn / fail counts and average scores per aspect (performance, accuracy, evaluation, hallucination, error).
+- **Workflow component breakdown** — per-component (research\_agent, document\_analyzer, compliance\_checker) observation counts, outcome distribution, average latency, and latest-event timestamp, making it possible to isolate which pipeline stage introduced latency regressions or failure spikes.
+- **Recent GenAI prompt/output pairs** — full prompt, output, provider, model, and a rich trace payload (tokens used, temperature, latency, hallucination flag, and any additional metadata) for every LLM-backed flow.
+- **Prometheus snapshot** — HTTP request totals, hallucination report totals, and AI evaluation totals directly from the `/metrics` endpoint.
+
+The page operates in **demo mode by default** (representative mock telemetry, no DB writes required) and switches to live database-backed telemetry when `NEXT_PUBLIC_OBSERVABILITY_SOURCE=backend` is set — the same env-flag pattern used by the Dashboard, ensuring zero risk to the production audit trail during demonstrations.
+
+### Stakeholder governance and rights management (Admin — QM)
+
+The **Stakeholders & Rights** admin module supports QM leads and administrators in governing who holds which role and what rights they carry throughout regulated workflows. It provides:
+
+- **Role-template matrix** — permission toggles per stakeholder role (`qm_lead`, `architect`, `riskmanager`, `auditor`, `developer`) aligned with the RBAC matrix in `frontend/lib/rbac.ts`, ensuring UI-visible role constraints stay consistent with backend authorization enforcement.
+- **Persistent employee assignment per role** — name-to-role assignments are stored in PostgreSQL (`stakeholder_employee_assignments` table, Alembic migration 008). Both a single-add form and a **bulk-add mode** (one name per line, automatic deduplication, parallel async POST) are provided for faster team onboarding.
+- **Audit-ready record keeping** — each assignment carries `created_at`, `created_by`, and `profile_id` provenance fields, making the governance record queryable for inspection reports and audit evidence packages.
+
+Both the Observability and Stakeholders & Rights modules are accessible from the **Admin** section of the left navigation bar and are protected by backend-enforced session authentication. They are designed to be the operational control surface for technical leads and QM personnel overseeing AI-assisted documentation workflows.
+
+---
+
 ## Product snapshot
 
 Attached browser-page view of the Document Hub:
@@ -60,7 +84,7 @@ Phase 0 requires **PostgreSQL 16** for session authentication, HITL reviews, and
 - [Infrastructure Overview](POSTGRES_INFRASTRUCTURE_SETUP.md) — Schema, requirements alignment, deployment path
 - [Application User Handbook](APP_USER_HANDBOOK.md) — Operational guidance for stakeholders, including top menu controls and compliance relevance
 - [Authentication and Authorization Guide](AUTHENTICATION_AUTHORIZATION_README.md) — Implemented login, session, RBAC, throttling, recovery, and security-test concepts
-- [Observability and Logging Guide](OBSERVABILITY_LOGGING_README.md) — Structured logging, audit trail persistence, request instrumentation, rate limiting, and compliance monitoring
+- [Observability and Logging Guide](OBSERVABILITY_LOGGING_README.md) — Structured logging, OpenTelemetry tracing, Prometheus metrics, quality evaluation telemetry, and compliance monitoring
 - [Project Structure Guide](PROJECT_STRUCTURE.md) — Complete tree-style overview of codebase layout with inline component descriptions
 
 ### Start the application (database + backend + frontend)
@@ -166,6 +190,7 @@ Security behavior includes hashed recovery tokens, TTL + single-use validation, 
 | Endpoint group | Browser session roles | Service API key (`service`) |
 | --- | --- | --- |
 | `/api/v1/skills/*` | `qm_lead`, `architect`, `riskmanager`, `auditor` | Allowed (explicit machine endpoints) |
+| `/api/v1/observability/*` | `qm_lead`, `architect`, `riskmanager`, `auditor` | Allowed (quality telemetry + evaluation ingestion) |
 | `/api/v1/reports/*` | `qm_lead`, `riskmanager`, `auditor` | Denied |
 | `/api/v1/compliance/*` | `qm_lead`, `architect`, `riskmanager`, `auditor` | Denied |
 | `/api/v1/research/*` | `qm_lead`, `architect`, `riskmanager`, `auditor` | Denied |

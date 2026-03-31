@@ -410,9 +410,134 @@ async def health_check() -> dict:
 | Error | HTTP 404 if template ID not found |
 | Inactive templates | Return placeholder content (not 404) |
 
+### 3.5 Observability Routes (`/api/v1/observability`)
+
+**`POST /api/v1/observability/quality-observations`**
+
+| Property | Value |
+|----------|-------|
+| Request body | `QualityObservationRequest` — `source_component`, `aspect`, `outcome`, optional `score`, `latency_ms`, `error_type`, `hallucination_flag`, evaluation metadata |
+| Response | `QualityObservationRecord` persisted in `quality_observations` |
+| Auth | Required (`qm_lead`, `auditor`, `riskmanager`, `architect`, service clients allowed) |
+| Purpose | Capture production quality signals for performance, accuracy, error, hallucination, and evaluation tracking |
+
+**`GET /api/v1/observability/quality-summary`**
+
+| Property | Value |
+|----------|-------|
+| Query params | `window_hours` (1..2160), optional `source_component`, optional `aspect` |
+| Response | `QualitySummaryResponse` with totals, aspect breakdown, average score, p95 latency |
+| Auth | Required (`qm_lead`, `auditor`, `riskmanager`, `architect`, service clients allowed) |
+| Purpose | Support operational dashboards and post-release quality evaluation loops |
+
+**`GET /api/v1/observability/llm-traces`**
+
+| Property | Value |
+|----------|-------|
+| Query params | `limit` (1..100), `window_hours` (1..2160), optional `source_component` |
+| Response | `LlmPromptOutputList` — recent prompt/output pairs including `rich_payload` (all non-base fields from the observation payload: tokens, temperature, latency, hallucination flag, domain extras) |
+| Auth | Required (`qm_lead`, `auditor`, `riskmanager`, `architect`, service clients allowed) |
+| Purpose | Visual traceability of LLM prompts and outputs in admin observability tooling |
+
+**`GET /api/v1/observability/workflow-components`**
+
+| Property | Value |
+|----------|-------|
+| Query params | `window_hours` (1..2160) |
+| Response | `WorkflowComponentBreakdownResponse` — per `source_component` totals, pass/warn/fail/info counts, average latency, latest event timestamp; sorted by total desc |
+| Auth | Required (same roles as above) |
+| Purpose | Component-level breakdown for pipeline health inspection — isolate which agent (research\_agent, document\_analyzer, compliance\_checker) contributes to latency regressions or failure spikes |
+
+**`GET /metrics`**
+
+| Property | Value |
+|----------|-------|
+| Response | Prometheus text exposition (`dq_http_requests_total`, request latency histograms, quality metrics families) |
+| Auth | Public scrape endpoint (deployment should restrict network access at ingress) |
+| Purpose | Real-time performance/error/quality telemetry ingestion by monitoring stack |
+
+### 3.6 Admin — Stakeholder Profile Routes (`/api/v1/admin/stakeholder-profiles`)
+
+**`GET /api/v1/admin/stakeholder-profiles`**
+
+| Property | Value |
+|----------|-------|
+| Response | List of `StakeholderProfileRecord` — all configured role-template profiles |
+| Auth | Required (`qm_lead`, `auditor`, `riskmanager`) |
+| Purpose | Populate role selector on the Stakeholders & Rights admin page |
+
+**`GET /api/v1/admin/stakeholder-profiles/{profile_id}/employees`**
+
+| Property | Value |
+|----------|-------|
+| Path param | `profile_id: str` |
+| Response | `StakeholderEmployeeAssignmentListResponse` — list of `StakeholderEmployeeAssignmentRecord` with `assignment_id`, `employee_name`, `created_at`, `created_by` |
+| Auth | Required |
+| Purpose | List all employees currently assigned to a role profile |
+
+**`POST /api/v1/admin/stakeholder-profiles/{profile_id}/employees`**
+
+| Property | Value |
+|----------|-------|
+| Path param | `profile_id: str` |
+| Request body | `StakeholderEmployeeAssignmentRequest` — `employee_name` |
+| Response | `StakeholderEmployeeAssignmentRecord` for the created row |
+| Auth | Required (`qm_lead` minimum) |
+| Validation | Duplicate name+profile combination is rejected with HTTP 409 |
+| Purpose | Add a named employee to a role profile (single-add from UI; called in parallel for bulk-add) |
+
+**`DELETE /api/v1/admin/stakeholder-profiles/{profile_id}/employees/{assignment_id}`**
+
+| Property | Value |
+|----------|-------|
+| Path params | `profile_id: str`, `assignment_id: str` |
+| Response | HTTP 204 on success |
+| Auth | Required (`qm_lead` minimum) |
+| Purpose | Remove a named employee assignment from a role profile |
+
 ---
 
 ## Section 4 – Service Layer
+
+### 4.0 Quality Service (`src/doc_quality/services/quality_service.py`)
+
+Observability persistence and aggregation functions for the quality telemetry pipeline.
+
+**`save_quality_observation(db, request: QualityObservationRequest) -> QualityObservationORM`**
+
+Persists a single quality observation row to the `quality_observations` table, including all payload fields as JSON.
+
+**`get_quality_summary(db, window_hours, source_component, aspect) -> QualitySummaryResponse`**
+
+Aggregates observations in the requested window. Returns totals, hallucination/error/evaluation counts, average score, p95 latency, and a per-aspect breakdown list (`QualityAspectSummary`).
+
+**`get_recent_llm_prompt_output_pairs(db, limit, window_hours, source_component) -> LlmPromptOutputList`**
+
+Returns the most recent LLM traces. Each item includes `prompt`, `output`, `provider`, `model_used`, `trace_id`, `correlation_id`, `subject_type`, `subject_id`, and a `rich_payload` dict containing all non-base payload fields (tokens used, temperature, latency, hallucination flag, domain extras) extracted at query time.
+
+**`get_workflow_component_breakdown(db, window_hours) -> WorkflowComponentBreakdownResponse`**
+
+Groups observations by `source_component`, counts pass/warn/fail/info outcomes, computes average latency, records the latest event timestamp per component, and returns the list sorted by total observations descending. Supports isolation of per-agent performance regressions.
+
+### 4.0b Stakeholder Service (`src/doc_quality/services/stakeholder_service.py`)
+
+Stakeholder profile and employee assignment persistence.
+
+**`list_stakeholder_profiles(db) -> list[StakeholderProfileORM]`**
+
+Returns all stakeholder role-template profiles.
+
+**`list_stakeholder_assignments(db, profile_id) -> list[StakeholderEmployeeAssignmentORM]`**
+
+Returns all employee assignments for a given profile ordered by `created_at`.
+
+**`add_stakeholder_assignment(db, profile_id, employee_name, created_by) -> StakeholderEmployeeAssignmentORM`**
+
+Validates that the profile exists, deduplicates (raises HTTP 409 on duplicate), and persists a new `StakeholderEmployeeAssignmentORM` row.
+
+**`delete_stakeholder_assignment(db, profile_id, assignment_id) -> None`**
+
+Validates the assignment exists and belongs to the profile before deletion (raises HTTP 404 otherwise).
 
 ### 4.1 Document Analyzer (`src/doc_quality/services/document_analyzer.py`)
 
@@ -533,6 +658,29 @@ Updates persisted status and metadata. Sets `approval_date` when status becomes 
 **`list_reviews() -> list[ReviewRecord]`**
 
 Returns persisted review records as a list, with filtering/pagination support in the API layer.
+
+---
+
+## Section 4b – ORM Models and Database Tables (`src/doc_quality/models/orm.py`)
+
+All tables use SQLAlchemy declarative base and are created/migrated via Alembic.
+
+| Table | Migration | Key columns | Purpose |
+|---|---|---|---|
+| `user_sessions` | 001 | `session_id`, `user_email`, `role`, `created_at`, `expires_at` | Browser session store |
+| `hitl_reviews` | 002 | `review_id`, `document_id`, `reviewer_name`, `verdict`, `created_at` | HITL review records |
+| `audit_events` | 003 | `event_id`, `event_type`, `actor_id`, `subject_type`, `subject_id`, `payload`, `event_time` | Append-only compliance audit trail |
+| `skill_documents` | 004 | `doc_id`, `title`, `type`, `content_hash`, `created_at` | Document registry for Skills API |
+| `skill_findings` | 005 | `finding_id`, `doc_id`, `aspect`, `severity`, `description` | Analysis findings per document |
+| `quality_observations` | 006 | `obs_id`, `source_component`, `aspect`, `outcome`, `score`, `latency_ms`, `payload` (JSON), `event_time` | AI quality telemetry from workflow agents |
+| `stakeholder_profiles` | 007 | `profile_id`, `role_name`, `permissions` (JSON), `created_at` | Role-template profiles for governance |
+| `stakeholder_employee_assignments` | 008 | `assignment_id`, `profile_id`, `employee_name`, `created_by`, `created_at` | Persistent employee-to-role assignments for audit governance |
+
+### Key ORM classes
+
+**`QualityObservationORM`** — persists all quality signals. The `payload` column stores the full observation dict (including LLM trace fields) as JSON, enabling both structured column queries and flexible `rich_payload` extraction at the API layer.
+
+**`StakeholderEmployeeAssignmentORM`** — stores who is assigned to which governance role. `profile_id` is a foreign key to `StakeholderProfileORM`. `created_by` captures the authenticated user email at assignment time. Unique constraint on `(profile_id, employee_name)` prevents accidental duplicates.
 
 ---
 

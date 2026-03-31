@@ -19,6 +19,10 @@ module.exports = {
         source: '/health',
         destination: `${backendOrigin}/health`,
       },
+      {
+        source: '/metrics',
+        destination: `${backendOrigin}/metrics`,
+      },
     ];
   },
 };

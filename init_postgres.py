@@ -5,7 +5,7 @@ PostgreSQL Database Initialization Script for Doc Quality Compliance Check
 This script:
 1. Tests PostgreSQL connection
 2. Creates the database if missing
-3. Runs all Alembic migrations (001-004)
+3. Runs all Alembic migrations (001-008)
 4. Verifies schema integrity
 5. Reports initialization status
 
@@ -185,6 +185,9 @@ class PostgreSQLInitializer:
             "skill_findings": ["finding_id", "document_id"],
             "audit_events": ["event_id", "event_type"],
             "user_sessions": ["session_id", "session_token_hash", "user_email"],
+            "quality_observations": ["observation_id", "aspect", "outcome", "source_component"],
+            "stakeholder_profiles": ["profile_id", "title", "permissions", "is_active"],
+            "stakeholder_employee_assignments": ["assignment_id", "profile_id", "employee_name"],
         }
 
         try:

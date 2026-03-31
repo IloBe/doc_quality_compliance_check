@@ -4,7 +4,7 @@ Complete observability and structured logging infrastructure for the Doc Quality
 
 ## Overview
 
-The application implements a multi-layer observability strategy combining structured logging, request-level instrumentation, audit trail persistence, and abuse detection. All logs are designed for compliance audit trails and operational debugging.
+The application implements a multi-layer observability strategy combining structured logging, OpenTelemetry request tracing, Prometheus performance metrics, quality/evaluation telemetry persistence, and abuse detection. All signals are designed for compliance audit trails and operational debugging.
 
 ---
 
@@ -520,36 +520,59 @@ def sanitize_nested_dict(d: dict, max_depth: int = 3) -> dict:
 
 ---
 
-## 8. Monitoring & Alerts (Future: Phase 3)
+## 8. Monitoring, Tracing, and Quality Telemetry
 
-### 8.1 OpenTelemetry Integration (Planned)
+### 8.1 OpenTelemetry Request Tracing (Delivered)
 
-**Road**: Distributed tracing for agent → service → persistence flow
+Request spans are emitted from FastAPI middleware with propagated context headers:
 
-- Trace ID already captured in `AuditEventORM.trace_id`
-- Correlation ID ready for multi-step workflows
-- Step-level event payload includes timing, token usage, cost
+- `X-Request-ID` and `X-Correlation-ID` generated or forwarded per request
+- `X-Trace-ID` returned when a valid active span exists
+- Trace attributes include method, target path, scheme, and user agent
 
-**Future implementation**:
-```python
-from opentelemetry import trace
+Configuration variables:
 
-tracer = trace.get_tracer(__name__)
+- `TRACING_ENABLED` (default `true`)
+- `TRACING_EXPORTER` (`none`, `console`, `otlp`)
+- `TRACING_OTLP_ENDPOINT` (required when exporter is `otlp`)
+- `TRACING_SAMPLING_RATIO` (default `1.0`)
+- `TELEMETRY_SERVICE_NAME` (default `doc-quality-api`)
 
-with tracer.start_as_current_span("document_analysis") as span:
-    span.set_attribute("document.id", doc_id)
-    span.set_attribute("workflow.run_id", run_id)
-    # ... analysis logic ...
-```
+### 8.2 Prometheus Metrics (Delivered)
 
-### 8.2 Metrics Dashboard (Planned Phase 3)
+The API exposes `/metrics` for scraping.
 
-Proposed metrics:
-- **Request latency** (p50, p95, p99) by endpoint
-- **Error rate** by error type and endpoint
-- **Database query latency** by operation
-- **Model token usage and cost** by workflow
-- **Audit trail growth** (events/day)
+Implemented metric families:
+
+- `dq_http_requests_total` (labels: `method`, `path`, `status`)
+- `dq_http_request_duration_seconds` (labels: `method`, `path`)
+- `dq_ai_quality_observations_total` (labels: `aspect`, `outcome`, `source_component`)
+- `dq_ai_quality_score` (labels: `aspect`, `source_component`)
+- `dq_ai_hallucination_reports_total` (labels: `source_component`)
+- `dq_ai_evaluations_total` (labels: `dataset`, `outcome`, `source_component`)
+
+### 8.3 Quality and Evaluation Telemetry API (Delivered)
+
+Two protected endpoints persist and aggregate quality signals used for production improvement loops:
+
+- `POST /api/v1/observability/quality-observations`
+- `GET /api/v1/observability/quality-summary`
+
+Supported quality aspects:
+
+- `performance`
+- `accuracy`
+- `error`
+- `hallucination`
+- `evaluation`
+
+Each observation can include score, latency, hallucination flag, evaluation dataset/metric, correlation ids, and structured payload metadata.
+
+### 8.4 Next Enhancements (Phase 3)
+
+- Grafana/Alertmanager dashboards and SLO alerting policies
+- Cross-service trace stitching once orchestrator OTEL emission is enabled end-to-end
+- Long-horizon quality drift and regression dashboards
 
 ---
 
@@ -591,7 +614,7 @@ ORDER BY attempt_count DESC;
 
 In production with centralized log aggregation (ELK, Splunk, CloudWatch):
 
-```
+```text
 # Find all high-severity compliance findings in the last 7 days
 event_type:compliance_finding_created severity:high timestamp:[now-7d TO now]
 
@@ -611,7 +634,8 @@ LOG_FORMAT=console LOG_LEVEL=DEBUG pytest tests/test_auth_session_api.py -v -s
 ```
 
 **Console output example:**
-```
+
+```text
 2026-03-30 14:23:11 [INFO] application_starting version=0.1.0 env=development
 2026-03-30 14:23:12 [INFO] http_request method=POST path=/api/v1/auth/login status=200 duration_ms=45.3
 2026-03-30 14:23:12 [INFO] review_created review_id=rev_123 document_id=doc_456 status=pending
@@ -681,6 +705,6 @@ def setup_logging():
 
 ---
 
-**Document Version**: 0.1.0  
-**Last Updated**: March 30, 2026  
-**Status**: Phase 0 MVP (complete), Phase 3 enhancements (OTEL, metrics) planned
+**Document Version**: 0.2.0  
+**Last Updated**: March 31, 2026  
+**Status**: Phase 0+ observability baseline delivered (structured logs + tracing + metrics + quality telemetry); dashboard/alert maturity remains Phase 3

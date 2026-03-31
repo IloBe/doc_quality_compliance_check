@@ -175,6 +175,54 @@ Current UI status:
 - Doc Hub and workflow UX remain mock-first for several interactions.
 - Templates and report endpoints are available but not yet fully represented by dedicated Next.js API-driven pages.
 
+### 2.6 Quality Observability API (Implemented, Backend Mode Toggle)
+
+Observability backend mode is enabled when `NEXT_PUBLIC_OBSERVABILITY_SOURCE=backend`. Default is **demo mode** (mock data via `useMemo`, no backend call).
+
+```http
+GET /api/v1/observability/quality-summary?window_hours=24
+GET /api/v1/observability/llm-traces?limit=15&window_hours=24
+GET /api/v1/observability/workflow-components?window_hours=24
+GET /metrics
+```
+
+All four requests are fired in parallel from `observabilityClient.ts`. The `/metrics` endpoint is reached via the Next.js `/metrics` rewrite (not through `/api/v1`). The `fetchMetricsSnapshot()` function uses the `HEALTH_ORIGIN` fallback chain (`NEXT_PUBLIC_HEALTH_ORIGIN` → `NEXT_PUBLIC_API_ORIGIN` → `http://127.0.0.1:8000`) for the direct backend health-origin call when outside the proxy.
+
+Mock data structure (demo mode):
+
+```json
+{
+  "summary": { "total_observations": 143, "average_score": 0.81, "p95_latency_ms": 2340, ... },
+  "components": [
+    { "source_component": "research_agent", "total": 51, "pass_count": 44, "average_latency_ms": 1920 },
+    { "source_component": "document_analyzer", "total": 48, "pass_count": 40, ... },
+    { "source_component": "compliance_checker", "total": 42, "pass_count": 25, ... }
+  ],
+  "prompt_pairs": [ /* 3 domain-realistic traces with rich_payload */ ]
+}
+```
+
+### 2.7 Stakeholder Admin API (Implemented, Always Live)
+
+The stakeholder employee assignment endpoints are always called against the live backend (no mock fallback needed — the page is an admin-only management surface):
+
+```http
+GET    /api/v1/admin/stakeholder-profiles
+GET    /api/v1/admin/stakeholder-profiles/{profile_id}/employees
+POST   /api/v1/admin/stakeholder-profiles/{profile_id}/employees
+DELETE /api/v1/admin/stakeholder-profiles/{profile_id}/employees/{assignment_id}
+```
+
+POST payload:
+
+```json
+{ "employee_name": "Maria Müller" }
+```
+
+Bulk-add on the frontend fires multiple `POST` calls in parallel via `Promise.allSettled` — each call is atomic and independently fails/succeeds. The UI displays a `"N added, M failed"` message after all settle.
+
+DELETE returns HTTP 204. A 409 is returned if the employee name already exists for that profile.
+
 ---
 
 ## Section 3 – Serving and Routing Integration
@@ -185,8 +233,9 @@ Current UI status:
 
 - `/api/:path*` → `${NEXT_PUBLIC_API_ORIGIN || 'http://127.0.0.1:8000'}/api/:path*`
 - `/health` → `${NEXT_PUBLIC_API_ORIGIN || 'http://127.0.0.1:8000'}/health`
+- `/metrics` → `${NEXT_PUBLIC_API_ORIGIN || 'http://127.0.0.1:8000'}/metrics`
 
-This avoids cross-site cookie failures during local development and keeps frontend/backend coupling explicit.
+The `/metrics` rewrite ensures that the Prometheus snapshot section of the Observability admin page can reach the backend `/metrics` endpoint without cross-origin issues in local development.
 
 ### 3.2 Backend StaticFiles Mount (Legacy-Compatible)
 
@@ -270,6 +319,11 @@ When sending `multipart/form-data`, the frontend must not manually set `Content-
 | Auth API integration | ✅ Implemented | Login/logout/me + recovery flows wired |
 | Bridge backend integration | ✅ Implemented (toggle) | `NEXT_PUBLIC_BRIDGE_SOURCE=backend` |
 | Dashboard backend integration | ✅ Implemented (toggle) | `NEXT_PUBLIC_DASHBOARD_SOURCE=backend` |
+| Observability backend integration | ✅ Implemented (toggle) | `NEXT_PUBLIC_OBSERVABILITY_SOURCE=backend`; default is demo mode |
+| Observability workflow component breakdown | ✅ Implemented | `GET /api/v1/observability/workflow-components` |
+| Observability rich GenAI trace payload | ✅ Implemented | `rich_payload` field extracted at query time from observation JSON |
+| Observability `/metrics` proxy rewrite | ✅ Implemented | Added to `next.config.js` rewrites |
+| Stakeholder employee assignment API | ✅ Implemented | Full CRUD, PostgreSQL-backed (migration 008) |
 | Document analysis UI integration | 🟡 Partial | Backend endpoint ready; UI still mixed with mock-first flows |
 | Compliance check UI integration | 🟡 Partial | Backend endpoint ready; progressive wiring pending |
 | Templates API-driven UI | 🟡 Partial | Backend routes available; markdown pages currently build-time |
@@ -332,7 +386,7 @@ When using `multipart/form-data` (file upload), the JavaScript code intentionall
 | Database webhook | Notify frontend when review status changes | Phase 2 |
 | File storage backend | Object storage (S3/MinIO) for PDF reports and immutable evidence bundles | Phase 3 |
 | Persistent distributed rate limiting | Replace process-local limiter with shared multi-instance throttling / lockout state | Phase 2+ |
-| OpenTelemetry tracing | Distributed tracing for agent → service → persistence flow | Phase 3 |
+| OpenTelemetry dashboards & alerts | Build centralized tracing dashboards and SLO alerting on top of delivered spans/metrics | Phase 3 |
 
 ---
 

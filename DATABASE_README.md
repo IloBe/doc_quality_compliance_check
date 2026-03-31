@@ -162,7 +162,7 @@ curl.exe -i -sS -H "Content-Type: application/json" --data-binary "@$tmp" http:/
 
 ## Database Schema
 
-### Tables Created (Alembic Migrations 001-004)
+### Tables Created (Alembic Migrations 001-006)
 
 | Table | Purpose | Phase | Columns |
 |-------|---------|-------|---------|
@@ -171,6 +171,7 @@ curl.exe -i -sS -H "Content-Type: application/json" --data-binary "@$tmp" http:/
 | `audit_events` | Immutable compliance audit trail | 0+ | 16 |
 | `skill_documents` | Uploaded documents for analysis | 0+ | 8 |
 | `skill_findings` | Compliance findings from analysis | 0+ | 8 |
+| `quality_observations` | Performance/accuracy/error/hallucination/evaluation telemetry | 0+ | 17 |
 
 ### Key Tables for Phase 0
 

@@ -63,6 +63,14 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: Literal["json", "console"] = "console"
 
+    # Observability
+    metrics_enabled: bool = True
+    tracing_enabled: bool = True
+    tracing_exporter: Literal["none", "console", "otlp"] = "none"
+    tracing_otlp_endpoint: str = ""
+    tracing_sampling_ratio: float = 1.0
+    telemetry_service_name: str = "doc-quality-api"
+
     # Templates directory
     templates_dir: str = "templates"
     reports_output_dir: str = "reports"

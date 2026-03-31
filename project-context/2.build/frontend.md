@@ -3,7 +3,7 @@
 <!-- markdownlint-disable MD007 MD009 MD013 MD022 MD031 MD032 MD034 MD036 MD037 -->
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.5.0  
+**Version:** 0.6.0  
 **Date:** 2026-3-31  
 **Author persona:** `@frontend-eng`  
 **AAMAD phase:** 2.build  
@@ -49,6 +49,7 @@ Page-specific companion documents remain:
 - [frontend_login.md](frontend_login.md)
 - [frontend_forgot_access.md](frontend_forgot_access.md)
 - [frontend_reset_access.md](frontend_reset_access.md)
+- [frontend_admin.md](frontend_admin.md)
 
 General requirements that apply to all pages:
 
@@ -78,7 +79,8 @@ frontend/
 │   ├── authContext.tsx      — Current user context + permission helpers
 │   ├── rbac.ts              — Frontend permission mapping
 │   ├── mockStore.ts         — Zustand-backed mock data for demo workflows
-│   └── dashboardClient.ts   — Optional live dashboard aggregation client
+│   ├── dashboardClient.ts   — Optional live dashboard aggregation client
+│   └── observabilityClient.ts — Admin observability API + metrics client
 ├── pages/
 │   ├── _app.tsx             — Session gate + AppShell bootstrap
 │   ├── _document.tsx        — Custom document wrapper
@@ -89,6 +91,9 @@ frontend/
 │   ├── bridge.tsx           — Route alias to workflow page
 │   ├── architecture.tsx     — arc42 library view from markdown templates
 │   ├── sops.tsx             — SOP library view from markdown templates
+│   ├── admin/index.tsx      — Admin center overview
+│   ├── admin/observability.tsx — Tracing/quality telemetry view
+│   ├── admin/stakeholders.tsx — Stakeholder role templates and rights matrix
 │   ├── login.tsx            — Public login page
 │   ├── forgot-access.tsx    — Password recovery request page
 │   └── reset-access.tsx     — Password reset page
@@ -125,6 +130,9 @@ The frontend currently has two route classes:
    - `/bridge` (alias/export of workflow)
    - `/architecture`
    - `/sops`
+  - `/admin`
+  - `/admin/observability`
+  - `/admin/stakeholders`
 
 ### 2.2 Protected route bootstrap
 
@@ -216,6 +224,12 @@ The frontend is currently **hybrid**, not uniformly backend-driven.
 - **Forgot-access / reset-access**
 - **Optional dashboard summary** when `NEXT_PUBLIC_DASHBOARD_SOURCE=backend`
 - **Auth health badge** on login
+- **Admin observability summary** via `GET /api/v1/observability/quality-summary?window_hours=…`
+- **Admin LLM prompt/output traces** via `GET /api/v1/observability/llm-traces?limit=…&window_hours=…`
+- **Admin workflow component breakdown** via `GET /api/v1/observability/workflow-components?window_hours=…`
+- **Admin metrics snapshot** via backend `/metrics` endpoint (proxied through Next.js rewrite)
+- **Stakeholder profiles** via `GET /api/v1/admin/stakeholder-profiles`
+- **Stakeholder employee assignments** via `GET/POST/DELETE /api/v1/admin/stakeholder-profiles/{id}/employees`
 
 ### 4.2 Mock/demo-driven today
 
@@ -318,6 +332,27 @@ Current behavior:
 - reset token is verified before password entry,
 - reset form enforces basic client-side validation before submission.
 
+### 5.8 Admin center and sub-pages (`/admin/*`)
+
+Implemented as:
+
+- `frontend/pages/admin/index.tsx`
+- `frontend/pages/admin/observability.tsx`
+- `frontend/pages/admin/stakeholders.tsx`
+
+Current behavior:
+
+- Sidebar exposes `Admin` with a sublist for `Observability` and `Stakeholders & Rights`.
+- Admin overview provides quick navigation cards for both admin modules.
+- **Observability page** operates in **demo mode by default** (env-flag pattern identical to Dashboard) — loads representative mock telemetry via `useMemo` with no backend dependency, labeled by a blue "Demo mode" banner. Switches to live data when `NEXT_PUBLIC_OBSERVABILITY_SOURCE=backend`.
+  - In both modes it renders: KPI cards (observations / avg score / P95 latency / hallucination reports), quality aspect breakdown table, **workflow component breakdown table** (per research\_agent / document\_analyzer / compliance\_checker), Prometheus snapshot, and recent GenAI prompt/output pairs with a **Rich GenAI Trace Payload** indigo pre-block per trace card (tokens, temperature, latency, hallucination flag, domain-specific extras).
+  - Window selector (`24h`, `7d`, `30d`) scales all mock and live values consistently.
+- **Stakeholders & Rights page** provides role-template governance UI and **persistent employee assignment per role**:
+  - Assignments are stored in PostgreSQL (`stakeholder_employee_assignments`, migration 008) via `POST /api/v1/admin/stakeholder-profiles/{id}/employees`.
+  - Single-add mode: text input + Add button.
+  - Bulk-add mode: toggled separately; accepts a textarea with one name per line, deduplicates, fires parallel async POSTs, and shows a success/fail count message on completion.
+  - Each assignment has an inline Remove button (`DELETE …/employees/{assignment_id}`).
+
 ---
 
 ## Section 6 – Role Awareness and Permission Checks
@@ -358,6 +393,10 @@ Current frontend env controls documented in `.env.local.example`:
   - `backend` enables live dashboard aggregation
   - any other value keeps dashboard on demo/mock mode
 
+- `NEXT_PUBLIC_OBSERVABILITY_SOURCE`
+  - `backend` enables live quality telemetry from the PostgreSQL `quality_observations` table
+  - any other value keeps observability on demo/mock mode (default; safe for demonstrations before workflow flows emit real telemetry)
+
 ---
 
 ## Section 8 – Current Gaps and Known Boundaries
@@ -370,6 +409,8 @@ Important current boundaries:
 - Compliance page is currently a governance reference view, not a full interactive compliance run form.
 - Workflow/Bridge surfaces are partially demo-oriented and do not expose every orchestrator/runtime state via live backend APIs.
 - Dashboard can be live-backed, but defaults to mock mode for resilience.
+- Admin stakeholder permission-matrix editing is currently configuration-oriented (template UX, local state); backend persistence for the rights matrix itself remains a future increment. Employee name assignment per role is fully implemented and persisted in PostgreSQL (migration 008).
+- Product-user chatbot support is a planned future admin topic and is currently documented as a follow-up extension.
 - The shell and RBAC UX are implemented, while some domain workflows are still pending deeper API wiring.
 
 This is the correct state to document for the current codebase.
