@@ -3,7 +3,7 @@
 
 **Product:** Document Quality & Compliance Check System  
 **Version:** 0.8.0  
-**Date:** 2026-3-15  
+**Date:** 2026-3-31  
 **Author persona:** `@system-arch`  
 **Standard:** ISO/IEC/IEEE 42010:2022 — Architecture Description  
 **AAMAD phase:** 1.define  
@@ -953,7 +953,7 @@ This checklist defines the minimum hardening scope for Phase 0 so the current MV
 ```Python
 persona=system-arch
 action=update-sad-v0.7.0-agentic-ux-multillm
-timestamp=2026-3-15
+timestamp=2026-3-31
 adapter=AAMAD-vscode
 artifact=project-context/1.define/sad.md
 version=0.8.0

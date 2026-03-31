@@ -106,6 +106,23 @@ class AuditEventORM(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
 
 
+class AuditScheduleORM(Base):
+    """Persistent governance audit schedule configuration."""
+
+    __tablename__ = "audit_schedules"
+
+    schedule_id = Column(String(64), primary_key=True, index=True)
+    tenant_id = Column(String(100), nullable=False, index=True)
+    org_id = Column(String(100), nullable=True, index=True)
+    project_id = Column(String(100), nullable=True, index=True)
+    internal_audit_date = Column(DateTime(timezone=True), nullable=True, index=True)
+    external_audit_date = Column(DateTime(timezone=True), nullable=True, index=True)
+    external_notified_body = Column(String(255), nullable=True)
+    updated_by = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), index=True)
+
+
 class UserSessionORM(Base):
     """Persistent server-side user session (email/password MVP)."""
 

@@ -24,7 +24,7 @@ from ..core.observability import (
 )
 from ..core.rate_limit import api_global_limiter
 from ..core.session_auth import require_authenticated_user
-from .routes import auth, bridge, compliance, dashboard, documents, observability, reports, research, skills, stakeholders, templates
+from .routes import audit_trail, auth, bridge, compliance, dashboard, documents, observability, reports, research, skills, stakeholders, templates
 
 logger = structlog.get_logger(__name__)
 
@@ -231,6 +231,7 @@ def create_app() -> FastAPI:
     app.include_router(research.router, prefix=prefix, dependencies=auth_dependencies)
     app.include_router(skills.router, prefix=prefix, dependencies=auth_dependencies)
     app.include_router(observability.router, prefix=prefix, dependencies=auth_dependencies)
+    app.include_router(audit_trail.router, prefix=prefix, dependencies=auth_dependencies)
     app.include_router(stakeholders.router, prefix=prefix, dependencies=auth_dependencies)
     app.include_router(dashboard.router, prefix=prefix, dependencies=auth_dependencies)
 

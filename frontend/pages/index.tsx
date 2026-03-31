@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { 
   LuFilePlus, 
   LuFilter, 
-  LuInfo,
   LuSearch, 
   LuLock,
   LuLockOpen,
@@ -14,7 +13,7 @@ import {
 import { useMockStore } from '../lib/mockStore';
 import { useCan } from '../lib/authContext';
 import { useRouter } from 'next/router';
-import WhyThisPageMatters from '../components/WhyThisPageMatters';
+import PageHeaderWithWhy from '../components/PageHeaderWithWhy';
 
 const DocumentHub = () => {
   const router = useRouter();
@@ -23,7 +22,6 @@ const DocumentHub = () => {
   const canEditDocuments = useCan('doc.edit');
   const canRunBridge = useCan('bridge.run');
   const [localFilter, setLocalFilter] = useState('');
-  const [showWhyThisPageMatters, setShowWhyThisPageMatters] = useState(false);
 
   const queryFilter = typeof router.query.q === 'string' ? router.query.q : '';
   const projectFilter = typeof router.query.project === 'string' ? router.query.project : '';
@@ -62,45 +60,28 @@ const DocumentHub = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Header & Stats */}
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">Home</div>
-          <div className="flex items-center gap-2 mb-2">
-            <h1 className="text-3xl font-black text-neutral-900 tracking-tight">Document Hub</h1>
+      <PageHeaderWithWhy
+        eyebrow="Home"
+        title="Document Hub"
+        subtitle="Manage and monitor technical documentation compliance."
+        whyDescription="The Document Hub is the controlled entry point for governed artifacts. It helps teams find the right document version, verify ownership and status, and start traceable review workflows before compliance or release decisions."
+        rightContent={
+          <div className="flex items-center gap-3">
             <button
-              type="button"
-              onClick={() => setShowWhyThisPageMatters((prev) => !prev)}
-              className="p-1.5 rounded-full text-neutral-400 hover:text-blue-700 hover:bg-blue-50 transition"
-              title="Why this page matters"
+              disabled={!canEditDocuments}
+              title={canEditDocuments ? 'Upload Document' : 'Insufficient role permissions'}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition uppercase text-xs tracking-widest ${
+                canEditDocuments
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200'
+                  : 'bg-neutral-200 text-neutral-500 cursor-not-allowed'
+              }`}
             >
-              <LuInfo className="w-4 h-4" />
-            </button>
-          </div>
-          <p className="text-neutral-500 font-medium">Manage and monitor technical documentation compliance.</p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-           <button
-             disabled={!canEditDocuments}
-             title={canEditDocuments ? 'Upload Document' : 'Insufficient role permissions'}
-             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition uppercase text-xs tracking-widest ${
-               canEditDocuments
-                 ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200'
-                 : 'bg-neutral-200 text-neutral-500 cursor-not-allowed'
-             }`}
-           >
               <LuFilePlus className="w-4 h-4" />
               Upload Document
-           </button>
-        </div>
-      </div>
-
-      {showWhyThisPageMatters && (
-        <WhyThisPageMatters
-          description="The Document Hub is the controlled entry point for governed artifacts. It helps teams find the right document version, verify ownership and status, and start traceable review workflows before compliance or release decisions."
-        />
-      )}
+            </button>
+          </div>
+        }
+      />
 
       {/* Quick Filters */}
       <div className="flex items-center justify-between bg-white/50 backdrop-blur-md p-2 rounded-2xl border border-white shadow-xl shadow-neutral-100/50">

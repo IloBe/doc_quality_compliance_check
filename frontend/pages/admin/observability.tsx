@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { LuActivity, LuGauge, LuInfo, LuLoader, LuMessagesSquare, LuRefreshCw, LuTimer, LuTriangleAlert, LuWandSparkles } from 'react-icons/lu';
-import WhyThisPageMatters from '../../components/WhyThisPageMatters';
+import { LuActivity, LuDownload, LuGauge, LuInfo, LuLoader, LuRefreshCw, LuTimer, LuTriangleAlert, LuWandSparkles } from 'react-icons/lu';
+import FooterInfoCard from '../../components/FooterInfoCard';
+import PageHeaderWithWhy from '../../components/PageHeaderWithWhy';
 import {
   fetchLlmPromptOutputPairs,
   fetchMetricsSnapshot,
@@ -18,6 +19,47 @@ const windows = [
   { label: '30d', value: 24 * 30 },
 ];
 
+function toCsvCell(value: unknown): string {
+  const text = value === null || value === undefined ? '' : String(value);
+  const escaped = text.replace(/"/g, '""');
+  return `"${escaped}"`;
+}
+
+function buildPromptPairsCsv(pairs: LlmPromptOutputPair[]): string {
+  const headers = [
+    'event_time',
+    'source_component',
+    'provider',
+    'model_used',
+    'trace_id',
+    'correlation_id',
+    'subject_type',
+    'subject_id',
+    'prompt',
+    'output',
+    'rich_payload_json',
+  ];
+
+  const rows = pairs.map((item) => [
+    item.event_time,
+    item.source_component,
+    item.provider,
+    item.model_used,
+    item.trace_id,
+    item.correlation_id,
+    item.subject_type,
+    item.subject_id,
+    item.prompt,
+    item.output,
+    JSON.stringify(item.rich_payload ?? {}),
+  ]);
+
+  return [
+    headers.map(toCsvCell).join(','),
+    ...rows.map((row) => row.map(toCsvCell).join(',')),
+  ].join('\n');
+}
+
 const AdminObservabilityPage = () => {
   const [windowHours, setWindowHours] = useState(24);
   const [summary, setSummary] = useState<QualitySummary | null>(null);
@@ -26,7 +68,6 @@ const AdminObservabilityPage = () => {
   const [workflowBreakdown, setWorkflowBreakdown] = useState<WorkflowComponentBreakdown | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showWhyThisPageMatters, setShowWhyThisPageMatters] = useState(false);
 
   // Default to demo mode — the same pattern as Dashboard.
   // Set NEXT_PUBLIC_OBSERVABILITY_SOURCE=backend to use live DB telemetry.
@@ -169,60 +210,58 @@ const AdminObservabilityPage = () => {
     return `${Math.round(summary.average_score * 100)}%`;
   }, [summary]);
 
+  const exportPromptPairsCsv = () => {
+    const csv = buildPromptPairsCsv(promptPairs);
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    link.href = url;
+    link.setAttribute('download', `observability_prompt_output_pairs_${windowHours}h_${ts}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">Admin / Observability</div>
+      <PageHeaderWithWhy
+        eyebrow="Admin / Observability"
+        title="Observability"
+        subtitle="Tracing and quality telemetry for technical monitoring, validation, and continuous improvement."
+        whyDescription="This page visualizes backend quality telemetry so engineers can detect latency regressions, track evaluation quality, monitor hallucination indicators, and correlate failures before they impact regulated production workflows."
+        rightContent={
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-black text-neutral-900 tracking-tight">Observability</h1>
+            <div className="flex items-center gap-1 bg-white border border-neutral-200 rounded-xl p-1">
+              {windows.map((option) => {
+                const active = option.value === windowHours;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setWindowHours(option.value)}
+                    className={`px-3 py-1.5 text-xs font-black uppercase tracking-wide rounded-lg transition ${
+                      active ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:bg-neutral-100'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+
             <button
               type="button"
-              onClick={() => setShowWhyThisPageMatters((prev) => !prev)}
-              className="p-1.5 rounded-full text-neutral-400 hover:text-blue-700 hover:bg-blue-50 transition"
-              title="Why this page matters"
+              onClick={load}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-neutral-200 bg-white text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
             >
-              <LuInfo className="w-4 h-4" />
+              <LuRefreshCw className="w-4 h-4" />
+              Refresh
             </button>
           </div>
-          <p className="text-neutral-500 font-medium mt-1">Tracing and quality telemetry for technical monitoring, validation, and continuous improvement.</p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-white border border-neutral-200 rounded-xl p-1">
-            {windows.map((option) => {
-              const active = option.value === windowHours;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setWindowHours(option.value)}
-                  className={`px-3 py-1.5 text-xs font-black uppercase tracking-wide rounded-lg transition ${
-                    active ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:bg-neutral-100'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <button
-            type="button"
-            onClick={load}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-neutral-200 bg-white text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
-          >
-            <LuRefreshCw className="w-4 h-4" />
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {showWhyThisPageMatters && (
-        <WhyThisPageMatters
-          description="This page visualizes backend quality telemetry so engineers can detect latency regressions, track evaluation quality, monitor hallucination indicators, and correlate failures before they impact regulated production workflows."
-        />
-      )}
+        }
+      />
 
       {!useBackendData && (
         <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 text-xs text-blue-700 font-semibold">
@@ -369,7 +408,18 @@ const AdminObservabilityPage = () => {
           </div>
 
           <div className="bg-white border border-neutral-200 rounded-2xl p-5">
-            <h2 className="text-lg font-black text-neutral-900 mb-4">Recent GenAI Prompt / Output Pairs</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <h2 className="text-lg font-black text-neutral-900">Recent GenAI Prompt / Output Pairs</h2>
+              <button
+                type="button"
+                onClick={exportPromptPairsCsv}
+                disabled={promptPairs.length === 0}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-neutral-200 bg-white text-sm font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <LuDownload className="w-4 h-4" />
+                Export CSV
+              </button>
+            </div>
             {promptPairs.length === 0 ? (
               <div className="text-sm text-neutral-500">No captured prompt/output pairs in this window. Pairs are listed when LLM-backed flows emit telemetry.</div>
             ) : (
@@ -406,13 +456,9 @@ const AdminObservabilityPage = () => {
             )}
           </div>
 
-          <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 text-sm text-indigo-800">
-            <div className="font-bold inline-flex items-center gap-2 mb-1">
-              <LuMessagesSquare className="w-4 h-4" />
-              Future topic
-            </div>
+          <FooterInfoCard title="Future topic" accent="indigo">
             A product-user chatbot can be added next to query documentation and workflow evidence via prompting, using the same observability stack for prompt/output traceability.
-          </div>
+          </FooterInfoCard>
         </>
       )}
     </div>

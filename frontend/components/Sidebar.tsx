@@ -19,7 +19,9 @@ import {
   LuSettings,
   LuActivity,
   LuUsers,
-  LuLogOut 
+  LuLogOut,
+  LuFileQuestion,
+  LuBookOpen
 } from 'react-icons/lu';
 import { useRouter } from 'next/router';
 
@@ -61,6 +63,7 @@ const Sidebar = ({ className }) => {
   const router = useRouter();
   const currentPath = router.pathname;
   const adminActive = currentPath.startsWith('/admin');
+  const helpActive = currentPath.startsWith('/help');
 
   return (
     <aside className={`${className} flex flex-col pt-6 pb-4 overflow-y-auto`}>
@@ -118,7 +121,9 @@ const Sidebar = ({ className }) => {
         <div className="mt-4">
           <SectionLabel label="Support" />
           <div className="space-y-0">
-            <NavItem href="/help" icon={LuCircleHelp} label="Help & Snippets" active={currentPath === '/help'} />
+            <NavItem href="/help" icon={LuCircleHelp} label="Help & Snippets" active={helpActive} />
+            <SubNavItem href="/help/qa" icon={LuFileQuestion} label="Q&A" active={currentPath === '/help/qa'} />
+            <SubNavItem href="/help/glossary" icon={LuBookOpen} label="Glossary" active={currentPath === '/help/glossary'} />
             <NavItem href="/admin" icon={LuSettings} label="Admin" active={adminActive} />
             <SubNavItem href="/admin/observability" icon={LuActivity} label="Observability" active={currentPath === '/admin/observability'} />
             <SubNavItem href="/admin/stakeholders" icon={LuUsers} label="Stakeholders & Rights" active={currentPath === '/admin/stakeholders'} />

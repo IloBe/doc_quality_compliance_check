@@ -22,6 +22,8 @@ Provide a technical administration entrypoint for:
 
 ## Current implementation
 
+API transport and endpoint-integration details are documented in [integration.md](integration.md), especially Section 2.6 (Observability) and Section 2.7 (Stakeholder Admin API).
+
 ### Admin Center overview (`/admin`)
 
 `frontend/pages/admin/index.tsx` renders a quick-navigation card grid that links to both admin sub-modules. No additional data fetches; static shell page.

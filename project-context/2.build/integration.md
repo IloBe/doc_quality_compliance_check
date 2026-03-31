@@ -179,6 +179,8 @@ Current UI status:
 
 Observability backend mode is enabled when `NEXT_PUBLIC_OBSERVABILITY_SOURCE=backend`. Default is **demo mode** (mock data via `useMemo`, no backend call).
 
+UI implementation details for this section are documented in [frontend_admin.md](frontend_admin.md) under "Observability page (`/admin/observability`)".
+
 ```http
 GET /api/v1/observability/quality-summary?window_hours=24
 GET /api/v1/observability/llm-traces?limit=15&window_hours=24
@@ -205,6 +207,8 @@ Mock data structure (demo mode):
 ### 2.7 Stakeholder Admin API (Implemented, Always Live)
 
 The stakeholder employee assignment endpoints are always called against the live backend (no mock fallback needed — the page is an admin-only management surface):
+
+UI behavior for this integration (single-add vs bulk-add, deduplication, and result messaging) is documented in [frontend_admin.md](frontend_admin.md) under "Stakeholders & Rights page (`/admin/stakeholders`)".
 
 ```http
 GET    /api/v1/admin/stakeholder-profiles

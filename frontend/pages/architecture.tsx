@@ -3,8 +3,8 @@ import path from 'path';
 import React, { useMemo, useState } from 'react';
 import { GetStaticProps } from 'next';
 import { marked } from 'marked';
-import { LuHexagon, LuInfo, LuList, LuChevronRight } from 'react-icons/lu';
-import WhyThisPageMatters from '../components/WhyThisPageMatters';
+import { LuHexagon, LuList, LuChevronRight } from 'react-icons/lu';
+import PageHeaderWithWhy from '../components/PageHeaderWithWhy';
 
 type Arc42Item = {
   id: string;
@@ -60,7 +60,6 @@ export const getStaticProps: GetStaticProps<ArchitecturePageProps> = async () =>
 };
 
 const ArchitecturePage = ({ templates }: ArchitecturePageProps) => {
-  const [showWhyThisPageMatters, setShowWhyThisPageMatters] = useState(false);
   const [activeTemplateId, setActiveTemplateId] = useState<string>(templates[0]?.id || '');
 
   const activeTemplate = useMemo(
@@ -70,39 +69,20 @@ const ArchitecturePage = ({ templates }: ArchitecturePageProps) => {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500">
-      {/* Page header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">
-            Governance Library
+      <PageHeaderWithWhy
+        eyebrow="Governance Library"
+        title="Architecture (arc42)"
+        subtitle="Select a template card to open and review its arc42 architecture documentation."
+        whyDescription="arc42 provides a proven, lightweight structure for software and system architecture documentation. Using a standardised template ensures every architectural decision is captured consistently, making systems easier to audit, onboard, and evolve."
+        rightContent={
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-neutral-200 rounded-xl shadow-sm">
+            <LuList className="w-4 h-4 text-blue-600" />
+            <span className="text-xs font-black uppercase tracking-wider text-neutral-600">
+              {templates.length} arc42 Template{templates.length !== 1 ? 's' : ''}
+            </span>
           </div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-black text-neutral-900 tracking-tight">Architecture (arc42)</h1>
-            <button
-              type="button"
-              onClick={() => setShowWhyThisPageMatters((prev) => !prev)}
-              className="p-1.5 rounded-full text-neutral-400 hover:text-blue-700 hover:bg-blue-50 transition"
-              title="Why this page matters"
-            >
-              <LuInfo className="w-4 h-4" />
-            </button>
-          </div>
-          <p className="text-neutral-500 font-medium mt-1">
-            Select a template card to open and review its arc42 architecture documentation.
-          </p>
-        </div>
-
-        <div className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-neutral-200 rounded-xl shadow-sm">
-          <LuList className="w-4 h-4 text-blue-600" />
-          <span className="text-xs font-black uppercase tracking-wider text-neutral-600">
-            {templates.length} arc42 Template{templates.length !== 1 ? 's' : ''}
-          </span>
-        </div>
-      </div>
-
-      {showWhyThisPageMatters && (
-        <WhyThisPageMatters description="arc42 provides a proven, lightweight structure for software and system architecture documentation. Using a standardised template ensures every architectural decision is captured consistently, making systems easier to audit, onboard, and evolve." />
-      )}
+        }
+      />
 
       {/* Main layout: card list left, content right */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

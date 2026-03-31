@@ -110,6 +110,38 @@ class AuditEventRecord(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class AuditEventListResponse(BaseModel):
+    """List response for governance-focused audit trail views."""
+
+    items: list[AuditEventRecord] = Field(default_factory=list)
+
+
+class AuditScheduleRecord(BaseModel):
+    """Persistent audit planning schedule used by Audit Trail page."""
+
+    schedule_id: str = "default"
+    tenant_id: str = "default_tenant"
+    org_id: str | None = None
+    project_id: str | None = None
+    internal_audit_date: datetime | None = None
+    external_audit_date: datetime | None = None
+    external_notified_body: str | None = None
+    updated_by: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class UpsertAuditScheduleRequest(BaseModel):
+    """Request payload for creating/updating the persistent audit schedule."""
+
+    internal_audit_date: datetime | None = None
+    external_audit_date: datetime | None = None
+    external_notified_body: str | None = None
+    tenant_id: str = "default_tenant"
+    org_id: str | None = None
+    project_id: str | None = None
+
+
 class LogEventRequest(BaseModel):
     """Request payload for audit event creation.
     

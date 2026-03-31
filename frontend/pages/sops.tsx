@@ -3,8 +3,8 @@ import path from 'path';
 import React, { useMemo, useState } from 'react';
 import { GetStaticProps } from 'next';
 import { marked } from 'marked';
-import { LuFileText, LuInfo, LuList, LuChevronRight } from 'react-icons/lu';
-import WhyThisPageMatters from '../components/WhyThisPageMatters';
+import { LuFileText, LuList, LuChevronRight } from 'react-icons/lu';
+import PageHeaderWithWhy from '../components/PageHeaderWithWhy';
 
 type SopItem = {
   id: string;
@@ -57,39 +57,24 @@ export const getStaticProps: GetStaticProps<SopPageProps> = async () => {
 };
 
 const SopsPage = ({ sops }: SopPageProps) => {
-  const [showWhyThisPageMatters, setShowWhyThisPageMatters] = useState(false);
   const [activeSopId, setActiveSopId] = useState<string>(sops[0]?.id || '');
 
   const activeSop = useMemo(() => sops.find((s) => s.id === activeSopId) || sops[0], [activeSopId, sops]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">Governance Library</div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-black text-neutral-900 tracking-tight">SOPs</h1>
-            <button
-              type="button"
-              onClick={() => setShowWhyThisPageMatters((prev) => !prev)}
-              className="p-1.5 rounded-full text-neutral-400 hover:text-blue-700 hover:bg-blue-50 transition"
-              title="Why this page matters"
-            >
-              <LuInfo className="w-4 h-4" />
-            </button>
+      <PageHeaderWithWhy
+        eyebrow="Governance Library"
+        title="SOPs"
+        subtitle="Select a SOP card to open and review its markdown content."
+        whyDescription="The SOP page centralizes controlled process templates so teams can quickly review required structure, ownership, and evidence expectations before execution or audit."
+        rightContent={
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-neutral-200 rounded-xl shadow-sm">
+            <LuList className="w-4 h-4 text-blue-600" />
+            <span className="text-xs font-black uppercase tracking-wider text-neutral-600">{sops.length} SOP Files</span>
           </div>
-          <p className="text-neutral-500 font-medium mt-1">Select a SOP card to open and review its markdown content.</p>
-        </div>
-
-        <div className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-neutral-200 rounded-xl shadow-sm">
-          <LuList className="w-4 h-4 text-blue-600" />
-          <span className="text-xs font-black uppercase tracking-wider text-neutral-600">{sops.length} SOP Files</span>
-        </div>
-      </div>
-
-      {showWhyThisPageMatters && (
-        <WhyThisPageMatters description="The SOP page centralizes controlled process templates so teams can quickly review required structure, ownership, and evidence expectations before execution or audit." />
-      )}
+        }
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-1 space-y-4">

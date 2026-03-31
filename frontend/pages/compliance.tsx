@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import WhyThisPageMatters from '../components/WhyThisPageMatters';
+import PageHeaderWithWhy from '../components/PageHeaderWithWhy';
 import { 
   LuShieldCheck, 
   LuFileCheck, 
@@ -10,15 +10,12 @@ import {
   LuExternalLink,
   LuChevronRight,
   LuBookOpen,
-   LuCircleCheck,
-   LuInfo
+   LuCircleCheck
 } from 'react-icons/lu';
 import Link from 'next/link';
 
 
 const ComplianceStandards = () => {
-   const [showWhyThisPageMatters, setShowWhyThisPageMatters] = useState(false);
-
    // Standards and directives as per login page and PRD
    const standards = [
       {
@@ -73,32 +70,12 @@ const ComplianceStandards = () => {
 
   return (
     <div className="space-y-12 animate-in fade-in duration-700">
-         {/* Overview Header (dashboard style) */}
-         <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-               <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">Governance & Standards</div>
-               <div className="flex items-center gap-2">
-                  <h1 className="text-3xl font-black text-neutral-900 tracking-tight">Compliance Standards</h1>
-                  <button
-                     type="button"
-                     onClick={() => setShowWhyThisPageMatters((prev) => !prev)}
-                     className="p-1.5 rounded-full text-neutral-400 hover:text-blue-700 hover:bg-blue-50 transition"
-                     title="Why this page matters"
-                  >
-                     <LuInfo className="w-4 h-4" />
-                  </button>
-               </div>
-               <p className="text-neutral-500 font-medium mt-1">
-                  This page lists the regulatory standards and mappings used for governance checks. It provides a transparent basis for agent-driven compliance validation and audit traceability.
-               </p>
-            </div>
-         </div>
-
-         {showWhyThisPageMatters && (
-            <WhyThisPageMatters
-               description="The Compliance page defines which standards and regulatory mappings are active for checks. It helps governance teams align validation rules with current obligations and gives reviewers a clear basis for pass/fail interpretation."
-            />
-         )}
+         <PageHeaderWithWhy
+            eyebrow="Governance & Standards"
+            title="Compliance Standards"
+            subtitle="This page lists the regulatory standards and mappings used for governance checks. It provides a transparent basis for agent-driven compliance validation and audit traceability."
+            whyDescription="The Compliance page defines which standards and regulatory mappings are active for checks. It helps governance teams align validation rules with current obligations and gives reviewers a clear basis for pass/fail interpretation."
+         />
 
          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
             {/* Main content */}

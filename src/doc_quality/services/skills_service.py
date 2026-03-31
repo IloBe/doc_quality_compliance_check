@@ -7,21 +7,24 @@ so agents never need direct database credentials.
 from __future__ import annotations
 
 import base64
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 import uuid
 
 from docx import Document as DocxDocument
 from pypdf import PdfReader
-from sqlalchemy import or_
+from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
 
 from ..core.logging_config import get_logger
 from ..core.security import sanitize_text, validate_filename, validate_file_size
 from ..models.document import DocumentType
-from ..models.orm import AuditEventORM, FindingORM, SkillDocumentORM
+from ..models.orm import AuditEventORM, AuditScheduleORM, FindingORM, SkillDocumentORM
 from ..models.skills import (
     AuditEventRecord,
+    AuditEventListResponse,
+    AuditScheduleRecord,
     ExtractTextRequest,
     ExtractTextResponse,
     FindingRecord,
@@ -29,6 +32,7 @@ from ..models.skills import (
     SearchDocumentsRequest,
     SearchDocumentsResponse,
     SkillDocumentRecord,
+    UpsertAuditScheduleRequest,
     WriteFindingRequest,
 )
 from .ocr_fallback import extract_text_with_fallback
@@ -261,4 +265,182 @@ def log_event(db: Session, request: LogEventRequest) -> AuditEventRecord:
         event_time=record.event_time,  # NEW: Event timestamp
         payload=record.payload,
         created_at=record.created_at,
+    )
+
+
+def list_audit_events(
+    db: Session,
+    *,
+    window_hours: int = 24 * 30,
+    limit: int = 200,
+    event_type: str | None = None,
+    actor_id: str | None = None,
+    subject_type: str | None = None,
+    subject_id: str | None = None,
+) -> AuditEventListResponse:
+    """Return recent audit events for governance and compliance review pages."""
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(hours=window_hours)
+
+    query = db.query(AuditEventORM).filter(AuditEventORM.event_time >= window_start)
+
+    if event_type:
+        query = query.filter(AuditEventORM.event_type.ilike(f"%{sanitize_text(event_type)}%"))
+    if actor_id:
+        query = query.filter(AuditEventORM.actor_id.ilike(f"%{sanitize_text(actor_id)}%"))
+    if subject_type:
+        query = query.filter(AuditEventORM.subject_type.ilike(f"%{sanitize_text(subject_type)}%"))
+    if subject_id:
+        query = query.filter(AuditEventORM.subject_id.ilike(f"%{sanitize_text(subject_id)}%"))
+
+    rows = query.order_by(desc(AuditEventORM.event_time)).limit(limit).all()
+
+    return AuditEventListResponse(
+        items=[
+            AuditEventRecord(
+                event_id=row.event_id,
+                event_type=row.event_type,
+                actor_type=row.actor_type,
+                actor_id=row.actor_id,
+                subject_type=row.subject_type,
+                subject_id=row.subject_id,
+                trace_id=row.trace_id,
+                correlation_id=row.correlation_id,
+                tenant_id=row.tenant_id,
+                org_id=row.org_id,
+                project_id=row.project_id,
+                event_time=row.event_time,
+                payload=row.payload,
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
+    )
+
+
+def get_audit_event_by_id(db: Session, event_id: str) -> AuditEventRecord | None:
+    """Return one audit event by id for row-level drilldown views."""
+    row = db.query(AuditEventORM).filter(AuditEventORM.event_id == sanitize_text(event_id)).first()
+    if row is None:
+        return None
+
+    return AuditEventRecord(
+        event_id=row.event_id,
+        event_type=row.event_type,
+        actor_type=row.actor_type,
+        actor_id=row.actor_id,
+        subject_type=row.subject_type,
+        subject_id=row.subject_id,
+        trace_id=row.trace_id,
+        correlation_id=row.correlation_id,
+        tenant_id=row.tenant_id,
+        org_id=row.org_id,
+        project_id=row.project_id,
+        event_time=row.event_time,
+        payload=row.payload,
+        created_at=row.created_at,
+    )
+
+
+def get_audit_schedule(
+    db: Session,
+    *,
+    tenant_id: str = "default_tenant",
+    org_id: str | None = None,
+    project_id: str | None = None,
+) -> AuditScheduleRecord:
+    """Return persistent audit schedule; create a default record when missing."""
+    normalized_tenant = sanitize_text(tenant_id).strip() or "default_tenant"
+    normalized_org = sanitize_text(org_id).strip() if org_id else None
+    normalized_project = sanitize_text(project_id).strip() if project_id else None
+
+    row = (
+        db.query(AuditScheduleORM)
+        .filter(
+            AuditScheduleORM.tenant_id == normalized_tenant,
+            AuditScheduleORM.org_id == normalized_org,
+            AuditScheduleORM.project_id == normalized_project,
+        )
+        .first()
+    )
+
+    if row is None:
+        row = AuditScheduleORM(
+            schedule_id=str(uuid.uuid4()),
+            tenant_id=normalized_tenant,
+            org_id=normalized_org,
+            project_id=normalized_project,
+            internal_audit_date=None,
+            external_audit_date=None,
+            external_notified_body=None,
+            updated_by="system",
+        )
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+
+    return AuditScheduleRecord(
+        schedule_id=row.schedule_id,
+        tenant_id=row.tenant_id,
+        org_id=row.org_id,
+        project_id=row.project_id,
+        internal_audit_date=row.internal_audit_date,
+        external_audit_date=row.external_audit_date,
+        external_notified_body=row.external_notified_body,
+        updated_by=row.updated_by,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def upsert_audit_schedule(
+    db: Session,
+    *,
+    request: UpsertAuditScheduleRequest,
+    updated_by: str,
+) -> AuditScheduleRecord:
+    """Create or update persistent governance audit schedule."""
+    normalized_tenant = sanitize_text(request.tenant_id).strip() or "default_tenant"
+    normalized_org = sanitize_text(request.org_id).strip() if request.org_id else None
+    normalized_project = sanitize_text(request.project_id).strip() if request.project_id else None
+    normalized_notified_body = sanitize_text(request.external_notified_body).strip() if request.external_notified_body else None
+
+    row = (
+        db.query(AuditScheduleORM)
+        .filter(
+            AuditScheduleORM.tenant_id == normalized_tenant,
+            AuditScheduleORM.org_id == normalized_org,
+            AuditScheduleORM.project_id == normalized_project,
+        )
+        .first()
+    )
+
+    if row is None:
+        row = AuditScheduleORM(
+            schedule_id=str(uuid.uuid4()),
+            tenant_id=normalized_tenant,
+            org_id=normalized_org,
+            project_id=normalized_project,
+        )
+        db.add(row)
+
+    row.internal_audit_date = request.internal_audit_date
+    row.external_audit_date = request.external_audit_date
+    row.external_notified_body = normalized_notified_body
+    row.updated_by = sanitize_text(updated_by)
+
+    db.commit()
+    db.refresh(row)
+
+    return AuditScheduleRecord(
+        schedule_id=row.schedule_id,
+        tenant_id=row.tenant_id,
+        org_id=row.org_id,
+        project_id=row.project_id,
+        internal_audit_date=row.internal_audit_date,
+        external_audit_date=row.external_audit_date,
+        external_notified_body=row.external_notified_body,
+        updated_by=row.updated_by,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
     )
