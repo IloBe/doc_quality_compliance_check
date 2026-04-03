@@ -162,8 +162,12 @@ The following matrix reflects the currently implemented route policy.
 | `/api/v1/reports/*` | `qm_lead`, `riskmanager`, `auditor` | No | [src/doc_quality/api/routes/reports.py](src/doc_quality/api/routes/reports.py) |
 | `/api/v1/bridge/*` | `qm_lead`, `architect`, `riskmanager`, `auditor` | No | [src/doc_quality/api/routes/bridge.py](src/doc_quality/api/routes/bridge.py) |
 | `/api/v1/skills/*` | `qm_lead`, `architect`, `riskmanager`, `auditor` | Yes, explicitly allowed | [src/doc_quality/api/routes/skills.py](src/doc_quality/api/routes/skills.py) |
-| `/api/v1/dashboard/*` | Authenticated user required; route-level role hardening not yet specialized | No explicit service allowance | [src/doc_quality/api/main.py](src/doc_quality/api/main.py), [src/doc_quality/api/routes/dashboard.py](src/doc_quality/api/routes/dashboard.py) |
-| `/api/v1/templates/*` | Authenticated user required; route-level role hardening not yet specialized | No explicit service allowance | [src/doc_quality/api/main.py](src/doc_quality/api/main.py), [src/doc_quality/api/routes/templates.py](src/doc_quality/api/routes/templates.py) |
+| `/api/v1/audit-trail/*` | `qm_lead`, `architect`, `riskmanager`, `auditor` | No | [src/doc_quality/api/routes/audit_trail.py](src/doc_quality/api/routes/audit_trail.py) |
+| `/api/v1/observability/*` | `qm_lead`, `architect`, `riskmanager`, `auditor` | Yes, explicitly allowed | [src/doc_quality/api/routes/observability.py](src/doc_quality/api/routes/observability.py) |
+| `/api/v1/risk-templates/*` | `qm_lead`, `architect`, `riskmanager`, `auditor` | No | [src/doc_quality/api/routes/risk_templates.py](src/doc_quality/api/routes/risk_templates.py) |
+| `/api/v1/stakeholders/*` | `qm_lead`, `architect`, `riskmanager`, `auditor` | No | [src/doc_quality/api/routes/stakeholders.py](src/doc_quality/api/routes/stakeholders.py) |
+| `/api/v1/dashboard/*` | No authentication required (currently unauthenticated) | No explicit service allowance | [src/doc_quality/api/routes/dashboard.py](src/doc_quality/api/routes/dashboard.py) |
+| `/api/v1/templates/*` | No authentication required (currently unauthenticated) | No explicit service allowance | [src/doc_quality/api/routes/templates.py](src/doc_quality/api/routes/templates.py) |
 
 ### 3.1 Authenticated browser user vs service client
 
