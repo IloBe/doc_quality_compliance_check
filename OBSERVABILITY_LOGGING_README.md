@@ -12,7 +12,7 @@ The application implements a multi-layer observability strategy combining struct
 
 ### 1.1 Framework: structlog
 
-The application uses **structlog 25.5.0** for JSON-structured logging with optional console output.
+The application uses **structlog ≥ 24.1.0** for JSON-structured logging with optional console output.
 
 **Location**: [core/logging_config.py](src/doc_quality/core/logging_config.py)
 
@@ -48,7 +48,7 @@ Configure logging behavior via `.env`:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `LOG_LEVEL` | `INFO` | Log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
-| `LOG_FORMAT` | `json` | Output format: `json` (production) or `console` (dev) |
+| `LOG_FORMAT` | `console` | Output format: `json` (production) or `console` (dev) |
 
 **Example `.env`:**
 
@@ -68,6 +68,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan: startup and shutdown tasks."""
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_format)
+    configure_observability(settings)
     logger.info("application_starting", version=settings.app_version, env=settings.environment)
     yield
     logger.info("application_stopping")
@@ -96,18 +97,44 @@ FastAPI HTTP middleware logs all incoming requests with structured context:
 ```python
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log HTTP requests with timing and status code."""
-    start_time = time.time()
-    response = await call_next(request)
-    duration = time.time() - start_time
-    
+    """Log HTTP requests with timing, tracing, metrics, and correlation IDs."""
+    request_id = request.headers.get("x-request-id") or uuid4().hex
+    correlation_id = request.headers.get("x-correlation-id") or request_id
+
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(request_id=request_id, correlation_id=correlation_id)
+
+    # Global rate limiting on /api/v1/* routes
+    if request.url.path.startswith(f"{settings.api_prefix}/") and settings.global_rate_limit_enabled:
+        decision = api_global_limiter.check(...)
+        if not decision.allowed:
+            return JSONResponse(status_code=429, ...)
+
+    start = time.time()
+    response = await call_next(request)   # (OTEL span wraps call_next when tracer is available)
+
+    duration = time.time() - start
+    trace_id = get_trace_id_hex()
+    if trace_id:
+        structlog.contextvars.bind_contextvars(trace_id=trace_id)
+
     logger.info(
         "http_request",
         method=request.method,
         path=request.url.path,
         status=response.status_code,
         duration_ms=round(duration * 1000, 1),
+        trace_id=trace_id,
     )
+
+    if settings.metrics_enabled:
+        observe_http_request(request.method, request.url.path, response.status_code, duration)
+
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Correlation-ID"] = correlation_id
+    if trace_id:
+        response.headers["X-Trace-ID"] = trace_id
+
     return response
 ```
 
@@ -199,36 +226,38 @@ Immutable append-only audit trail stored in PostgreSQL. Every significant action
 
 **Location**: [src/doc_quality/models/orm.py](src/doc_quality/models/orm.py)
 
-**Schema (16 columns):**
+**Schema (14 columns):**
 
 | Column | Type | Purpose |
 | --- | --- | --- |
-| `event_id` | UUID | Unique event identifier |
-| `event_type` | VARCHAR | Event category (e.g., `login_success`, `review_created`, `finding_written`) |
-| `actor_type` | VARCHAR | Who performed the action: `user`, `agent`, `service`, `orchestrator` |
-| `actor_id` | VARCHAR | Email (user), agent name, service name, or orchestrator ID |
-| `subject_type` | VARCHAR | What was affected: `document`, `review`, `finding`, `session`, `workflow` |
-| `subject_id` | VARCHAR | Document ID, review ID, finding ID, etc. |
-| `trace_id` | VARCHAR (nullable) | Distributed trace ID (for OTEL integration) |
-| `correlation_id` | VARCHAR (nullable) | Workflow correlation ID linking related events |
-| `tenant_id` | VARCHAR | Multi-tenant identifier (default: `default_tenant`) |
-| `org_id` | VARCHAR (nullable) | Organization identifier |
-| `project_id` | VARCHAR (nullable) | Project identifier |
-| `event_time` | TIMESTAMP | UTC timestamp of event |
-| `payload` | JSONB | Event-specific data (structured, no PII) |
+| `event_id` | VARCHAR(64) PK | Unique event identifier |
+| `tenant_id` | VARCHAR(100) | Multi-tenant identifier (caller sets; typically `"default"`) |
+| `org_id` | VARCHAR(100) nullable | Organization identifier |
+| `project_id` | VARCHAR(100) nullable | Project identifier |
+| `event_time` | TIMESTAMP with tz | UTC timestamp of event (indexed for range queries) |
+| `event_type` | VARCHAR(100) | Event category (e.g., `auth.login_success`, `auth.recovery.requested`) |
+| `actor_type` | VARCHAR(50) | Who performed the action: `user`, `agent`, `service`, `anonymous` |
+| `actor_id` | VARCHAR(100) | Email (user), agent name, service name, or IP address |
+| `subject_type` | VARCHAR(50) | What was affected: `document`, `review`, `finding`, `session`, `workflow` |
+| `subject_id` | VARCHAR(100) | Document ID, review ID, finding ID, session ID, etc. |
+| `trace_id` | VARCHAR(64) nullable | Distributed trace ID (for OTEL integration) |
+| `correlation_id` | VARCHAR(64) nullable | Workflow correlation ID linking related events |
+| `payload` | JSON | Event-specific data (structured, no PII) |
+| `created_at` | TIMESTAMP with tz | Row insertion timestamp |
 
 **Example audit events:**
 
 ```python
 # Login successful
 AuditEventORM(
-    event_type="login_success",
+    event_type="auth.login_success",
     actor_type="user",
     actor_id="user@example.com",
     subject_type="session",
     subject_id="session_uuid",
-    event_time=datetime.utcnow(),
-    payload={"ip": "192.168.1.1", "remember_me": True},
+    tenant_id="default",
+    event_time=datetime.now(timezone.utc),
+    payload={"roles": ["qm_lead"], "remember_me": True},
 )
 
 # Review created
@@ -287,7 +316,7 @@ def _log_audit_event(
         payload=payload,
     )
     db.add(event)
-    db.commit()
+    # Note: db.commit() is called by the invoking route handler after all mutations.
 ```
 
 **Skills Service** ([src/doc_quality/services/skills_service.py](src/doc_quality/services/skills_service.py#L226-L260)):
@@ -496,21 +525,12 @@ All logging functions sanitize user-submitted content to prevent PII leakage.
 **Sanitization Functions** ([src/doc_quality/core/security.py](src/doc_quality/core/security.py)):
 
 ```python
-def sanitize_text(text: str, max_length: int = 500) -> str:
-    """Remove control chars, truncate, prevent log injection."""
-    if not isinstance(text, str):
-        return ""
-    return "".join(c for c in text if ord(c) >= 32 or c in "\t\n").strip()[:max_length]
-
-def sanitize_nested_dict(d: dict, max_depth: int = 3) -> dict:
-    """Recursively sanitize dict values, respect privacy."""
-    if not isinstance(d, dict) or max_depth <= 0:
-        return {}
-    return {
-        sanitize_text(k): sanitize_text(v) if isinstance(v, str) else v
-        for k, v in d.items()
-    }
+def sanitize_text(text: str) -> str:
+    """Strip HTML/JS from user-supplied text to prevent XSS."""
+    return bleach.clean(text, tags=[], strip=True)
 ```
+
+All user-submitted strings passed to audit events and service logs are stripped of HTML and script content via `bleach` before persistence.
 
 **PII Protection Policy**:
 - User passwords never logged
@@ -553,10 +573,12 @@ Implemented metric families:
 
 ### 8.3 Quality and Evaluation Telemetry API (Delivered)
 
-Two protected endpoints persist and aggregate quality signals used for production improvement loops:
+Four protected endpoints persist and aggregate quality signals used for production improvement loops:
 
 - `POST /api/v1/observability/quality-observations`
 - `GET /api/v1/observability/quality-summary`
+- `GET /api/v1/observability/llm-traces`
+- `GET /api/v1/observability/workflow-components`
 
 Supported quality aspects:
 
@@ -679,7 +701,8 @@ LOG_LEVEL=DEBUG
 ### Query Recent Audit Events
 
 ```bash
-sqlite3 doc_quality.db "SELECT event_time, event_type, actor_id FROM audit_events ORDER BY event_time DESC LIMIT 20;"
+psql postgresql://postgres:postgres@localhost:5432/doc_quality -c \
+  "SELECT event_time, event_type, actor_id FROM audit_events ORDER BY event_time DESC LIMIT 20;"
 ```
 
 ### Test Logging in Tests
@@ -706,5 +729,5 @@ def setup_logging():
 ---
 
 **Document Version**: 0.2.0  
-**Last Updated**: March 31, 2026  
+**Last Updated**: April 3, 2026  
 **Status**: Phase 0+ observability baseline delivered (structured logs + tracing + metrics + quality telemetry); dashboard/alert maturity remains Phase 3
