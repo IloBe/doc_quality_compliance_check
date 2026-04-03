@@ -1,6 +1,6 @@
 # PostgreSQL Infrastructure Setup — Summary
 
-**Date:** March 25, 2026  
+**Date:** April 3, 2026  
 **Phase:** Phase 0 (MVP) Database Infrastructure  
 **Status:** Ready for deployment
 
@@ -22,8 +22,8 @@ Made SQLAlchemy dialect-aware so connection parameters adapt to database type:
 Automated, idempotent initialization that:
 1. Tests PostgreSQL connectivity
 2. Creates `doc_quality` database if missing
-3. Applies all 4 Alembic migrations automatically
-4. Verifies schema integrity (all tables + columns)
+3. Applies all 11 Alembic migrations automatically
+4. Verifies schema integrity (required tables + columns)
 5. Provides colored output with clear error messages and next steps
 
 **Features:**
@@ -43,8 +43,8 @@ Automated, idempotent initialization that:
 All backend code is ready:
 - ✅ `src/doc_quality/api/routes/auth.py` — Login endpoint implemented
 - ✅ `src/doc_quality/core/session_auth.py` — Session lifecycle utilities
-- ✅ Alembic migrations 001-004 created and ready
-- ✅ `tests/test_auth_session_api.py` — 5 auth tests ready to run
+- ✅ Alembic migrations 001-011 created and ready
+- ✅ `tests/test_auth_session_api.py` — 7 auth/session tests ready to run
 
 ---
 
@@ -54,8 +54,8 @@ All backend code is ready:
 
 **Option A: Docker (Easiest)**
 ```powershell
-cd C:\Dev\doc-quality-compliance-check\doc_quality_compliance_check
-docker-compose up -d
+Set-Location C:\Dev\doc-quality-compliance-check\doc_quality_compliance_check
+docker compose up -d
 Start-Sleep -Seconds 15  # Wait for PostgreSQL to be ready
 ```
 
@@ -80,7 +80,7 @@ $env:DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/doc_
 .\.venv\Scripts\python.exe init_postgres.py
 ```
 
-Expected: All 4 checks pass ✓
+Expected: All 4 checks pass ✓ (`Test Connection`, `Create Database`, `Run Migrations`, `Verify Schema`)
 
 ---
 
@@ -88,15 +88,14 @@ Expected: All 4 checks pass ✓
 
 ```powershell
 # Terminal 1: Backend
+Set-Location C:\Dev\doc-quality-compliance-check\doc_quality_compliance_check
 $env:DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality"
-.\.venv\Scripts\python.exe -m uvicorn doc_quality.api.main:app `
-  --app-dir "C:\Dev\doc-quality-compliance-check\doc_quality_compliance_check\src" `
-  --host 0.0.0.0 --port 8000
+.\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
 
 # Terminal 2: Test login
 $tmp = ".\login.json"
-Set-Content -Path $tmp -Value '{"email":"demo@quality-station.ai","password":"change-me"}' -NoNewline
-curl.exe -i -sS -H "Content-Type: application/json" --data-binary "@$tmp" http://localhost:8000/api/v1/auth/login
+Set-Content -Path $tmp -Value '{"email":"mvp-user@example.invalid","password":"CHANGE_ME_BEFORE_USE"}' -NoNewline
+curl.exe -i -sS -H "Content-Type: application/json" --data-binary "@$tmp" http://127.0.0.1:8000/api/v1/auth/login
 
 # Expected: HTTP 200 OK with dq_session cookie
 ```
@@ -109,19 +108,21 @@ curl.exe -i -sS -H "Content-Type: application/json" --data-binary "@$tmp" http:/
 # Run backend auth tests
 .\.venv\Scripts\python.exe -m pytest tests/test_auth_session_api.py -v
 
-# Expected: 5 tests passing
-# ✓ test_login_creates_session
+# Expected: 7 tests passing
+# ✓ test_login_issues_session_cookie
 # ✓ test_me_returns_user_after_login
-# ✓ test_logout_revokes_session
-# ✓ test_login_rejects_bad_password
-# ✓ test_rbac_403_insufficient_role
+# ✓ test_logout_clears_session
+# ✓ test_login_rejects_invalid_password
+# ✓ test_rbac_denies_insufficient_role_for_report_generation
+# ✓ test_login_without_remember_me_uses_short_ttl
+# ✓ test_login_with_remember_me_uses_persistent_ttl
 ```
 
 ---
 
 ## Schema Created
 
-When `init_postgres.py` runs, it automatically creates:
+When `init_postgres.py` runs, it verifies these required tables:
 
 | Table | Purpose | SAD Requirement |
 |-------|---------|-----------------|
@@ -130,17 +131,20 @@ When `init_postgres.py` runs, it automatically creates:
 | `audit_events` | Immutable audit trail with provenance fields | R-2: Audit trail + tenant support |
 | `skill_documents` | Uploaded documents for analysis | Skills API persistence |
 | `skill_findings` | Compliance findings from document analysis | Skills API persistence |
+| `quality_observations` | AI quality telemetry observations | Observability + quality controls |
+| `stakeholder_profiles` | Role profile templates and permissions | Governance + RBAC administration |
+| `stakeholder_employee_assignments` | Employee-to-role assignments | Governance + accountability trail |
 
 **Key Tables for Phase 0:**
 
 **`user_sessions`** (for login):
-- `session_id` — HTTP-only cookie value (primary key)
+- `session_id` — Internal session identifier (primary key)
 - `session_token_hash` — Hashed token (unique)
-- `user_email` — demo@quality-station.ai
-- `user_roles` — JSON: ["qm_lead"]
+- `user_email` — from `.env` (`AUTH_MVP_EMAIL`) or app users
+- `user_roles` — JSON roles array
 - `user_org` — QM-CORE-STATION
-- `expires_at` — Session lifetime (8 hours default)
-- Indexes on: session_id, token_hash, email, revoked, expires_at
+- `expires_at` — Session lifetime (short vs remember-me TTL)
+- Indexes on: session token hash, email, revoked status, expiry
 
 **`audit_events`** (immutable compliance trail):
 - `event_id` — Primary key
@@ -148,7 +152,7 @@ When `init_postgres.py` runs, it automatically creates:
 - `actor_id`, `subject_id` — Who did what
 - `tenant_id`, `org_id`, `project_id` — Multi-tenancy support (SAD requirement)
 - `payload` — Event-specific data (JSON)
-- `event_time` — Timestamp (for range partitioning, per SAD AD-13)
+- `event_time` — Timestamp (for ordering/retention policies)
 - Composite indexes for multi-tenant queries
 
 ---
@@ -168,8 +172,8 @@ When `init_postgres.py` runs, it automatically creates:
 ### Verified Ready:
 - ✅ `src/doc_quality/api/routes/auth.py` — Login endpoint
 - ✅ `src/doc_quality/core/session_auth.py` — Session utilities
-- ✅ `migrations/versions/001-004_*.py` — All migrations ready
-- ✅ `tests/test_auth_session_api.py` — Auth tests ready
+- ✅ `migrations/versions/001-011_*.py` — All migrations ready
+- ✅ `tests/test_auth_session_api.py` — Auth/session tests ready
 
 ---
 
@@ -199,7 +203,7 @@ When `init_postgres.py` runs, it automatically creates:
 ✅ **Implemented:**
 - `user_sessions` table for HTTP-only session cookies
 - RBAC roles in session: qm_lead, auditor, architect, riskmanager, service
-- Default test credentials: demo@quality-station.ai / change-me
+- Default local credentials are env-driven (`AUTH_MVP_EMAIL` / `AUTH_MVP_PASSWORD`)
 
 ---
 
@@ -212,9 +216,9 @@ When `init_postgres.py` runs, it automatically creates:
 4. ✅ Backend ready to start
 
 ### Phase 1 (Future)
-- Add `app_users` table with hashed passwords (PBKDF2)
-- Move from MVP credentials to real user management
-- Add password reset workflow
+- Strengthen user lifecycle management and enterprise identity policies
+- Harden operational controls and observability thresholds
+- Expand audit/report workflows for governance operations
 
 ### Phase 2+ (Future)
 - Add OIDC SSO integration (Google, Microsoft, Auth0)
@@ -227,7 +231,7 @@ When `init_postgres.py` runs, it automatically creates:
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `connection refused` | PostgreSQL not running | `docker-compose up -d` |
+| `connection refused` | PostgreSQL not running | `docker compose up -d` |
 | `database does not exist` | Migration failed | Re-run `init_postgres.py` |
 | `Authentication failed` | Wrong password | Check `DATABASE_URL` |
 | `Table does not exist` | Migration incomplete | Check migration logs in script output |
@@ -239,7 +243,7 @@ When `init_postgres.py` runs, it automatically creates:
 1. **You:** Choose PostgreSQL installation method (Docker recommended)
 2. **You:** Run `init_postgres.py` to initialize database
 3. **You:** Start backend and test login endpoint
-4. **Me:** Ready to help with Phase 1 (user management) or troubleshooting
+4. **Me:** Ready to help with troubleshooting and runtime validation
 
 ---
 
@@ -256,5 +260,5 @@ Check these files in order:
 - Database layer fully implemented
 - Migration strategy in place
 - Initialization script tested and ready
-- All backend code verified and integrated
-- Documentation complete with troubleshooting guides
+- Backend integration verified
+- Documentation aligned to current implementation
