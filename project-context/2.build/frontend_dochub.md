@@ -23,7 +23,7 @@ Serve as the controlled landing page for governed documentation assets so users 
 ## Data sources and permissions
 
 - Primary render source is `useMockStore(state => state.documents)`.
-- Persisted list ingestion comes from `documentRetrievalClient` (`GET /api/v1/documents`).
+- Persisted list ingestion comes from `documentRetrievalClient` (`GET /api/v1/documents`) and is attempted backend-first in both proxy mode and direct-origin mode.
 - Upload uses `documentUploadClient` (`POST /api/v1/documents/upload`) with demo fallback.
 - Lock actions use `documentLockClient` (`.../lock/acquire`, `.../lock/release`) with demo fallback.
 - Local lock synchronization uses `acquireLock`, `releaseLock`, and `setDocumentLock` from mock store.

@@ -196,8 +196,13 @@ Current UI status:
 
 - Bridge and Dashboard are actively wired to backend through explicit mode switches.
 - Risk page actively uses backend-backed risk-template defaults and creation, with local demo fallback when backend persistence is unavailable.
+- Document Hub live core path is backend-first in both proxy mode (`/api/v1`) and direct-origin mode (`NEXT_PUBLIC_API_ORIGIN`) for list retrieval, upload, and lock acquire/release.
 - Document lock APIs are integrated through a dedicated frontend client for ownership/locking flows.
-- Doc Hub, compliance flows, templates, and report UX still include mock-first or partially wired interactions in the current Next.js pages.
+- Compliance flows, templates, and report UX still include mock-first or partially wired interactions in parts of the current Next.js pages.
+
+Validation coverage:
+
+- `tests/test_document_hub_live_api.py` verifies upload → list retrieval → lock acquire/release end-to-end through backend APIs.
 
 ### 2.6 Quality Observability API (Implemented, Backend Mode Toggle)
 

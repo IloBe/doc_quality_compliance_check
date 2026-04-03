@@ -204,8 +204,9 @@ async def list_all_documents(
     """List all documents from persistent storage (database)."""
     from ...models.skills import SearchDocumentsRequest as SkillsSearchRequest
     
-    # Use the skills service to search for all documents with a broad limit
-    search_result = search_documents(db, SkillsSearchRequest(query="", limit=1000))
+    # Use the skills service to search for documents with a valid bounded limit.
+    # SkillsSearchRequest enforces limit <= 100.
+    search_result = search_documents(db, SkillsSearchRequest(query="", limit=100))
     
     active_locks = {row.document_id: row for row in db.query(DocumentLockORM).all()}
 
