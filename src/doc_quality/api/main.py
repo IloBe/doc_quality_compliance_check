@@ -149,13 +149,22 @@ def create_app() -> FastAPI:
             code = "rate_limited"
 
         headers = exc.headers or {}
+        detail = exc.detail
+        error_payload = {
+            "code": code,
+            "message": str(detail),
+        }
+        if isinstance(detail, dict):
+            message = detail.get("message")
+            error_payload["message"] = message if isinstance(message, str) else str(detail)
+            for key, value in detail.items():
+                if key != "message":
+                    error_payload[key] = value
+
         return JSONResponse(
             status_code=exc.status_code,
             content={
-                "error": {
-                    "code": code,
-                    "message": str(exc.detail),
-                }
+                "error": error_payload
             },
             headers=headers,
         )
@@ -185,7 +194,7 @@ def create_app() -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(_: Request, __: RequestValidationError):
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={
                 "error": {
                     "code": "validation_error",
