@@ -18,11 +18,18 @@ The Doc Quality system requires PostgreSQL for Phase 0 (MVP) to support:
    - Made SQLAlchemy dialect-aware (SQLite fallback for testing, PostgreSQL for production)
    - Prevents `connect_timeout` errors when switching databases
 
-2. ✅ **Created Alembic migrations** (4 migrations, ready to apply)
-   - `001_initial_hitl_reviews.py` — Review workflow tables
-   - `002_skills_api_tables.py` — Document/finding/audit tables
+2. ✅ **Created Alembic migrations** (11 migrations, ready to apply)
+   - `001_initial_hitl_reviews.py` — HITL review workflow tables
+   - `002_skills_api_tables.py` — Skill documents, findings, audit tables
    - `003_audit_events_provenance.py` — Audit trail with tenant/org fields
    - `004_user_sessions.py` — Session auth tables for email/password login
+   - `005_app_users_and_recovery_tokens.py` — App users & password recovery tokens
+   - `006_quality_observations.py` — AI quality telemetry observation table
+   - `007_stakeholder_profiles.py` — Stakeholder role profiles table
+   - `008_stakeholder_employee_assignments.py` — Employee-to-role assignment table
+   - `009_audit_schedule.py` — Audit scheduling & calendar table
+   - `010_bridge_human_reviews.py` — Bridge run HITL review linkage
+   - `011_risk_templates.py` — FMEA & RMF risk template tables
 
 3. ✅ **Generated initialization script** (`init_postgres.py`)
    - Automated: Test connection → Create DB → Run migrations → Verify schema
@@ -49,13 +56,13 @@ The Doc Quality system requires PostgreSQL for Phase 0 (MVP) to support:
 ```powershell
 # Assumes Docker Desktop is installed
 
-cd C:\Dev\doc-quality-compliance-check\doc_quality_compliance_check
+Set-Location C:\Dev\doc-quality-compliance-check\doc_quality_compliance_check
 
 # Start PostgreSQL in Docker
-docker-compose up -d
+docker compose up -d
 
 # Verify container is running
-docker ps | Select-String dq-postgres
+docker ps --filter "name=dq-postgres" --format "{{.Names}}|{{.Status}}|{{.Ports}}"
 
 # Wait ~15-30 seconds for PostgreSQL to be ready
 Start-Sleep -Seconds 15
@@ -110,7 +117,7 @@ $env:DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/doc_
 **What it does:**
 1. Tests PostgreSQL connection
 2. Creates `doc_quality` database (if missing)
-3. Runs Alembic migrations (applies all 4 migration scripts)
+3. Runs Alembic migrations (applies all 11 migration scripts)
 4. Verifies all tables and columns exist
 
 **Expected output:**
@@ -141,6 +148,9 @@ Step: Verify Schema
 [✓] Table 'skill_findings' OK (8 columns)
 [✓] Table 'audit_events' OK (16 columns)
 [✓] Table 'user_sessions' OK (9 columns)
+[✓] Table 'quality_observations' OK (12 columns)
+[✓] Table 'stakeholder_profiles' OK (7 columns)
+[✓] Table 'stakeholder_employee_assignments' OK (6 columns)
 
 ======================================================================
 Initialization Summary
@@ -156,11 +166,11 @@ Next steps:
   1. Set DATABASE_URL in .env:
      DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality
   2. Start backend:
-     .\.venv\Scripts\python.exe -m uvicorn doc_quality.api.main:app ...
+     .\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
   3. Test login:
-     curl -X POST http://localhost:8000/api/v1/auth/login \
+     curl -X POST http://127.0.0.1:8000/api/v1/auth/login \
        -H 'Content-Type: application/json' \
-       -d '{"email":"demo@quality-station.ai","password":"change-me"}'
+       -d '{"email":"mvp-user@example.invalid","password":"CHANGE_ME_BEFORE_USE"}'
 ```
 
 ---
@@ -168,32 +178,31 @@ Next steps:
 ### Step 4: Verify with Test Login
 
 ```powershell
-# 1. Start the backend
+# 1. Start the backend (from doc_quality_compliance_check/)
+Set-Location c:\Dev\doc-quality-compliance-check\doc_quality_compliance_check
 $env:DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality"
 
-.\.venv\Scripts\python.exe -m uvicorn doc_quality.api.main:app `
-  --app-dir "C:\Dev\doc-quality-compliance-check\doc_quality_compliance_check\src" `
-  --host 0.0.0.0 --port 8000
+.\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
 
 # Leave running, open another terminal for step 2
 
 # 2. Test auth endpoint (in new terminal from same directory)
 $tmp = ".\login.json"
-Set-Content -Path $tmp -Value '{"email":"demo@quality-station.ai","password":"change-me"}' -NoNewline
+Set-Content -Path $tmp -Value '{"email":"mvp-user@example.invalid","password":"CHANGE_ME_BEFORE_USE"}' -NoNewline
 
 curl.exe -i -sS -H "Content-Type: application/json" `
   --data-binary "@$tmp" `
-  http://localhost:8000/api/v1/auth/login
+  http://127.0.0.1:8000/api/v1/auth/login
 ```
 
 **Expected response (200 OK with session cookie):**
 ```
 HTTP/1.1 200 OK
-date: Tue, 24 Mar 2026 09:00:00 GMT
+date: Fri, 03 Apr 2026 09:00:00 GMT
 content-type: application/json
-set-cookie: dq_session=xxxx...; HttpOnly; Max-Age=28800; Path=/
+set-cookie: dq_session=xxxx...; HttpOnly; Max-Age=7200; Path=/; SameSite=lax
 
-{"user":{"email":"demo@quality-station.ai","roles":["qm_lead"],"org":"QM-CORE-STATION"},"expires_at":"2026-03-25T..."}
+{"user":{"email":"mvp-user@example.invalid","roles":["qm_lead"],"org":"QM-CORE-STATION"},"expires_at":"2026-04-03T..."}
 ```
 
 ---
@@ -204,12 +213,14 @@ set-cookie: dq_session=xxxx...; HttpOnly; Max-Age=28800; Path=/
 # Run backend auth tests (requires PostgreSQL running)
 .\.venv\Scripts\python.exe -m pytest tests/test_auth_session_api.py -v
 
-# Expected: 5 tests passing
-# ✓ test_login_creates_session
+# Expected: 7 tests passing
+# ✓ test_login_issues_session_cookie
 # ✓ test_me_returns_user_after_login
-# ✓ test_logout_revokes_session
-# ✓ test_login_rejects_bad_password
-# ✓ test_rbac_403_insufficient_role
+# ✓ test_logout_clears_session
+# ✓ test_login_rejects_invalid_password
+# ✓ test_rbac_denies_insufficient_role_for_report_generation
+# ✓ test_login_without_remember_me_uses_short_ttl
+# ✓ test_login_with_remember_me_uses_persistent_ttl
 ```
 
 ---
@@ -234,11 +245,21 @@ set-cookie: dq_session=xxxx...; HttpOnly; Max-Age=28800; Path=/
 DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality
 DATABASE_ECHO=false
 
-# Auth (MVP defaults)
-AUTH_MVP_EMAIL=demo@quality-station.ai
-AUTH_MVP_PASSWORD=change-me
+# Auth (MVP defaults — override in .env, never commit real credentials)
+AUTH_MVP_EMAIL=mvp-user@example.invalid
+AUTH_MVP_PASSWORD=CHANGE_ME_BEFORE_USE
 AUTH_MVP_ROLES=qm_lead
 AUTH_MVP_ORG=QM-CORE-STATION
+AUTH_AUTO_PROVISION_MVP_USER=true
+
+# Security
+SECRET_KEY=change-me-in-production
+SESSION_COOKIE_SECURE=false
+AUTH_RECOVERY_DEBUG_EXPOSE_TOKEN=false
+
+# Rate limiting
+GLOBAL_RATE_LIMIT_ENABLED=true
+AUTH_LOGIN_RATE_LIMIT_COUNT=8
 
 # Backend
 ENVIRONMENT=development
@@ -262,18 +283,18 @@ LOG_LEVEL=INFO
 - **SAD Requirement AD-5:** Storage backend (PostgreSQL + filesystem)
 - **SAD Requirement R-1:** Approved review records persisted to PostgreSQL
 - **SAD Requirement R-2:** Immutable audit trail with provenance
-- **Project Status:** Phase 0 (MVP) — Email/password auth + HITL reviews
-- **Future Phase 1:** `app_users` table with hashed passwords; Phase 2: OIDC SSO
+- **Project Status:** Phase 0 MVP — Auth, HITL reviews, audit trail, quality telemetry, stakeholder governance, risk templates
+- **Future:** Phase 1 — OIDC SSO; Phase 2 — vector search & retrieval augmentation
 
 ---
 
 ## Next Actions After DB Setup
 
 1. ✅ PostgreSQL running + initialized (`init_postgres.py` passed)
-2. Start backend: `.\.venv\Scripts\python.exe -m uvicorn doc_quality.api.main:app ...`
-3. Start frontend: `npm --prefix "frontend" run dev`
+2. Start backend: `.\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload`
+3. Start frontend: `cd frontend && npm run dev`
 4. Open login: `http://localhost:3000/login`
-5. Test login with `demo@quality-station.ai` / `change-me`
+5. Test login with credentials from your `.env` (`AUTH_MVP_EMAIL` / `AUTH_MVP_PASSWORD`)
 6. Run backend tests: `pytest tests/ -v`
 
 ---
