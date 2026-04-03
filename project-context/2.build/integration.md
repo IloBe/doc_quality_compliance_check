@@ -251,6 +251,11 @@ POST   /api/v1/admin/stakeholder-profiles/{profile_id}/employees
 DELETE /api/v1/admin/stakeholder-profiles/{profile_id}/employees/{assignment_id}
 ```
 
+Authorization policy (current):
+
+- `GET` profile/assignment endpoints: `qm_lead`, `riskmanager`, `auditor`, `architect`
+- `POST`/`DELETE` assignment endpoints: `qm_lead`, `riskmanager` only (governance ownership)
+
 POST payload:
 
 ```json
@@ -259,7 +264,11 @@ POST payload:
 
 Bulk-add on the frontend fires multiple `POST` calls in parallel via `Promise.allSettled` — each call is atomic and independently fails/succeeds. The UI displays a `"N added, M failed"` message after all settle.
 
-DELETE returns a success payload (`{"success": true}`). Duplicate employee assignment attempts currently return HTTP 400 from the backend validation path.
+DELETE returns a success payload (`{"success": true}`) and is idempotent for already-removed assignment IDs. Duplicate employee assignment attempts are treated idempotently (same canonical employee name resolves to the existing assignment record).
+
+Validation coverage:
+
+- `tests/test_stakeholder_profiles_api.py` verifies assignment add/list/delete, idempotent add/delete behavior, and role-protected mutation paths.
 
 ---
 

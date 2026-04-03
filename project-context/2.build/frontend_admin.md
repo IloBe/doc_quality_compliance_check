@@ -100,6 +100,7 @@ The following mock data is returned from `useMemo` hooks keyed on `windowHours`:
 - **Bulk-add mode:** toggled via a "Bulk Add" button. Accepts a textarea with one employee name per line. On submit: deduplicates names via `Set`, fires `Promise.allSettled` in parallel, then displays a success/fail count message.
 - **Remove:** each assigned employee has an inline "Remove" button. Calls `DELETE /api/v1/admin/stakeholder-profiles/{profile_id}/employees/{assignment_id}`.
 - **Persistence:** assignments are stored in the `stakeholder_employee_assignments` PostgreSQL table (Alembic migration 008) with `assignment_id`, `profile_id`, `employee_name`, `created_by`, `created_at`.
+- **Backend authorization:** assignment/profile reads are available to `qm_lead`, `riskmanager`, `auditor`, and `architect`; assignment/profile mutations are restricted to governance owner roles (`qm_lead`, `riskmanager`).
 
 #### Data sources
 

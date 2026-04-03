@@ -87,6 +87,14 @@ def _normalize_permissions(values: list[str]) -> list[str]:
     return normalized
 
 
+def _normalize_employee_name(value: str) -> str:
+    return " ".join(sanitize_text(value).split())
+
+
+def _employee_name_key(value: str) -> str:
+    return value.casefold()
+
+
 def ensure_default_stakeholder_profiles(db: Session) -> None:
     """Seed default profiles only when table is empty."""
     if db.query(StakeholderProfileORM).count() > 0:
@@ -182,7 +190,7 @@ def add_stakeholder_assignment(
     if not sanitized_profile_id:
         raise ValueError("profile_id cannot be empty")
 
-    employee_name = sanitize_text(request.employee_name).strip()
+    employee_name = _normalize_employee_name(request.employee_name)
     if not employee_name:
         raise ValueError("employee_name cannot be empty")
 
@@ -191,16 +199,15 @@ def add_stakeholder_assignment(
     if profile is None:
         raise ValueError("stakeholder profile not found")
 
-    existing = (
+    existing_rows = (
         db.query(StakeholderEmployeeAssignmentORM)
-        .filter(
-            StakeholderEmployeeAssignmentORM.profile_id == sanitized_profile_id,
-            StakeholderEmployeeAssignmentORM.employee_name == employee_name,
-        )
-        .first()
+        .filter(StakeholderEmployeeAssignmentORM.profile_id == sanitized_profile_id)
+        .all()
     )
-    if existing is not None:
-        return _to_assignment_record(existing)
+    target_key = _employee_name_key(employee_name)
+    for existing in existing_rows:
+        if _employee_name_key(existing.employee_name) == target_key:
+            return _to_assignment_record(existing)
 
     row = StakeholderEmployeeAssignmentORM(
         assignment_id=str(uuid.uuid4()),
@@ -219,12 +226,17 @@ def delete_stakeholder_assignment(
     *,
     profile_id: str,
     assignment_id: str,
-) -> None:
+) -> bool:
     """Delete one employee assignment for a stakeholder role profile."""
     sanitized_profile_id = sanitize_text(profile_id).strip().lower()
     sanitized_assignment_id = sanitize_text(assignment_id).strip()
     if not sanitized_profile_id or not sanitized_assignment_id:
         raise ValueError("profile_id and assignment_id are required")
+
+    ensure_default_stakeholder_profiles(db)
+    profile = db.query(StakeholderProfileORM).filter(StakeholderProfileORM.profile_id == sanitized_profile_id).first()
+    if profile is None:
+        raise ValueError("stakeholder profile not found")
 
     row = (
         db.query(StakeholderEmployeeAssignmentORM)
@@ -235,7 +247,8 @@ def delete_stakeholder_assignment(
         .first()
     )
     if row is None:
-        raise ValueError("stakeholder assignment not found")
+        return False
 
     db.delete(row)
     db.commit()
+    return True
