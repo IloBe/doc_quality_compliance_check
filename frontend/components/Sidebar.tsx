@@ -8,7 +8,6 @@ import {
   LuShuffle, 
   LuFlaskConical, 
   LuVault, 
-  LuFiles, 
   LuFileText, 
   LuFileSpreadsheet, 
   LuShieldAlert, 
@@ -102,9 +101,7 @@ const Sidebar = ({ className }) => {
         <div className="mt-4">
           <SectionLabel label="Governance" />
           <div className="space-y-0">
-            <NavItem href="/documents" icon={LuFiles} label="Documents" active={currentPath === '/documents'} />
             <NavItem href="/sops" icon={LuFileText} label="SOPs" active={currentPath === '/sops'} />
-            <NavItem href="/forms" icon={LuFileSpreadsheet} label="Forms & Records" active={currentPath === '/forms'} />
             <NavItem href="/risk" icon={LuShieldAlert} label="Risk (FMEA/RMF)" active={currentPath.startsWith('/risk')} />
             <NavItem href="/architecture" icon={LuHexagon} label="Architecture (arc42)" active={currentPath === '/architecture'} />
           </div>
@@ -132,10 +129,22 @@ const Sidebar = ({ className }) => {
         </div>
       </nav>
 
-      <div className="mt-auto px-4 pt-4 border-t border-neutral-100">
-        <div className="flex items-center gap-3 px-4 py-3 text-sm text-neutral-600 bg-neutral-50 rounded italic">
-          <div className="w-2 h-2 rounded-full bg-green-500 ring-4 ring-green-100 animate-pulse" />
-          <span>SOTA Hub Phase 0</span>
+      <div className="mt-auto px-4 pt-4 border-t border-neutral-100 space-y-3">
+        <div className="px-3 py-2 text-xs bg-amber-50 border border-amber-200 rounded text-neutral-700 space-y-1">
+          <p className="font-semibold text-amber-900">⚠️ AI-Assisted Tool</p>
+          <p className="leading-tight">
+            This application uses AI to assist document analysis and compliance checking. 
+            <strong> Results should be verified by qualified human experts.</strong> AI systems have limitations 
+            and may produce errors. Users remain fully responsible for all decisions and outputs.
+          </p>
+        </div>
+
+        <div className="px-3 py-1.5 text-xs text-neutral-500 border-t border-neutral-200 pt-2">
+          <p className="text-center">Last accessed: <strong>{new Date().toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric' 
+          })}</strong></p>
         </div>
       </div>
     </aside>

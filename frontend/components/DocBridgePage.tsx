@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
+import { Document } from '../lib/mockStore';
 import { useMockStore } from '../lib/mockStore';
 import { useCan } from '../lib/authContext';
 import WhyThisPageMatters from './WhyThisPageMatters';
@@ -11,6 +12,17 @@ import {
   fetchBridgeHumanReview,
   submitBridgeHumanReview,
 } from '../lib/bridgeClient';
+import {
+  bridgeSteps,
+  buildLogMessage,
+  buildQualityGateSummary,
+  createLocalHumanReviewRecord,
+  deriveAutomaticRecommendation,
+  deriveComplianceChecks,
+  deriveResearchChecks,
+  formatBridgeDateTime,
+  inferBridgeDomainInfo,
+} from '../lib/bridgeRunViewModel';
 import {
   LuTriangle,
   LuCheck,
@@ -31,7 +43,7 @@ const DocBridgePage = () => {
   const { getDocById, updateDocStatus, currentUserId } = useMockStore();
   const canRunBridge = useCan('bridge.run');
 
-  const [doc, setDoc] = useState<any>(null);
+  const [doc, setDoc] = useState<Pick<Document, 'id' | 'title' | 'type'> | null>(null);
   const [activeStep, setActiveStep] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
@@ -127,155 +139,32 @@ const DocBridgePage = () => {
     };
   }, [backendRun?.run_id, useBackendBridge]);
 
-  const steps = [
-    { id: 'inspect', title: 'Inspection Agent', desc: 'Scan text for logical structure and quality.' },
-    { id: 'compliance', title: 'Compliance Agent', desc: 'Verify adherence to ISO/SOP standards.' },
-    { id: 'research', title: 'Research Agent', desc: 'Cross-reference external regulations.' },
-    { id: 'approval', title: 'Quality Gate', desc: 'Final scoring and report generation.' },
-  ];
-
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const addLog = (msg: string) => {
-    setLogs((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev]);
+    setLogs((prev) => [buildLogMessage(msg), ...prev]);
   };
 
-  const inferDomainInfo = () => {
-    const docType = (doc?.type ?? '').toLowerCase();
-    if (docType === 'rmf' || docType === 'fmea') {
-      return {
-        domain: 'medical devices',
-        description: `Risk management workflow for ${doc?.title ?? 'AI product'}`,
-        uses_ai_ml: true,
-        intended_use: 'Risk classification and quality assurance support',
-        target_market: 'EU',
-      };
-    }
-    if (docType === 'sop') {
-      return {
-        domain: 'quality management',
-        description: `Quality process control document: ${doc?.title ?? ''}`,
-        uses_ai_ml: true,
-        intended_use: 'Governed process execution and documentation control',
-        target_market: 'EU',
-      };
-    }
-    return {
-      domain: 'general',
-      description: `${doc?.title ?? 'Technical document'} governance assessment`,
-      uses_ai_ml: true,
-      intended_use: 'Compliance and documentation quality support',
-      target_market: 'EU',
-    };
-  };
+  const complianceChecks = useMemo(() => deriveComplianceChecks(doc, backendRun), [backendRun, doc]);
+  const researchChecks = useMemo(() => deriveResearchChecks(doc), [doc]);
 
-  const getComplianceChecks = () => {
-    if (backendRun) {
-      return backendRun.requirements.map((req) => ({
-        name: `${req.requirement_id} — ${req.title}`,
-        passed: req.passed,
-      }));
-    }
+  const qualityGateSummary = useMemo(
+    () =>
+      buildQualityGateSummary({
+        activeStep,
+        isProcessing,
+        backendRun,
+        complianceChecks,
+        researchChecks,
+      }),
+    [activeStep, backendRun, complianceChecks, isProcessing, researchChecks],
+  );
 
-    const docType = (doc?.type ?? '').toLowerCase();
-    if (docType === 'sop') {
-      return [
-        { name: 'ISO 9001:2015 — Clause 7.5 (Documented Information)', passed: true },
-        { name: 'ISO 13485:2016 — Clause 4.2.4 (Control of Documents)', passed: true },
-        { name: 'SOP-QMS-DOC-001 — Document Approval Workflow', passed: false },
-      ];
-    }
-    if (docType === 'rmf' || docType === 'fmea') {
-      return [
-        { name: 'ISO 14971:2019 — Risk Management Process', passed: true },
-        { name: 'ISO 9001:2015 — Clause 6.1 (Risk & Opportunities)', passed: true },
-        { name: 'SOP-RISK-002 — Risk Review Sign-off', passed: false },
-      ];
-    }
-    return [
-      { name: 'ISO 9001:2015 — Clause 7.5 (Documented Information)', passed: true },
-      { name: 'ISO/IEC 27001:2022 — A.8.15 (Logging)', passed: false },
-      { name: 'SOP-QMS-DOC-001 — Document Approval Workflow', passed: true },
-    ];
-  };
-
-  const getResearchChecks = () => {
-    const docType = (doc?.type ?? '').toLowerCase();
-    if (docType === 'sop') {
-      return [
-        { name: 'EU AI Act — Art. 9 (Risk Management System)', passed: true },
-        { name: 'EU AI Act — Art. 12 (Record-Keeping)', passed: true },
-        { name: 'MDR 2017/745 — Annex IX (QMS Technical Documentation)', passed: false },
-      ];
-    }
-    if (docType === 'rmf' || docType === 'fmea') {
-      return [
-        { name: 'EU AI Act — Art. 10 (Data and Data Governance)', passed: true },
-        { name: 'EU AI Act — Art. 14 (Human Oversight)', passed: false },
-        { name: 'ISO 14971:2019 — Risk Control Verification', passed: true },
-      ];
-    }
-    return [
-      { name: 'EU AI Act — Annex IV (Technical Documentation)', passed: false },
-      { name: 'ISO/IEC 27001:2022 — A.5.36 (Compliance with Policies)', passed: true },
-      { name: 'NIST AI RMF — Govern Function Mapping', passed: true },
-    ];
-  };
-
-  const complianceChecks = getComplianceChecks();
-  const researchChecks = getResearchChecks();
-
-  const qualityGateSummary = useMemo(() => {
-    // In backend mode use only the real compliance checks so the passed/failed
-    // count matches compliance_score from the backend run.
-    // In demo mode merge both check sets (all simulated).
-    const allChecks = backendRun ? [...complianceChecks] : [...complianceChecks, ...researchChecks];
-    const passed = allChecks.filter((check) => check.passed).length;
-    const failed = allChecks.length - passed;
-
-    if (isProcessing) {
-      return {
-        heading: 'Final decision pending',
-        text: 'The Quality Gate is consolidating control outcomes and evidence references from prior agents. A final score and report package will be generated after all mandatory checks are completed.',
-      };
-    }
-
-    if (activeStep < steps.length - 1) {
-      return {
-        heading: 'Awaiting Quality Gate execution',
-        text: 'Scoring has not started yet because earlier workflow stages are still in progress. Final report generation will begin once Compliance and Research checks are finalized.',
-      };
-    }
-
-    if (failed > 0) {
-      return {
-        heading: 'Conditional result: remediation required',
-        text: `The Quality Gate recorded ${passed} passed and ${failed} failed controls, so release recommendation remains restricted until remediation is documented. A report draft was generated with failure traceability for audit follow-up.`,
-      };
-    }
-
-    return {
-      heading: 'Result: quality gate passed',
-      text: `The Quality Gate recorded ${passed} passed and ${failed} failed controls, meeting the configured acceptance criteria for this artifact. A complete report package was generated with traceable evidence for release and audit review.`,
-    };
-  }, [activeStep, backendRun, complianceChecks, isProcessing, researchChecks]);
-
-  const formatDateTime = (value: string | null | undefined) => {
-    if (!value) {
-      return 'n/a';
-    }
-    const dt = new Date(value);
-    return Number.isNaN(dt.getTime()) ? value : dt.toLocaleString();
-  };
-
-  const localAutomaticRecommendation = useMemo<'approved' | 'rejected'>(() => {
-    const allChecks = [...complianceChecks, ...researchChecks];
-    const failedCount = allChecks.filter((check) => !check.passed).length;
-    return failedCount === 0 ? 'approved' : 'rejected';
-  }, [complianceChecks, researchChecks]);
-
-  const activeAutomaticRecommendation = backendRun?.automatic_recommendation ?? localAutomaticRecommendation;
-  const shouldShowHumanReviewPanel = runStartedAtLeastOnce && !isProcessing && activeStep >= steps.length - 1;
+  const activeAutomaticRecommendation = useMemo(
+    () => deriveAutomaticRecommendation(complianceChecks, researchChecks, backendRun),
+    [backendRun, complianceChecks, researchChecks],
+  );
+  const shouldShowHumanReviewPanel = runStartedAtLeastOnce && !isProcessing && activeStep >= bridgeSteps.length - 1;
   const humanReviewPending = shouldShowHumanReviewPanel && !humanReview;
 
   const handleSubmitHumanReview = async () => {
@@ -308,20 +197,16 @@ const DocBridgePage = () => {
             next_task_instructions: reviewDecision === 'rejected' ? nextTaskInstructions.trim() || undefined : undefined,
             assignee_notified: reviewDecision === 'rejected',
           })
-        : {
-            review_id: `local-${Date.now()}`,
-            run_id: backendRun?.run_id || `local-run-${doc.id}`,
-            document_id: doc.id,
+        : createLocalHumanReviewRecord({
+            runId: backendRun?.run_id,
+            documentId: doc.id,
             decision: reviewDecision,
             reason: trimmedReason,
-            reviewer_email: currentUserId,
-            reviewer_roles: ['local'],
-            reviewed_at: new Date().toISOString(),
-            next_task_type: reviewDecision === 'rejected' ? nextTaskType : null,
-            next_task_assignee: reviewDecision === 'rejected' && nextTaskType === 'manual_follow_up' ? nextTaskAssignee.trim() : null,
-            next_task_instructions: reviewDecision === 'rejected' ? nextTaskInstructions.trim() || null : null,
-            assignee_notified: reviewDecision === 'rejected',
-          };
+            reviewerEmail: currentUserId,
+            nextTaskType,
+            nextTaskAssignee: nextTaskAssignee.trim(),
+            nextTaskInstructions: nextTaskInstructions.trim(),
+          });
 
       setHumanReview(saved);
       if (saved.decision === 'approved') {
@@ -358,12 +243,12 @@ const DocBridgePage = () => {
     let runResult: BridgeRunResponse | null = null;
 
     try {
-      for (let current = 0; current < steps.length; current += 1) {
+      for (let current = 0; current < bridgeSteps.length; current += 1) {
         setActiveStep(current);
-        addLog(`Step ${current + 1}: ${steps[current].title} active...`);
+        addLog(`Step ${current + 1}: ${bridgeSteps[current].title} active...`);
 
         if (useBackendBridge && current === 1) {
-          runResult = await executeBridgeEuAiActRun(doc.id, inferDomainInfo());
+          runResult = await executeBridgeEuAiActRun(doc.id, inferBridgeDomainInfo(doc));
           setBackendRun(runResult);
           setReviewDecision(runResult.automatic_recommendation === 'approved' ? 'approved' : 'rejected');
           setReviewReason('');
@@ -381,7 +266,7 @@ const DocBridgePage = () => {
       }
 
       if (!runResult) {
-        setReviewDecision(localAutomaticRecommendation);
+        setReviewDecision(deriveAutomaticRecommendation(complianceChecks, researchChecks, null));
       }
 
       if (runResult?.human_review_required) {
@@ -522,7 +407,7 @@ const DocBridgePage = () => {
               </div>
               <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
                 <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-1">Reviewed</div>
-                <div className="text-neutral-700">{humanReview.reviewer_email} · {formatDateTime(humanReview.reviewed_at)}</div>
+                <div className="text-neutral-700">{humanReview.reviewer_email} · {formatBridgeDateTime(humanReview.reviewed_at)}</div>
               </div>
               {humanReview.decision === 'rejected' && (
                 <>
@@ -645,8 +530,8 @@ const DocBridgePage = () => {
             </div>
 
             <div className="p-10 space-y-4 relative">
-              {steps.map((step, idx) => {
-                const isDone = idx < activeStep || (activeStep === steps.length - 1 && !isProcessing);
+              {bridgeSteps.map((step, idx) => {
+                const isDone = idx < activeStep || (activeStep === bridgeSteps.length - 1 && !isProcessing);
                 const isActive = idx === activeStep && isProcessing;
                 const hasComplianceOutput = runStartedAtLeastOnce && activeStep >= 1 && (!useBackendBridge || backendRun !== null);
                 const hasResearchOutput = runStartedAtLeastOnce && activeStep >= 2;

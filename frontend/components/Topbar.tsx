@@ -46,6 +46,7 @@ const Topbar = ({ className, onOpsClick, onExitClick, onFocusModeChange, current
   const [activeProject, setActiveProject] = useState('All Projects');
 
   const helpContent = useMemo(() => {
+    const path = router.pathname;
     const common = {
       controls: [
         'Active Project: scope all checks to the selected product/program.',
@@ -58,7 +59,7 @@ const Topbar = ({ className, onOpsClick, onExitClick, onFocusModeChange, current
       ],
     };
 
-    if (router.pathname === '/') {
+    if (path === '/') {
       return {
         title: 'Document Hub Guidance',
         sop: 'Use SOP-driven review order: identify document, validate lock ownership, then start review workflow.',
@@ -75,7 +76,7 @@ const Topbar = ({ className, onOpsClick, onExitClick, onFocusModeChange, current
       };
     }
 
-    if (router.pathname === '/dashboard') {
+    if (path === '/dashboard') {
       return {
         title: 'Dashboard Guidance',
         sop: 'Use dashboard KPIs for readiness screening before release gates and formal audits.',
@@ -92,7 +93,7 @@ const Topbar = ({ className, onOpsClick, onExitClick, onFocusModeChange, current
       };
     }
 
-    if (router.pathname === '/bridge' || router.pathname === '/doc/[docId]/bridge') {
+    if (path === '/bridge' || path === '/doc/[docId]/bridge') {
       return {
         title: 'Bridge Workflow Guidance',
         sop: 'Execute sequentially: Inspection → Compliance → Research → Quality Gate; capture decision rationale in logs.',
@@ -105,6 +106,261 @@ const Topbar = ({ className, onOpsClick, onExitClick, onFocusModeChange, current
         rules: [
           ...common.rules,
           'Do not finalize quality gate when any mandatory control remains failed.',
+        ],
+      };
+    }
+
+    if (path === '/risk') {
+      return {
+        title: 'Risk (FMEA/RMF) Guidance',
+        sop: 'Maintain traceable risk lifecycle: create RMF/FMEA records, update controls, then move Draft → In Review → Approved with rationale.',
+        fieldDefinitions: [
+          'Type: RMF (company-level) or FMEA (product-specific)',
+          'Residual Risk: Low, Medium, High after mitigation',
+          'Action History: who changed what, when, and why',
+        ],
+        controls: common.controls,
+        rules: [
+          ...common.rules,
+          'Do not approve risk records without documented mitigations and linked evidence.',
+        ],
+      };
+    }
+
+    if (path === '/compliance' || path.startsWith('/compliance/')) {
+      return {
+        title: 'Compliance Standards Guidance',
+        sop: 'Select the applicable standard profile, map controls to evidence, and document gaps before requesting approval.',
+        fieldDefinitions: [
+          'Standard Profile: ISO/IEC or regulatory framework baseline',
+          'Control Mapping: relation between requirement and artifact evidence',
+          'Gap Status: compliant, partial, or missing coverage',
+        ],
+        controls: common.controls,
+        rules: [
+          ...common.rules,
+          'Every standards claim must be backed by verifiable artifact references.',
+        ],
+      };
+    }
+
+    if (path === '/artifact-lab' || path.startsWith('/artifact-lab/')) {
+      return {
+        title: 'Artifact Lab Guidance',
+        sop: 'Start from a valid Bridge run, refine generated artifact content, verify citations, then export controlled outputs.',
+        fieldDefinitions: [
+          'Run Context: source Bridge session used for artifact generation',
+          'Citation Trace: links from generated text to compliance evidence',
+          'Ask the Author: feedback loop for clarification and refinement',
+        ],
+        controls: common.controls,
+        rules: [
+          ...common.rules,
+          'Do not export artifacts until citation traceability is complete and reviewed.',
+        ],
+      };
+    }
+
+    if (path === '/auditor-vault') {
+      return {
+        title: 'Auditor Vault Guidance',
+        sop: 'Use Auditor Vault as read-only evidence inventory: verify freshness, approval status, and trace context before audit review sessions.',
+        fieldDefinitions: [
+          'Evidence Source: Document, Export, or Bridge provenance',
+          'Health: Fresh, Aging, or Stale based on recency window',
+          'Readiness Score: snapshot indicator combining approval and freshness',
+        ],
+        controls: common.controls,
+        rules: [
+          ...common.rules,
+          'Vault entries are governance references; perform edits in source modules and re-validate here.',
+        ],
+      };
+    }
+
+    if (path === '/admin') {
+      return {
+        title: 'Admin Guidance',
+        sop: 'Review observability and access governance changes, validate impact, and apply updates under change-control discipline.',
+        fieldDefinitions: [
+          'Observability: latency, quality, and failure trend signals',
+          'Stakeholders & Rights: role-based access and authority mapping',
+          'Change Impact: expected effect on platform governance controls',
+        ],
+        controls: common.controls,
+        rules: [
+          ...common.rules,
+          'Admin changes must be auditable and approved per governance policy before production use.',
+        ],
+      };
+    }
+
+    if (path === '/help/qa') {
+      return {
+        title: 'Q&A Guidance',
+        sop: 'Use Q&A to capture recurring operator questions, approved answers, and evidence-oriented handling patterns.',
+        fieldDefinitions: [
+          'Question: recurring operational or audit scenario',
+          'Approved Answer: standardized response with decision rationale',
+          'Evidence Link: references to SOPs, controls, or audit records',
+        ],
+        controls: common.controls,
+        rules: [
+          ...common.rules,
+          'Answers should be specific, testable, and aligned with current SOP and policy baselines.',
+        ],
+      };
+    }
+
+    if (path === '/sops') {
+      return {
+        title: 'SOPs Guidance',
+        sop: 'Manage SOP lifecycle with controlled drafting, review, approval, and version traceability before operational use.',
+        fieldDefinitions: [
+          'SOP ID: unique controlled procedure identifier',
+          'Version: revision state tied to change-control history',
+          'Approval Status: Draft, In Review, Approved',
+        ],
+        controls: common.controls,
+        rules: [
+          ...common.rules,
+          'Never use superseded SOP versions for compliance decisions.',
+        ],
+      };
+    }
+
+    if (path === '/architecture') {
+      return {
+        title: 'Architecture (arc42) Guidance',
+        sop: 'Capture architecture decisions in arc42 structure and link each decision to constraints, risks, and verification evidence.',
+        fieldDefinitions: [
+          'arc42 Section: structured architecture viewpoint chapter',
+          'Decision Rationale: why a design choice was made',
+          'Trace Link: relation to risk, compliance, and test evidence',
+        ],
+        controls: common.controls,
+        rules: [
+          ...common.rules,
+          'Major architectural changes require updated rationale and impact traceability.',
+        ],
+      };
+    }
+
+    if (path === '/exports') {
+      return {
+        title: 'Exports Registry Guidance',
+        sop: 'Track export jobs from request to completion, validate generated files, and retain status history for audit evidence.',
+        fieldDefinitions: [
+          'Export Job: requested package generation task',
+          'Status: Running, Completed, Failed',
+          'Artifact Bundle: output set prepared for downstream use',
+        ],
+        controls: common.controls,
+        rules: [
+          ...common.rules,
+          'Failed exports must be reviewed and remediated before relying on generated outputs.',
+        ],
+      };
+    }
+
+    if (path === '/audit-trail') {
+      return {
+        title: 'Audit Trail Guidance',
+        sop: 'Use the audit timeline as immutable evidence chronology: review who acted, what changed, when, and in which context.',
+        fieldDefinitions: [
+          'Actor: user or system identity that triggered an action',
+          'Event Type: create, update, status transition, export, review',
+          'Timestamp: auditable execution time for event ordering',
+        ],
+        controls: common.controls,
+        rules: [
+          ...common.rules,
+          'Do not edit source records to hide history; corrections must be additive and traceable.',
+        ],
+      };
+    }
+
+    if (path === '/auditor-workstation') {
+      return {
+        title: 'Auditor Workstation Guidance',
+        sop: 'Perform evidence review with documented findings, attach references, and conclude audit checkpoints with clear pass/fail rationale.',
+        fieldDefinitions: [
+          'Finding: observed nonconformity, risk, or confirmation',
+          'Evidence Reference: linked artifact supporting the finding',
+          'Disposition: accepted, needs action, or escalated',
+        ],
+        controls: common.controls,
+        rules: [
+          ...common.rules,
+          'Audit conclusions must cite concrete evidence and accountable owners for follow-up actions.',
+        ],
+      };
+    }
+
+    if (path === '/help') {
+      return {
+        title: 'Help & Snippets Guidance',
+        sop: 'Use Help & Snippets as the operational knowledge hub for quick patterns, recurring procedures, and support navigation.',
+        fieldDefinitions: [
+          'Snippet: concise reusable operational instruction',
+          'Guidance Card: topic entry point to detailed help content',
+          'Search Query: keyword filter for fast support retrieval',
+        ],
+        controls: common.controls,
+        rules: [
+          ...common.rules,
+          'Keep snippets current with approved SOP changes and governance policy updates.',
+        ],
+      };
+    }
+
+    if (path === '/help/glossary') {
+      return {
+        title: 'Glossary Guidance',
+        sop: 'Maintain shared terminology definitions so engineering, quality, and audit teams use consistent language in decisions and records.',
+        fieldDefinitions: [
+          'Term: canonical keyword used in governance workflows',
+          'Definition: approved meaning in current compliance context',
+          'Domain Tag: area such as risk, audit, architecture, or operations',
+        ],
+        controls: common.controls,
+        rules: [
+          ...common.rules,
+          'When definitions change, update dependent guidance and review impacted records.',
+        ],
+      };
+    }
+
+    if (path === '/admin/observability') {
+      return {
+        title: 'Observability Guidance',
+        sop: 'Monitor system quality signals (latency, failures, model output quality), identify anomalies, and document remediation decisions.',
+        fieldDefinitions: [
+          'Latency KPI: processing time across critical workflows',
+          'Quality Signal: evaluation outcome for prompts and outputs',
+          'Incident Trend: recurring operational issue patterns',
+        ],
+        controls: common.controls,
+        rules: [
+          ...common.rules,
+          'High-severity observability issues require tracked corrective actions and verification closure.',
+        ],
+      };
+    }
+
+    if (path === '/admin/stakeholders') {
+      return {
+        title: 'Stakeholders & Rights Guidance',
+        sop: 'Manage stakeholder profiles and access rights with least-privilege principles and review authorization changes for governance impact.',
+        fieldDefinitions: [
+          'Stakeholder Profile: role identity and governance responsibilities',
+          'Access Right: permitted actions within controlled modules',
+          'Session Context: active authority scope for current user',
+        ],
+        controls: common.controls,
+        rules: [
+          ...common.rules,
+          'Grant only necessary permissions and keep approvals traceable for every role change.',
         ],
       };
     }
