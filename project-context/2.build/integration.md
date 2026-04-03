@@ -52,7 +52,28 @@ Behavior:
 - If `NEXT_PUBLIC_API_ORIGIN` is set: call backend directly (remote/staging mode)
 - Browser calls use `credentials: 'include'` for session cookie transport
 
-### 1.3 CORS Configuration
+Important exception (current implementation):
+
+- `frontend/lib/riskActionClient.ts` still uses `NEXT_PUBLIC_API_BASE` and `NEXT_PUBLIC_DEMO_MODE` (legacy toggle path), not the shared `NEXT_PUBLIC_API_ORIGIN` pattern.
+
+### 1.3 Runtime and Environment Toggle Map (Current)
+
+| Variable | Used by | Default / fallback | Effect |
+|---|---|---|---|
+| `NEXT_PUBLIC_API_ORIGIN` | Most frontend API clients + Next.js rewrites | unset (`''`) | unset → proxy-relative `/api/v1`; set → direct backend origin |
+| `NEXT_PUBLIC_HEALTH_ORIGIN` | Auth/observability health fetches | `NEXT_PUBLIC_API_ORIGIN` → `http://127.0.0.1:8000` | Direct backend health/metrics origin override |
+| `NEXT_PUBLIC_ENABLE_AUTH_HEALTH_CHECK` | Login page | `true` (disabled only when set to `false`) | Enables/disables login-page auth health check UI |
+| `NEXT_PUBLIC_BRIDGE_SOURCE` | Bridge pages | demo mode unless `backend` | Enables live bridge run/review/reload integration |
+| `NEXT_PUBLIC_DASHBOARD_SOURCE` | Dashboard page | demo mode unless `backend` | Enables live dashboard summary aggregation |
+| `NEXT_PUBLIC_OBSERVABILITY_SOURCE` | Admin observability page | demo mode unless `backend` | Enables live observability API calls |
+| `NEXT_PUBLIC_AUDIT_TRAIL_SOURCE` | Audit trail + auditor workstation pages | demo mode unless `backend` | Enables live audit-trail retrieval |
+| `NEXT_PUBLIC_API_BASE` | Risk action client (legacy path) | `http://localhost:8000/api/v1` | Base URL for risk action POST/GET calls |
+| `NEXT_PUBLIC_DEMO_MODE` | Risk action client (legacy path) | `false` unless explicitly `true` | Forces risk action client into local demo fallback |
+| `NEXT_PUBLIC_ARTIFACT_EXPORT_PDF_ENDPOINT` | Artifact export client | unset | When set, PDF export calls backend endpoint; otherwise local demo export |
+| `NEXT_PUBLIC_ARTIFACT_EXPORT_MD_ENDPOINT` | Artifact export client | unset | When set, Markdown export calls backend endpoint; otherwise local demo export |
+| `NEXT_PUBLIC_ARTIFACT_WIKI_PUSH_ENDPOINT` | Artifact export client | unset | When set, wiki push calls backend endpoint; otherwise local demo queue |
+
+### 1.4 CORS Configuration
 
 Defined in `src/doc_quality/api/main.py`:
 
@@ -73,7 +94,7 @@ app.add_middleware(
 )
 ```
 
-### 1.4 Auth + RBAC Handshake
+### 1.5 Auth + RBAC Handshake
 
 Current implemented state:
 
@@ -246,6 +267,7 @@ UI behavior for this integration (single-add vs bulk-add, deduplication, and res
 
 ```http
 GET    /api/v1/admin/stakeholder-profiles
+PUT    /api/v1/admin/stakeholder-profiles/{profile_id}
 GET    /api/v1/admin/stakeholder-profiles/{profile_id}/employees
 POST   /api/v1/admin/stakeholder-profiles/{profile_id}/employees
 DELETE /api/v1/admin/stakeholder-profiles/{profile_id}/employees/{assignment_id}
