@@ -29,6 +29,52 @@ from .routes import audit_trail, auth, bridge, compliance, dashboard, documents,
 logger = structlog.get_logger(__name__)
 
 
+def _status_to_error_code(status_code: int) -> str:
+    mapping = {
+        400: "request_error",
+        401: "authentication_required",
+        403: "forbidden",
+        404: "not_found",
+        405: "method_not_allowed",
+        409: "conflict",
+        413: "payload_too_large",
+        422: "validation_error",
+        429: "rate_limited",
+        503: "database_unavailable",
+    }
+    if status_code in mapping:
+        return mapping[status_code]
+    if 400 <= status_code < 500:
+        return "request_error"
+    return "internal_error"
+
+
+def _build_error_payload(status_code: int, detail: object) -> dict:
+    payload: dict = {
+        "code": _status_to_error_code(status_code),
+        "message": str(detail),
+    }
+
+    if isinstance(detail, dict):
+        message = detail.get("message")
+        payload["message"] = message if isinstance(message, str) else str(detail)
+        for key, value in detail.items():
+            if key != "message":
+                payload[key] = value
+    elif isinstance(detail, list):
+        payload["details"] = detail
+
+    return payload
+
+
+def _error_response(*, status_code: int, detail: object, headers: dict | None = None) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": _build_error_payload(status_code, detail)},
+        headers=headers or {},
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan: startup and shutdown tasks."""
@@ -82,15 +128,14 @@ def create_app() -> FastAPI:
                 window_seconds=settings.global_rate_limit_window_seconds,
             )
             if not decision.allowed:
-                return JSONResponse(
+                return _error_response(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    content={
-                        "error": {
-                            "code": "rate_limited",
-                            "message": "Too many requests. Please retry later.",
-                        }
+                    detail="Too many requests. Please retry later.",
+                    headers={
+                        "Retry-After": str(decision.retry_after_seconds),
+                        "X-Request-ID": request_id,
+                        "X-Correlation-ID": correlation_id,
                     },
-                    headers={"Retry-After": str(decision.retry_after_seconds)},
                 )
 
         start = time.time()
@@ -138,95 +183,33 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(_: Request, exc: HTTPException):
-        code = "authentication_required" if exc.status_code == 401 else "request_error"
-        if exc.status_code == 403:
-            code = "forbidden"
-        elif exc.status_code == 404:
-            code = "not_found"
-        elif exc.status_code == 422:
-            code = "validation_error"
-        elif exc.status_code == 429:
-            code = "rate_limited"
-
-        headers = exc.headers or {}
-        detail = exc.detail
-        error_payload = {
-            "code": code,
-            "message": str(detail),
-        }
-        if isinstance(detail, dict):
-            message = detail.get("message")
-            error_payload["message"] = message if isinstance(message, str) else str(detail)
-            for key, value in detail.items():
-                if key != "message":
-                    error_payload[key] = value
-
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "error": error_payload
-            },
-            headers=headers,
-        )
+        return _error_response(status_code=exc.status_code, detail=exc.detail, headers=exc.headers)
 
     @app.exception_handler(StarletteHTTPException)
     async def starlette_http_exception_handler(_: Request, exc: StarletteHTTPException):
-        code = "not_found" if exc.status_code == 404 else "request_error"
-        if exc.status_code == 405:
-            code = "method_not_allowed"
-        elif exc.status_code == 401:
-            code = "authentication_required"
-        elif exc.status_code == 403:
-            code = "forbidden"
-
-        headers = exc.headers or {}
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "error": {
-                    "code": code,
-                    "message": str(exc.detail),
-                }
-            },
-            headers=headers,
-        )
+        return _error_response(status_code=exc.status_code, detail=exc.detail, headers=exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(_: Request, __: RequestValidationError):
-        return JSONResponse(
+        return _error_response(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            content={
-                "error": {
-                    "code": "validation_error",
-                    "message": "Request validation failed",
-                }
-            },
+            detail="Request validation failed",
         )
 
     @app.exception_handler(OperationalError)
     async def database_operational_error_handler(_: Request, exc: OperationalError):
         logger.exception("database_unavailable", error_type=type(exc).__name__)
-        return JSONResponse(
+        return _error_response(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={
-                "error": {
-                    "code": "database_unavailable",
-                    "message": "Database unavailable. Start PostgreSQL and retry.",
-                }
-            },
+            detail="Database unavailable. Start PostgreSQL and retry.",
         )
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(_: Request, exc: Exception):
         logger.exception("unhandled_exception", error_type=type(exc).__name__)
-        return JSONResponse(
+        return _error_response(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "error": {
-                    "code": "internal_error",
-                    "message": "Internal server error",
-                }
-            },
+            detail="Internal server error",
         )
 
     prefix = settings.api_prefix

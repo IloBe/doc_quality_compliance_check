@@ -340,13 +340,19 @@ Custom exception handlers return a standard envelope:
 
 Common codes include:
 
+- `request_error`
 - `authentication_required`
 - `forbidden`
 - `not_found`
+- `method_not_allowed`
+- `conflict`
+- `payload_too_large`
 - `validation_error`
 - `rate_limited`
 - `database_unavailable`
 - `internal_error`
+
+When backend routes raise `HTTPException` with structured `detail` data (for example conflict metadata such as lock owner), the response still uses the same envelope and preserves additional detail fields under `error.*` for UI compatibility.
 
 ### 5.2 Frontend Error Translation
 
