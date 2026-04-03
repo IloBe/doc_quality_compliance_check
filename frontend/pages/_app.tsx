@@ -6,6 +6,10 @@ import { AuthUser, fetchCurrentUser } from '../lib/authClient';
 import { AuthProvider } from '../lib/authContext';
 import '../styles/globals.css';
 
+const AUTH_BOOTSTRAP_MAX_ATTEMPTS = 4;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 function MyApp({ Component, pageProps }) {
   const router = useRouter();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -24,17 +28,25 @@ function MyApp({ Component, pageProps }) {
         return;
       }
 
-      try {
-        const user = await fetchCurrentUser();
-        if (isMounted) {
-          setCurrentUser(user);
-          setIsCheckingAuth(false);
-        }
-      } catch {
-        if (isMounted) {
-          setCurrentUser(null);
-          setIsCheckingAuth(false);
-          router.replace('/login');
+      for (let attempt = 1; attempt <= AUTH_BOOTSTRAP_MAX_ATTEMPTS; attempt += 1) {
+        try {
+          const user = await fetchCurrentUser();
+          if (isMounted) {
+            setCurrentUser(user);
+            setIsCheckingAuth(false);
+          }
+          return;
+        } catch {
+          if (attempt < AUTH_BOOTSTRAP_MAX_ATTEMPTS) {
+            await sleep(attempt * 100);
+            continue;
+          }
+
+          if (isMounted) {
+            setCurrentUser(null);
+            setIsCheckingAuth(false);
+            router.replace('/login');
+          }
         }
       }
     };

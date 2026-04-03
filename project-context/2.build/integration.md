@@ -106,11 +106,18 @@ Login page submits email/password
     ├── POST /api/v1/auth/login
     │   → backend creates server session
     │   → backend sets HTTP-only cookie
+  │   → frontend verifies session via short /auth/me retry bootstrap
     │
     └── App bootstrap calls GET /api/v1/auth/me
         → success: render protected route in AppShell
         → failure: redirect to /login
 ```
+
+Determinism hardening (current):
+
+- `loginWithPassword(...)` now performs bounded short retries of `GET /api/v1/auth/me` immediately after successful login response before route transition.
+- Protected-route bootstrap in `_app.tsx` also retries `GET /api/v1/auth/me` before redirecting to `/login`.
+- This removes transient race conditions between cookie issuance and initial protected-route session check on slower local environments.
 
 ### 2.2 Bridge Run + Human Review (Implemented, Backend Mode Toggle)
 

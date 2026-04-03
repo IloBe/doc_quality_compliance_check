@@ -19,6 +19,7 @@ Authenticate users with backend session cookies and establish access for protect
 - Provides navigation to `/forgot-access`.
 - Shows inline error feedback on failed login attempts.
 - Redirects successful login to `/` via `router.replace('/')`.
+- After successful login response, the client performs a short bounded `/auth/me` verification retry loop to ensure deterministic session bootstrap before protected-route rendering.
 
 ## Auth service visibility
 
@@ -41,6 +42,7 @@ Authenticate users with backend session cookies and establish access for protect
 ## Acceptance criteria
 
 - Successful sign-in creates valid backend session and lands on `/`.
+- Login bootstrap deterministically validates `/auth/me` before shell-protected routes are evaluated.
 - Failed sign-in stays on `/login` with actionable feedback.
 - Forgot-access navigation works.
 - Health badge (when enabled) updates on interval without relying on dev proxy noise.
