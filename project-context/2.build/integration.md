@@ -19,6 +19,7 @@ Preferred local setup:
 - Next.js frontend on `localhost:3000`
 - FastAPI backend on `127.0.0.1:8000`
 - Next.js rewrites proxy `/api/*` and `/health` to the backend
+- Recommended backend startup entrypoint: `./scripts/start_backend.ps1 -Reload` (idempotent launcher)
 
 This preserves first-party cookie behavior in local development and keeps integration close to production routing patterns.
 

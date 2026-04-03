@@ -90,7 +90,7 @@ Expected: All 4 checks pass ✓ (`Test Connection`, `Create Database`, `Run Migr
 # Terminal 1: Backend
 Set-Location C:\Dev\doc-quality-compliance-check\doc_quality_compliance_check
 $env:DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality"
-.\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
+.\scripts\start_backend.ps1 -Reload
 
 # Terminal 2: Test login
 $tmp = ".\login.json"

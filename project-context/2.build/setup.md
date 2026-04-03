@@ -161,18 +161,23 @@ MAX_FILE_SIZE_MB=10       # Maximum uploaded file size in megabytes
 ### Start the Server
 
 ```bash
-python -m uvicorn src.doc_quality.api.main:app --reload
+./scripts/start_backend.ps1 -Reload
 ```
+
+The launcher is idempotent for local Windows development:
+
+- Starts Uvicorn when port `8000` is free.
+- Returns success when a healthy backend is already running.
+- Fails fast if `8000` is occupied by an unhealthy process.
 
 Expected output:
 
 ```text
-INFO:     Will watch for changes in these directories: ['/path/to/project']
+Starting backend on http://127.0.0.1:8000 ...
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process
-INFO:     Started server process
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
+...
+# or when already running:
+Backend already running and healthy on http://127.0.0.1:8000 (PID: ...).
 ```
 
 ### Verify the Server is Running
@@ -196,10 +201,10 @@ open http://localhost:3000/        # Protected app shell / Doc Hub after auth
 
 ```bash
 # Different port
-python -m uvicorn src.doc_quality.api.main:app --reload --port 8080
+./scripts/start_backend.ps1 -Port 8080 -Reload
 
 # Listen on all interfaces (for Docker or network access)
-python -m uvicorn src.doc_quality.api.main:app --reload --host 0.0.0.0 --port 8000
+./scripts/start_backend.ps1 -BindHost 0.0.0.0 -Port 8000 -Reload
 ```
 
 ---
@@ -408,7 +413,7 @@ cp .env.example .env
 python -m pytest
 
 # Start server
-python -m uvicorn src.doc_quality.api.main:app --reload
+./scripts/start_backend.ps1 -Reload
 
 # Start frontend (separate terminal)
 npm --prefix frontend run dev

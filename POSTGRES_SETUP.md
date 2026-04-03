@@ -30,7 +30,7 @@ $env:DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/doc_
 # Should see: "Database initialization complete!"
 
 # 6. Backend is now ready to start
-.\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
+.\scripts\start_backend.ps1 -Reload
 ```
 
 ---
@@ -137,7 +137,7 @@ After running `init_postgres.py`, test the full auth flow:
 # 1. Set environment and start backend
 Set-Location C:\Dev\doc-quality-compliance-check\doc_quality_compliance_check
 $env:DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality"
-.\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
+.\scripts\start_backend.ps1 -Reload
 
 # 2. In a new terminal, test health endpoint
 curl.exe -sS http://127.0.0.1:8000/health

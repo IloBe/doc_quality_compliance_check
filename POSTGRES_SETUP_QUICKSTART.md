@@ -166,7 +166,7 @@ Next steps:
   1. Set DATABASE_URL in .env:
      DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality
   2. Start backend:
-     .\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
+     .\scripts\start_backend.ps1 -Reload
   3. Test login:
      curl -X POST http://127.0.0.1:8000/api/v1/auth/login \
        -H 'Content-Type: application/json' \
@@ -182,7 +182,7 @@ Next steps:
 Set-Location c:\Dev\doc-quality-compliance-check\doc_quality_compliance_check
 $env:DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality"
 
-.\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
+.\scripts\start_backend.ps1 -Reload
 
 # Leave running, open another terminal for step 2
 
@@ -291,7 +291,7 @@ LOG_LEVEL=INFO
 ## Next Actions After DB Setup
 
 1. ✅ PostgreSQL running + initialized (`init_postgres.py` passed)
-2. Start backend: `.\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload`
+2. Start backend: `.\scripts\start_backend.ps1 -Reload`
 3. Start frontend: `cd frontend && npm run dev`
 4. Open login: `http://localhost:3000/login`
 5. Test login with credentials from your `.env` (`AUTH_MVP_EMAIL` / `AUTH_MVP_PASSWORD`)

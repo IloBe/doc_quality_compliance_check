@@ -107,36 +107,26 @@ Use separate terminals so PostgreSQL, the API, and the UI run at the same time.
 
 2. **Backend terminal** (from `doc_quality_compliance_check/`):
 
-   Start uvicorn backend server:
+   Start backend server (idempotent launcher, recommended):
 
-    In general on CLI via:
     ```powershell
-    .\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
-    ``` 
+    .\scripts\start_backend.ps1 -Reload
+   ```
 
-    If issues appear:
+   Behavior:
+   - Starts Uvicorn on `127.0.0.1:8000` if the port is free.
+   - Returns success when a healthy backend is already running on `8000`.
+   - Fails fast if the port is occupied but `/health` is not responding.
+
+   Manual fallback (direct Uvicorn):
+
    ```powershell
-   # Option A — navigate first, then start (two separate commands, safest)
-   Set-Location c:\Dev\doc-quality-compliance-check\doc_quality_compliance_check
    .\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
    ```
 
-   ```powershell
-   # Option B — run from workspace root without changing directory
-   $env:PYTHONPATH = "c:\Dev\doc-quality-compliance-check\doc_quality_compliance_check"
-   c:\Dev\doc-quality-compliance-check\doc_quality_compliance_check\.venv\Scripts\python.exe `
-     -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload `
-     --reload-dir "c:\Dev\doc-quality-compliance-check\doc_quality_compliance_check\src"
-   ```
-
-   > **⚠ PowerShell pitfall:** Do **not** combine `cd` and the `python` call on a single line without
-   > a semicolon separator (e.g. `cd .\doc_quality_compliance_check\.\.venv\Scripts\python.exe -m ...`).
-   > PowerShell parses `-m` as a named parameter of `Set-Location` and throws
-   > *"NamedParameterNotFound"*. Always use two separate lines (Option A) or the `$env:PYTHONPATH`
-   > form (Option B) when running from the workspace root.
-
-   Expected log line:
+   Expected output includes either:
    - `Uvicorn running on http://127.0.0.1:8000`
+   - `Backend already running and healthy on http://127.0.0.1:8000`
 
 3. **Frontend terminal** (from `doc_quality_compliance_check/frontend/`):
 
