@@ -4,7 +4,7 @@
 
 **Product:** Document Quality & Compliance Check System  
 **Version:** 0.3.0  
-**Date:** 2026-3-31  
+**Date:** 2026-4-3  
 **Author persona:** `@integration-eng`  
 **AAMAD phase:** 2.build  
 
@@ -67,7 +67,7 @@ app.add_middleware(
     "http://0.0.0.0:8000",
   ],
   allow_credentials=True,
-  allow_methods=["GET", "POST", "PUT"],
+  allow_methods=["GET", "POST", "PUT", "DELETE"],
   allow_headers=["*"],
 )
 ```
@@ -111,7 +111,7 @@ Login page submits email/password
         → failure: redirect to /login
 ```
 
-### 2.2 Bridge Run (Implemented, Backend Mode Toggle)
+### 2.2 Bridge Run + Human Review (Implemented, Backend Mode Toggle)
 
 Bridge execution is enabled when `NEXT_PUBLIC_BRIDGE_SOURCE=backend`.
 
@@ -120,6 +120,9 @@ Frontend calls:
 ```http
 POST /api/v1/bridge/run/eu-ai-act
 GET /api/v1/bridge/alerts/eu-ai-act/{document_id}
+GET /api/v1/bridge/runs/{run_id}/human-review
+POST /api/v1/bridge/runs/{run_id}/human-review
+POST /api/v1/bridge/agents/reload
 ```
 
 Bridge request payload (current):
@@ -136,6 +139,12 @@ Bridge request payload (current):
   }
 }
 ```
+
+Current UI status:
+
+- `/bridge` uses backend mode to reload bridge agents through `POST /api/v1/bridge/agents/reload`
+- `/doc/[docId]/bridge` uses backend mode for bridge execution, alert lookup, and human review retrieval/submission
+- When backend mode is off, the page remains in demo mode without live API dependency
 
 ### 2.3 Dashboard Aggregation (Implemented, Backend Mode Toggle)
 
@@ -154,14 +163,21 @@ These pages currently render markdown from repository files via `getStaticProps`
 - `/sops`
 - `/architecture`
 
-### 2.5 Document / Compliance / Templates / Reports APIs (Partially Integrated)
+### 2.5 Document / Compliance / Risk / Templates / Reports APIs (Mixed Integration)
 
 Backend endpoints are implemented and protected:
 
 - `POST /api/v1/documents/analyze`
 - `POST /api/v1/documents/upload`
+- `GET /api/v1/documents/{document_id}/lock`
+- `POST /api/v1/documents/{document_id}/lock/acquire`
+- `POST /api/v1/documents/{document_id}/lock/release`
 - `POST /api/v1/compliance/check/eu-ai-act`
 - `POST /api/v1/compliance/applicable-regulations`
+- `GET /api/v1/risk-templates/`
+- `GET /api/v1/risk-templates/defaults/{template_type}`
+- `PUT /api/v1/risk-templates/defaults/{template_type}`
+- `POST /api/v1/risk-templates/`
 - `GET /api/v1/templates/`
 - `GET /api/v1/templates/index`
 - `GET /api/v1/templates/{template_id}`
@@ -171,8 +187,9 @@ Backend endpoints are implemented and protected:
 Current UI status:
 
 - Bridge and Dashboard are actively wired to backend through explicit mode switches.
-- Doc Hub and workflow UX remain mock-first for several interactions.
-- Templates and report endpoints are available but not yet fully represented by dedicated Next.js API-driven pages.
+- Risk page actively uses backend-backed risk-template defaults and creation, with local demo fallback when backend persistence is unavailable.
+- Document lock APIs are integrated through a dedicated frontend client for ownership/locking flows.
+- Doc Hub, compliance flows, templates, and report UX still include mock-first or partially wired interactions in the current Next.js pages.
 
 ### 2.6 Quality Observability API (Implemented, Backend Mode Toggle)
 
@@ -224,7 +241,7 @@ POST payload:
 
 Bulk-add on the frontend fires multiple `POST` calls in parallel via `Promise.allSettled` — each call is atomic and independently fails/succeeds. The UI displays a `"N added, M failed"` message after all settle.
 
-DELETE returns HTTP 204. A 409 is returned if the employee name already exists for that profile.
+DELETE returns a success payload (`{"success": true}`). Duplicate employee assignment attempts currently return HTTP 400 from the backend validation path.
 
 ---
 
@@ -321,17 +338,20 @@ When sending `multipart/form-data`, the frontend must not manually set `Content-
 | Next.js app shell + protected routes | ✅ Implemented | Session bootstrap + redirect to login |
 | Auth API integration | ✅ Implemented | Login/logout/me + recovery flows wired |
 | Bridge backend integration | ✅ Implemented (toggle) | `NEXT_PUBLIC_BRIDGE_SOURCE=backend` |
+| Bridge human review + agent reload integration | ✅ Implemented (toggle) | Run page uses `human-review` and `agents/reload` endpoints in backend mode |
 | Dashboard backend integration | ✅ Implemented (toggle) | `NEXT_PUBLIC_DASHBOARD_SOURCE=backend` |
 | Observability backend integration | ✅ Implemented (toggle) | `NEXT_PUBLIC_OBSERVABILITY_SOURCE=backend`; default is demo mode |
 | Observability workflow component breakdown | ✅ Implemented | `GET /api/v1/observability/workflow-components` |
 | Observability rich GenAI trace payload | ✅ Implemented | `rich_payload` field extracted at query time from observation JSON |
 | Observability `/metrics` proxy rewrite | ✅ Implemented | Added to `next.config.js` rewrites |
 | Stakeholder employee assignment API | ✅ Implemented | Full CRUD, PostgreSQL-backed (migration 008) |
+| Risk template backend integration | ✅ Implemented with demo fallback | `risk.tsx` uses live defaults/create plus local fallback |
+| Document lock API integration | ✅ Implemented | Lock acquire/release/state client exists for document ownership UX |
 | Document analysis UI integration | 🟡 Partial | Backend endpoint ready; UI still mixed with mock-first flows |
 | Compliance check UI integration | 🟡 Partial | Backend endpoint ready; progressive wiring pending |
 | Templates API-driven UI | 🟡 Partial | Backend routes available; markdown pages currently build-time |
 | Reports generate/download UX | 🟡 Partial | Backend routes available; richer page flow pending |
-| HITL review HTTP routes | 🔴 Not yet implemented | Service/ORM persistence exists, route layer pending |
+| Generic HITL review HTTP routes | 🟡 Partial | Bridge-specific human review routes exist; standalone HITL workflow API remains pending |
 | Enterprise SSO integration | 🔴 Not yet implemented | Planned in later phase |
 
 ---
@@ -350,9 +370,9 @@ Then `GET /api/v1/reports/download/{report_id}` returns HTTP 404.
 
 ### 7.2 HITL API Surface Gap
 
-Review persistence exists in backend services/ORM, but dedicated public route coverage for full HITL review lifecycle is still incomplete in the current route set.
+Bridge-specific human review routes are implemented, but a broader standalone HITL workflow API surface is still incomplete in the current route set.
 
-**Mitigation:** Add explicit review create/list/update endpoints and wire UI actions to these routes.
+**Mitigation:** Keep using the existing bridge review endpoints for run-level decisions, and add explicit generic HITL create/list/update endpoints if non-bridge review workflows must be surfaced independently.
 
 ### 7.3 CORS Origins for Production
 
@@ -411,7 +431,7 @@ When using `multipart/form-data` (file upload), the JavaScript code intentionall
 2. `GET /health` remains the canonical backend health endpoint.
 3. API error responses follow the standardized `error.code` + `error.message` envelope.
 4. For MVP, some frontend workflows intentionally remain mock-first while backend integrations are progressively activated.
-5. Full HITL review lifecycle routes and UI wiring remain a planned integration increment.
+5. Standalone non-bridge HITL workflow routes and UI wiring remain a planned integration increment.
 
 ---
 
@@ -430,9 +450,9 @@ When using `multipart/form-data` (file upload), the JavaScript code intentionall
 ```Python
 persona=integration-eng
 action=review-and-align-integration-doc
-timestamp=2026-3-30
+timestamp=2026-4-3
 adapter=AAMAD-vscode
 artifact=project-context/2.build/integration.md
-version=0.2.0
+version=0.3.0
 status=updated
 ```

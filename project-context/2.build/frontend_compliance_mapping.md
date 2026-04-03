@@ -4,7 +4,7 @@
 **Route:** `/compliance/request-standard-mapping`  
 **Protection:** Protected route inside `AppShell`  
 **Owner persona:** `@frontend-eng`  
-**Status:** Implemented, backend-aware with demo fallback for mapping request submissions
+**Status:** Implemented, backend-first with local demo fallback for mapping request submissions
 
 ## Purpose
 
@@ -15,10 +15,10 @@ Externalizes standard mapping change intent with rationale and trace metadata. P
 - `frontend/pages/compliance/request-standard-mapping.tsx` renders the full page.
 - Renders standardized header via `PageHeaderWithWhy` (`Governance & Standards` → `Request New Standard Mapping`).
 - Renders a back-navigation link (left area) to `/compliance`.
-- Demo mode banner shown conditionally in the header area (amber badge with `LuInfo` icon).
+- Demo mode banner shown conditionally in the top action row beside the back-navigation link (amber badge with `LuInfo` icon).
 - Renders a split layout:
-  - **Request form (left/top):** structured input fields + submit button.
-  - **Records list (bottom):** recent mapping requests, filtered to max 25 items.
+  - **Request form (left/main):** structured input fields + submit button.
+  - **Records list (right sidebar):** recent mapping requests, filtered to max 25 items.
 - No footer card; page remains focused on the request workflow.
 
 ### Components
@@ -35,7 +35,7 @@ Externalizes standard mapping change intent with rationale and trace metadata. P
 - **sopReference:** text input (≥3 characters required)
 - **businessJustification:** textarea (≥15 characters required)
 - **projectId:** optional text input
-- **tenantId:** select dropdown, default `'default'`
+- **tenantId:** freeform text input, default `'default'`
 - **requesterEmail:** pre-filled from `currentUser?.email`, user-editable
 
 ### Form validation
@@ -52,7 +52,7 @@ Submission requires:
 - `submitStandardMappingRequest()` from `lib/complianceMappingRequestClient`.
 - Payload includes all form fields + computed tenant/project context.
 - Response: `{ ok, message, record, degradedToDemo }`.
-- On success: form fields cleared, new record prepended to list, `submitMessage` shown.
+- On success: `standardName`, `sopReference`, `businessJustification`, and `projectId` are cleared; `tenantId` and `requesterEmail` remain populated; new record is prepended to the list and `submitMessage` is shown.
 - On failure: `submitError` shown inline; form fields retained for retry.
 - Loading state: `isSubmitting` disables the button.
 
@@ -71,7 +71,7 @@ Submission requires:
 
 ## UX and behavior contract
 
-- **Demo banner:** shown only when `isDemoMode` is true (backend endpoint not configured).
+- **Demo banner:** shown only when `isDemoMode` is true after list/submission flows degrade to demo storage.
 - **Validation feedback:** `submitError` shows inline when form validation fails before API call.
 - **Request feedback:** `submitMessage` shows inline on successful submission.
 - **Records loading:** spinner shown during initial fetch (`isLoadingRecords`).
@@ -85,7 +85,7 @@ Submission requires:
 ## Known boundaries
 
 - Records list is presentation-only; no edit or delete capability.
-- Tenant ID is a select dropdown with limited options; no dynamic tenant creation.
+- Tenant ID is a freeform text field; the page does not validate tenant existence client-side.
 - Project ID is optional; backend determines scope based on tenant/project combo.
 
 ## Acceptance criteria

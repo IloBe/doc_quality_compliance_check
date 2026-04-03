@@ -46,6 +46,7 @@ Page-specific companion documents remain:
 - [frontend_bridge_overview.md](frontend_bridge_overview.md)
 - [frontend_bridge_run.md](frontend_bridge_run.md)
 - [frontend_compliance.md](frontend_compliance.md)
+- [frontend_compliance_mapping.md](frontend_compliance_mapping.md)
 - [frontend_login.md](frontend_login.md)
 - [frontend_forgot_access.md](frontend_forgot_access.md)
 - [frontend_reset_access.md](frontend_reset_access.md)
@@ -255,10 +256,10 @@ The frontend is currently **hybrid**, not uniformly backend-driven.
 - **Admin observability summary** via `GET /api/v1/observability/quality-summary?window_hours=…`
 - **Admin LLM prompt/output traces** via `GET /api/v1/observability/llm-traces?limit=…&window_hours=…`
 - **Admin workflow component breakdown** via `GET /api/v1/observability/workflow-components?window_hours=…`
-- **Admin metrics snapshot** via backend `/metrics` endpoint (proxied through Next.js rewrite)
-- **Stakeholder profiles** via `GET /api/v1/admin/stakeholder-profiles`
+- **Admin metrics snapshot** via direct backend `GET /metrics` using `NEXT_PUBLIC_HEALTH_ORIGIN` or `NEXT_PUBLIC_API_ORIGIN`
+- **Stakeholder profiles** via `GET /api/v1/admin/stakeholder-profiles?include_inactive=true`
 - **Stakeholder employee assignments** via `GET/POST/DELETE /api/v1/admin/stakeholder-profiles/{id}/employees`
-- **Risk action log persistence** via `/api/v1/risk-templates/actions` (with fallback)
+- **Risk action log persistence** via `/api/v1/risk-templates/actions` (backend-first with demo fallback)
 
 ### 4.2 Mock/demo-driven today
 
@@ -317,6 +318,7 @@ Current behavior:
 
 - presents governance standards and status cards,
 - acts primarily as a reference/guidance surface,
+- links to downstream governance pages such as standard-mapping requests,
 - is not yet the full backend compliance-check execution UI described in older MVP docs.
 
 ### 5.4 Bridge overview (`/bridge`)
@@ -390,8 +392,8 @@ Implemented as `frontend/pages/risk.tsx`.
 Current behavior:
 
 - supports RMF/FMEA record handling and status transitions,
-- writes risk action trail via `riskActionClient` (backend-first, demo fallback),
-- creates risk templates via `riskTemplateClient`,
+- writes risk action trail via `riskActionClient` (backend-first unless `NEXT_PUBLIC_DEMO_MODE=true`, with demo fallback),
+- creates risk templates via `riskTemplateClient` with backend seeding and local fallback behavior,
 - keeps UI responsive through local view models and filtered table projections.
 
 ### 5.10 Reporting and audit pages
@@ -405,10 +407,10 @@ Implemented as:
 
 Current behavior:
 
-- **Exports Registry** tracks export status, filtering, and download dialog UX.
-- **Audit Trail** provides schedule and event-level inspection surfaces.
-- **Auditor Workstation** supports reviewer decision workflows.
-- **Auditor Vault** provides a read-only, consolidated evidence inventory for audit retrieval.
+- **Exports Registry** is a read-only registry with filter controls and download/upload-to-remote dialog UX backed by the local export store.
+- **Audit Trail** defaults to demo mode and switches to persisted backend events/schedule only when `NEXT_PUBLIC_AUDIT_TRAIL_SOURCE=backend`.
+- **Auditor Workstation** shares that same env flag and supports local-session demo reviews or backend human-review persistence.
+- **Auditor Vault** provides a read-only, consolidated evidence inventory derived from current document/export/bridge store state.
 
 ### 5.11 Help center pages (`/help*`)
 
@@ -467,6 +469,14 @@ Current frontend env controls documented in `.env.local.example`:
   - `backend` enables live quality telemetry from the PostgreSQL `quality_observations` table
   - any other value keeps observability on demo/mock mode (default; safe for demonstrations before workflow flows emit real telemetry)
 
+- `NEXT_PUBLIC_AUDIT_TRAIL_SOURCE`
+  - `backend` enables persisted audit-trail events, schedule loading, and auditor-workstation review retrieval
+  - any other value keeps Audit Trail and Auditor Workstation on their demo/mock data paths
+
+- `NEXT_PUBLIC_DEMO_MODE`
+  - `true` forces risk action logging onto its demo path
+  - any other value keeps the risk action client backend-first with fallback on failure
+
 ---
 
 ## Section 8 – Current Gaps and Known Boundaries
@@ -480,6 +490,8 @@ Important current boundaries:
 - Workflow/Bridge surfaces are partially demo-oriented and do not expose every orchestrator/runtime state via live backend APIs.
 - Dashboard can be live-backed, but defaults to mock mode for resilience.
 - Admin stakeholder permission-matrix editing is currently configuration-oriented (template UX, local state); backend persistence for the rights matrix itself remains a future increment. Employee name assignment per role is fully implemented and persisted in PostgreSQL (migration 008).
+- Audit Trail and Auditor Workstation are intentionally demo-by-default; persisted governance evidence appears only when their shared env flag is enabled and the backend is reachable.
+- Risk page demo indication reflects the risk-action/history path specifically, not whole-page backend availability.
 - Product-user chatbot support is a planned future admin topic and is currently documented as a follow-up extension.
 - The shell and RBAC UX are implemented, while some domain workflows are still pending deeper API wiring.
 

@@ -47,7 +47,7 @@ NEXT_PUBLIC_AUDIT_TRAIL_SOURCE=backend
 
 - `buildCandidates(events, reviewsByRunId)` derives the pending queue from audit events.
 - `pending` / `reviewed` / `openFollowUps` derived via useMemo from candidates.
-- `selectedRunId` auto-initialized to first pending candidate on load.
+- `selectedRunId` auto-initializes to the first available candidate on load; when no explicit selection exists, the displayed record prefers pending items before reviewed ones.
 
 ### Review submission
 
@@ -77,7 +77,7 @@ NEXT_PUBLIC_AUDIT_TRAIL_SOURCE=backend
 | --- | --- |
 | Decision | `approved` \| `rejected`, pre-populated from queue row |
 | Reason | ≥5 characters required |
-| Next task type | Required when `rejected` |
+| Next task type | Available when `rejected`; defaults to `rerun_bridge` |
 | Next task assignee | Required when `rejected` and `nextTaskType === 'manual_follow_up'` |
 | Next task instructions | Optional |
 
@@ -100,7 +100,7 @@ NEXT_PUBLIC_AUDIT_TRAIL_SOURCE=backend
 
 ## Acceptance criteria
 
-- Demo mode loads mock candidates and allows local decision submission without backend.
+- Demo mode loads mock candidates and allows local decision submission for the current page session without backend.
 - Backend mode loads real events and existing reviews; decisions persist via `submitBridgeHumanReview`.
 - Decision form validates reason length and follow-up fields before submission.
 - Role gate (`review.approve`) disables submit for read-only users.

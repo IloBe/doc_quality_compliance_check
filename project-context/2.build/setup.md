@@ -1,8 +1,8 @@
 # Setup Documentation — Doc Quality Compliance Check
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.2.0  
-**Date:** 2026-3-31  
+**Version:** 0.3.0  
+**Date:** 2026-4-3  
 **Author persona:** `@project-mgr`  
 **AAMAD phase:** 2.build  
 
@@ -116,7 +116,7 @@ AUTH_LOGIN_LOCKOUT_SECONDS=600
 
 # Logging
 LOG_LEVEL="INFO"          # DEBUG | INFO | WARNING | ERROR
-LOG_FORMAT="json"         # json | console
+LOG_FORMAT="console"      # console | json
 
 # File Upload
 MAX_FILE_SIZE_MB=10       # Maximum uploaded file size in megabytes
@@ -149,7 +149,7 @@ MAX_FILE_SIZE_MB=10       # Maximum uploaded file size in megabytes
 | `AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS` | `300` | No | Failed-login tracking window |
 | `AUTH_LOGIN_LOCKOUT_SECONDS` | `600` | No | Temporary login lockout duration |
 | `LOG_LEVEL` | `INFO` | No | Logging verbosity level |
-| `LOG_FORMAT` | `json` | No | `json` for structured logging, `console` for human-readable |
+| `LOG_FORMAT` | `console` | No | `console` for human-readable local logs, `json` for structured output |
 | `MAX_FILE_SIZE_MB` | `10` | No | Maximum file upload size in MB |
 | `ANTHROPIC_API_KEY` | (unset) | No | Anthropic API key for Claude enrichment |
 | `ANTHROPIC_MODEL` | `claude-3-haiku-20240307` | No | Claude model identifier |
@@ -161,7 +161,7 @@ MAX_FILE_SIZE_MB=10       # Maximum uploaded file size in megabytes
 ### Start the Server
 
 ```bash
-uvicorn src.doc_quality.api.main:app --reload
+python -m uvicorn src.doc_quality.api.main:app --reload
 ```
 
 Expected output:
@@ -196,10 +196,10 @@ open http://localhost:3000/        # Protected app shell / Doc Hub after auth
 
 ```bash
 # Different port
-uvicorn src.doc_quality.api.main:app --reload --port 8080
+python -m uvicorn src.doc_quality.api.main:app --reload --port 8080
 
 # Listen on all interfaces (for Docker or network access)
-uvicorn src.doc_quality.api.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn src.doc_quality.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ---
@@ -209,42 +209,30 @@ uvicorn src.doc_quality.api.main:app --reload --host 0.0.0.0 --port 8000
 ### Run All Tests
 
 ```bash
-pytest tests/ -v
+python -m pytest
 ```
 
-Expected output:
+Expected outcome:
 
 ```text
 ============================= test session starts ==============================
-platform linux -- Python 3.12.x
-collected 30 items
-
-tests/test_document_analyzer.py::test_detect_document_type_arc42 PASSED
-tests/test_document_analyzer.py::test_detect_document_type_model_card PASSED
-tests/test_document_analyzer.py::test_analyze_arc42_complete PASSED
-tests/test_document_analyzer.py::test_analyze_arc42_partial PASSED
-tests/test_document_analyzer.py::test_analyze_arc42_empty PASSED
-tests/test_document_analyzer.py::test_analyze_model_card_complete PASSED
-tests/test_document_analyzer.py::test_analyze_model_card_incomplete PASSED
-tests/test_compliance_checker.py::... (6 tests)
-tests/test_hitl_workflow.py::... (6 tests)
-tests/test_report_generator.py::... (3 tests)
-tests/test_template_manager.py::... (8 tests)
-
-============================== 30 passed in X.Xs ==============================
+platform ... -- Python 3.12.x
+collected ... items
+...
+============================== ... passed in X.Xs ==============================
 ```
 
 ### Run Tests with Coverage Report
 
 ```bash
-pytest tests/ -v --cov=src/doc_quality --cov-report=term-missing
+python -m pytest --cov=src --cov-report=term-missing
 ```
 
 ### Run a Specific Test Module
 
 ```bash
-pytest tests/test_document_analyzer.py -v
-pytest tests/test_compliance_checker.py -v
+python -m pytest tests/test_document_analyzer.py -v
+python -m pytest tests/test_compliance_checker.py -v
 ```
 
 ### Run Linting (Ruff)
@@ -417,10 +405,10 @@ python -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
 cp .env.example .env
 
 # Run tests to verify installation
-pytest tests/ -v
+python -m pytest
 
 # Start server
-uvicorn src.doc_quality.api.main:app --reload
+python -m uvicorn src.doc_quality.api.main:app --reload
 
 # Start frontend (separate terminal)
 npm --prefix frontend run dev
@@ -466,9 +454,9 @@ open http://localhost:3000/login
 ```text
 persona=project-mgr
 action=setup-project
-timestamp=2026-3-31
+timestamp=2026-4-3
 adapter=AAMAD-vscode
 artifact=project-context/2.build/setup.md
-version=0.2.0
+version=0.3.0
 status=complete
 ```

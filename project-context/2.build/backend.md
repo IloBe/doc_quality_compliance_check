@@ -291,20 +291,23 @@ app.add_middleware(
         "http://0.0.0.0:8000",
     ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 ```
 
 **Request logging middleware:**
-Every HTTP request is logged with method, path, status code, and duration in milliseconds:
+Every HTTP request flows through middleware that adds request/correlation IDs, applies global rate limiting to `/api/v1/*`, records OpenTelemetry span metadata when enabled, emits `http_request` logs, and appends response tracing headers:
 ```python
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    start = time.time()
-    response = await call_next(request)
-    duration = time.time() - start
-    logger.info("http_request", method=..., path=..., status=..., duration_ms=...)
+    request_id = request.headers.get("x-request-id") or uuid4().hex
+    correlation_id = request.headers.get("x-correlation-id") or request_id
+    structlog.contextvars.bind_contextvars(request_id=request_id, correlation_id=correlation_id)
+    ...
+    logger.info("http_request", method=..., path=..., status=..., duration_ms=..., trace_id=...)
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Correlation-ID"] = correlation_id
     return response
 ```
 
@@ -515,8 +518,8 @@ async def health_check() -> dict:
 | Path param | `profile_id: str` |
 | Request body | `StakeholderEmployeeAssignmentRequest` — `employee_name` |
 | Response | `StakeholderEmployeeAssignmentRecord` for the created row |
-| Auth | Required (`qm_lead` minimum) |
-| Validation | Duplicate name+profile combination is rejected with HTTP 409 |
+| Auth | Required (`qm_lead`, `auditor`, `riskmanager`, `architect`) |
+| Validation | Duplicate name+profile combination currently raises HTTP 400 from backend validation |
 | Purpose | Add a named employee to a role profile (single-add from UI; called in parallel for bulk-add) |
 
 **`DELETE /api/v1/admin/stakeholder-profiles/{profile_id}/employees/{assignment_id}`**
@@ -524,8 +527,8 @@ async def health_check() -> dict:
 | Property | Value |
 |----------|-------|
 | Path params | `profile_id: str`, `assignment_id: str` |
-| Response | HTTP 204 on success |
-| Auth | Required (`qm_lead` minimum) |
+| Response | JSON success payload — `{"success": true}` |
+| Auth | Required (`qm_lead`, `auditor`, `riskmanager`, `architect`) |
 | Purpose | Remove a named employee assignment from a role profile |
 
 ---
@@ -534,17 +537,17 @@ async def health_check() -> dict:
 
 Production-grade compliance execution with HITL integration and regulatory drift detection.
 
-**`POST /api/v1/bridge/run`**
+**`POST /api/v1/bridge/run/eu-ai-act`**
 
 | Property | Value |
 |----------|-------|
 | Request body | `BridgeRunRequest` — `document_id: str`, `domain_info: ProductDomainInfo` |
 | Response | `BridgeRunResponse` — `run_id`, `compliance_score`, `requirements`, `mandatory_gaps`, `approved`, `human_review_required`, `regulatory_update` |
 | Auth | Required (`qm_lead`, `architect`, `riskmanager`, `auditor`) |
-| Persistence | Run outcome persisted as audit event; findings stored in `skill_findings`; human review trigger stored in `bridge_human_reviews` |
+| Persistence | Run outcome persisted as audit events; findings stored in `skill_findings`; bridge review records stored in `bridge_human_reviews` |
 | Purpose | Execute full EU AI Act compliance run for a document, evaluate regulatory drift, and generate structured result for HITL review gate |
 
-**`GET /api/v1/bridge/regulatory-alert/{document_id}`**
+**`GET /api/v1/bridge/alerts/eu-ai-act/{document_id}`**
 
 | Property | Value |
 |----------|-------|
@@ -553,15 +556,34 @@ Production-grade compliance execution with HITL integration and regulatory drift
 | Auth | Required |
 | Purpose | Check if EU AI Act requirements have changed since last approved run; drives UI popup alerts |
 
-**`POST /api/v1/bridge/human-review/{run_id}`**
+**`GET /api/v1/bridge/runs/{run_id}/human-review`**
+
+| Property | Value |
+|----------|-------|
+| Path param | `run_id: str` |
+| Response | `BridgeHumanReviewResponse` — previously submitted review for this run |
+| Auth | Required (`qm_lead`, `riskmanager`, `auditor`) |
+| Error | HTTP 404 if no review exists yet |
+| Purpose | Rehydrate prior human-review state when reopening a bridge run page |
+
+**`POST /api/v1/bridge/runs/{run_id}/human-review`**
 
 | Property | Value |
 |----------|-------|
 | Path param | `run_id: str` |
 | Request body | HITL decision — `decision` (`approved`\|`rejected`), `reason`, and optional follow-up task assignment |
-| Response | Persisted `BridgeHumanReviewORM` record |
+| Response | `BridgeHumanReviewResponse` |
 | Auth | Required (`qm_lead`, `riskmanager`, `auditor`) |
+| Validation | Returns HTTP 409 on duplicate submission and HTTP 422 on invalid follow-up-task combinations |
 | Purpose | Record the HITL approval/rejection decision for a bridge run; creates auditable approval artefact |
+
+**`POST /api/v1/bridge/agents/reload`**
+
+| Property | Value |
+|----------|-------|
+| Response | `BridgeAgentsReloadResponse` — readiness snapshot for all bridge agents plus active requirements version/signature |
+| Auth | Required (`qm_lead`, `architect`, `riskmanager`, `auditor`) |
+| Purpose | Operational reload/readiness action used by the Bridge overview page |
 
 ---
 
@@ -648,7 +670,7 @@ Full CRUD for RMF (Risk Management File) and FMEA risk templates with AI-assiste
 
 | Property | Value |
 |----------|-------|
-| Request body | `CreateRiskTemplateRequest` — `template_type`, `template_title`, `product`, `version`, `rows` |
+| Request body | `CreateRiskTemplateRequest` — `template_type`, `template_title`, `product`, `created_by`, optional `rationale`, `rows` |
 | Response | `RiskTemplate` (created) |
 | Auth | Required |
 
@@ -693,11 +715,11 @@ Full CRUD for RMF (Risk Management File) and FMEA risk templates with AI-assiste
 | Auth | Required |
 | Purpose | Excel-compatible CSV export for FMEA tables and risk management records (SAD §3.1 requirement) |
 
-**`POST /api/v1/risk-templates/{template_id}/ai-suggest-row`**
+**`POST /api/v1/risk-templates/ai-suggest`**
 
 | Property | Value |
 |----------|-------|
-| Request body | `AiSuggestRowRequest` — partial row fields and context hint |
+| Request body | `AiSuggestRowRequest` — `template_type`, `partial_row`, and optional free-text `context` |
 | Response | `AiSuggestRowResponse` — AI-suggested field values |
 | Auth | Required |
 | Graceful degradation | Falls back to empty/default suggestions when `ANTHROPIC_API_KEY` is not set |
@@ -1159,7 +1181,7 @@ return result
 
 ### 7.2 Phase 0 Test Gating and Phase 2 CI/CD
 
-**Phase 0:** Release gating is manual (`pytest tests/ -v` via local developer or CI orchestrator). The 30-test classical unit test suite + LLM unit tests must pass before release; integration tests are deferred to Phase 2.
+**Phase 0/current local practice:** Release gating remains manual (`python -m pytest` via local developer or CI orchestrator). The current pytest suite now extends beyond the original 30-test unit baseline and includes API-route, auth/session, and integration-oriented coverage.
 
 **Phase 2:** GitHub Actions CI/CD pipeline will be added with automated pytest, ruff, and mypy checks on every push, plus integration test execution.
 

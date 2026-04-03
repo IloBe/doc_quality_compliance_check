@@ -35,10 +35,11 @@ Execute and evidence a single document-level Bridge run with step visibility, re
 - Backend endpoints currently used:
   - `POST /api/v1/bridge/run/eu-ai-act`
   - `GET /api/v1/bridge/alerts/eu-ai-act/{document_id}`
-  - `GET /api/v1/bridge/human-review/{run_id}`
-  - `POST /api/v1/bridge/human-review/{run_id}`
+  - `GET /api/v1/bridge/runs/{run_id}/human-review`
+  - `POST /api/v1/bridge/runs/{run_id}/human-review`
 - Auth transport uses cookie-backed session requests.
 - In backend mode the run auto-starts once per load for authorized users.
+- Human-review submission enforces backend validation rules for reject/follow-up combinations and duplicate-review prevention.
 
 ## Backend-mode behavior contract
 

@@ -12,6 +12,7 @@ Serve as the controlled landing page for governed documentation assets so users 
 
 ## Current implementation
 
+- `frontend/pages/index.tsx` is the route entry and renders `components/documentHub/DocumentHubPage.tsx`.
 - Renders standardized header via `PageHeaderWithWhy` (`Home` → `Document Hub`).
 - Supports query-driven filtering through `q` and `project` URL params.
 - Mirrors query param `q` into local filter state for user editing.

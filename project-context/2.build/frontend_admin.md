@@ -6,7 +6,7 @@
 **Routes:** `/admin`, `/admin/observability`, `/admin/stakeholders`
 **Protection:** Protected route inside `AppShell`
 **Owner persona:** `@frontend-eng`
-**Status:** Implemented — live backend data + demo mode
+**Status:** Implemented — mixed admin module set (demo-backed observability, backend-backed stakeholder governance)
 
 ---
 
@@ -91,7 +91,7 @@ The following mock data is returned from `useMemo` hooks keyed on `windowHours`:
 |---|---|
 | **Role-template selector** | Dropdown to select from available stakeholder roles |
 | **Permission toggles** | Read/write/approve/admin toggles per selected role, aligned with `frontend/lib/rbac.ts` |
-| **Current user context** | Displays authenticated user name and role |
+| **Current user context** | Displays authenticated session email and role list |
 | **Employee assignment area** | Add / remove named employees to the currently selected role profile (persisted in PostgreSQL) |
 
 #### Employee assignment feature
@@ -105,7 +105,7 @@ The following mock data is returned from `useMemo` hooks keyed on `windowHours`:
 
 | Endpoint | Client function |
 |---|---|
-| `GET /api/v1/admin/stakeholder-profiles` | `fetchStakeholderProfiles()` |
+| `GET /api/v1/admin/stakeholder-profiles?include_inactive=true` | `fetchStakeholderProfiles(true)` |
 | `GET /api/v1/admin/stakeholder-profiles/{id}/employees` | `fetchStakeholderAssignments(profileId)` |
 | `POST /api/v1/admin/stakeholder-profiles/{id}/employees` | `addStakeholderAssignment(profileId, employeeName)` |
 | `DELETE /api/v1/admin/stakeholder-profiles/{id}/employees/{assignmentId}` | `removeStakeholderAssignment(profileId, assignmentId)` |
@@ -132,6 +132,7 @@ All admin pages use the standardized `PageHeaderWithWhy` pattern:
 - Admin pages render within shared protected shell conventions.
 - Demo mode is clearly labeled via blue banner to prevent operator confusion.
 - Stakeholder bulk-add shows success/fail summary count.
+- Stakeholder profile loading falls back to the seeded in-app profile set when backend retrieval fails.
 - `/admin` overview page uses standardized `Governance note` footer convention.
 
 ---
@@ -143,6 +144,7 @@ All admin pages use the standardized `PageHeaderWithWhy` pattern:
 - `/admin/observability` backend mode fetches summary, traces, workflow breakdown, and metrics snapshot.
 - `/admin/stakeholders` supports profile save, single assignment add/remove, and bulk assignment add.
 - Assignment rows persist across page refresh (backend persistence).
+- Stakeholder page documentation does not imply a standalone demo mode for assignment persistence.
 - Route protection remains session-based via `_app.tsx`; unauthorized users redirect to `/login`.
 
 ---

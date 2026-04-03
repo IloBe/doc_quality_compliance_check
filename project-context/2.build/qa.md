@@ -3,8 +3,8 @@
 <!-- markdownlint-disable MD031 MD032 MD034 MD040 MD060 -->
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.2.0  
-**Date:** 2026-3-31  
+**Version:** 0.3.0  
+**Date:** 2026-4-3  
 **Author persona:** `@qa-eng`  
 **AAMAD phase:** 2.build  
 
@@ -12,9 +12,9 @@
 
 ## Overview
 
-The QA strategy for MVP is **unit test first**: all five service modules are covered by dedicated pytest unit test files. Integration tests (FastAPI TestClient) and end-to-end tests are backlog items deferred to Phase 2. All 30 unit tests pass with 0 failures.
+This document captures the original Phase-0 QA baseline. The current codebase now includes a broader pytest suite covering service, API-route, auth/session, integration, and observability behaviors in addition to the initial unit tests.
 
-> **Consistency note (2026-3-31):** This file preserves the initial Phase-0 QA baseline snapshot. The current codebase has expanded beyond this original scope (including auth/session/rate-limit and API-route tests). Treat this document as historical baseline context; for current coverage, use the active `tests/` directory and latest CI/test outputs.
+> **Consistency note (2026-4-3):** Keep this file as Phase-0 baseline context, not as the full current test inventory. For current coverage, use the active `tests/` directory and latest local/CI pytest outputs.
 
 ---
 
@@ -66,16 +66,16 @@ tests/
 
 ```bash
 # Run all tests
-pytest tests/ -v
+python -m pytest
 
 # Run with coverage
-pytest tests/ -v --cov=src/doc_quality --cov-report=term-missing
+python -m pytest --cov=src --cov-report=term-missing
 
 # Run a specific module
-pytest tests/test_document_analyzer.py -v
+python -m pytest tests/test_document_analyzer.py -v
 
 # Run a specific test
-pytest tests/test_compliance_checker.py::test_high_risk_medical_domain -v
+python -m pytest tests/test_compliance_checker.py::test_high_risk_medical_domain -v
 ```
 
 ---
@@ -416,7 +416,7 @@ The earlier Phase-0 test baseline referenced module-level in-memory review state
 
 ## Assumptions
 
-1. Tests are run from the repository root directory (`pytest tests/ -v`).
+1. Tests are run from the repository root directory (`python -m pytest`).
 2. The `templates/sop/` directory contains all 6 active SOP template files at test time.
 3. The `reports/` directory is writable by the test process; it is created automatically by the report generator service if absent.
 4. Where persistence-backed tests are used, test data isolation is handled by fixtures/database setup strategy rather than relying on module-level in-memory stores.
@@ -440,10 +440,10 @@ The earlier Phase-0 test baseline referenced module-level in-memory review state
 ```
 persona=qa-eng
 action=qa
-timestamp=2026-3-31
+timestamp=2026-4-3
 adapter=AAMAD-vscode
 artifact=project-context/2.build/qa.md
-version=0.2.0
+version=0.3.0
 status=complete
 tests_passed=historical-baseline-30
 tests_failed=historical-baseline-0

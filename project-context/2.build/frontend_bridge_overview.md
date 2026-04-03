@@ -25,12 +25,12 @@ Explain the orchestration model used for document checks and provide a clear ent
 - Overview stats/system summary are currently static/presentational values.
 - Reload behavior:
   - demo mode (`NEXT_PUBLIC_BRIDGE_SOURCE` not `backend`) returns local demo confirmation,
-  - backend mode calls `reloadBridgeAgents()` from `bridgeClient` and reports readiness summary.
+  - backend mode calls `reloadBridgeAgents()` from `bridgeClient` (`POST /api/v1/bridge/agents/reload`) and reports readiness summary plus requirements version.
 
 ## UX and behavior contract
 
 - The page communicates orchestration purpose for QA, auditors, and product leads.
-- Demo Bridge entry button remains a reliable path into document-level run page.
+- Demo Bridge entry button is a fixed navigation shortcut to `/doc/DOC-001/bridge`.
 - Reload action must provide explicit user feedback in both demo and backend modes.
 
 ## Known boundaries
