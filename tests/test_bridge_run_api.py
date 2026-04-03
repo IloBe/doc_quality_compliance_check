@@ -210,3 +210,72 @@ def test_bridge_human_review_rejection_requires_next_task_and_stores_assignment(
     events = test_db_session.query(AuditEventORM).filter(AuditEventORM.correlation_id == run_id).all()
     assert any(e.event_type == "bridge.run.rejected" for e in events)
     assert any(e.event_type == "bridge.run.next_task.proposed" for e in events)
+
+
+def test_bridge_human_review_can_be_fetched_after_submission(client, test_db_session) -> None:
+    doc_id = "DOC-BRIDGE-5"
+    doc = SkillDocumentORM(
+        document_id=doc_id,
+        filename="controls.md",
+        content_type="text/markdown",
+        document_type="sop",
+        extracted_text="quality controls and oversight",
+        source="skills_extract",
+    )
+    test_db_session.add(doc)
+    test_db_session.commit()
+
+    run = client.post(
+        "/api/v1/bridge/run/eu-ai-act",
+        json={
+            "document_id": doc_id,
+            "domain_info": {
+                "domain": "quality management",
+                "description": "AI quality control",
+                "uses_ai_ml": True,
+                "intended_use": "control verification",
+                "target_market": "EU",
+            },
+        },
+    )
+    assert run.status_code == 200
+    run_id = run.json()["run_id"]
+
+    submission = client.post(
+        f"/api/v1/bridge/runs/{run_id}/human-review",
+        json={
+            "document_id": doc_id,
+            "decision": "approved",
+            "reason": "Review confirms sufficient evidence and oversight controls.",
+        },
+    )
+    assert submission.status_code == 200
+
+    fetched = client.get(f"/api/v1/bridge/runs/{run_id}/human-review")
+    assert fetched.status_code == 200
+    payload = fetched.json()
+    assert payload["run_id"] == run_id
+    assert payload["document_id"] == doc_id
+    assert payload["decision"] == "approved"
+    assert payload["reviewer_email"]
+
+
+def test_bridge_agents_reload_returns_runtime_snapshot_and_audit_event(client, test_db_session) -> None:
+    response = client.post("/api/v1/bridge/agents/reload")
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["reload_id"]
+    assert payload["requirements_version"]
+    assert payload["requirements_signature"]
+    assert isinstance(payload["agents"], list)
+    assert len(payload["agents"]) >= 1
+    assert all(agent["source"] == "backend" for agent in payload["agents"])
+
+    events = (
+        test_db_session.query(AuditEventORM)
+        .filter(AuditEventORM.event_type == "bridge.agents.reload.requested")
+        .all()
+    )
+    assert len(events) == 1
+    assert events[0].correlation_id == payload["reload_id"]

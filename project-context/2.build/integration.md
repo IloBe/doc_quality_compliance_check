@@ -152,7 +152,12 @@ Current UI status:
 
 - `/bridge` uses backend mode to reload bridge agents through `POST /api/v1/bridge/agents/reload`
 - `/doc/[docId]/bridge` uses backend mode for bridge execution, alert lookup, and human review retrieval/submission
+- Frontend role checks now align with backend bridge authorization so `architect` can execute run + human review actions in backend mode
 - When backend mode is off, the page remains in demo mode without live API dependency
+
+Validation coverage:
+
+- `tests/test_bridge_run_api.py` verifies bridge run execution, human review submission/fetch lifecycle, rejection task assignment validation, and bridge agent reload snapshot auditing.
 
 ### 2.3 Dashboard Aggregation (Implemented, Backend Mode Toggle)
 

@@ -39,6 +39,7 @@ Execute and evidence a single document-level Bridge run with step visibility, re
   - `POST /api/v1/bridge/runs/{run_id}/human-review`
 - Auth transport uses cookie-backed session requests.
 - In backend mode the run auto-starts once per load for authorized users.
+- Frontend role gating is aligned with backend route authorization for bridge run/review roles (`qm_lead`, `auditor`, `riskmanager`, `architect`).
 - Human-review submission enforces backend validation rules for reject/follow-up combinations and duplicate-review prevention.
 
 ## Backend-mode behavior contract

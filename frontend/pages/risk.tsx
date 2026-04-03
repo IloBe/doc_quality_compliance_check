@@ -250,9 +250,9 @@ const RiskPage = () => {
             <div className="rounded-2xl border border-neutral-200 bg-white p-4 text-sm text-neutral-500">Loading risk action history...</div>
           ) : null}
 
-          <div className="rounded-2xl border border-neutral-200 bg-white p-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-neutral-600">Risk records (workflow list)</h3>
-            <p className="mt-1 text-xs text-neutral-600">
+          <div className="rounded-2xl border border-slate-300 bg-slate-100 p-4">
+            <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">Risk records (workflow list)</h3>
+            <p className="mt-1 text-xs text-slate-700">
               This list is for lifecycle governance only: <strong>Draft → In Review → Approved</strong>.
               Use these entries to submit, approve, or request changes. No records are removed on create.
             </p>
@@ -270,9 +270,9 @@ const RiskPage = () => {
             onRequestChanges={(recordId) => transitionStatus(recordId, 'Draft', 'request_changes', 'Changes requested after HITL review')}
           />
 
-          <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-blue-700">Risk templates (editable content)</h3>
-            <p className="mt-1 text-xs text-blue-800">
+          <div className="rounded-2xl border border-slate-300 bg-slate-100 p-4">
+            <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">Risk templates (editable content)</h3>
+            <p className="mt-1 text-xs text-slate-700">
               This section contains the editable RMF/FMEA table content. <strong>Save, Export CSV, Push, and Load Default</strong> 
               &nbsp;actions apply to the currently active template tab.
             </p>
