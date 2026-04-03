@@ -1,32 +1,23 @@
 # Internal Audit SOP
 
-**Document ID:** `[PROJECT-ID]-SOP-IA-001`
-**Version:** 1.0
-**Status:** Draft
-**Owner:** Compliance & Quality Lead
-
-&nbsp;
+**Document ID:** `[PROJECT-ID]-SOP-IA-001`<br>
+**Version:** 1.0<br>
+**Status:** Draft<br>
+**Owner:** Compliance & Quality Lead<br>
 
 ---
-&nbsp;
 
 ## 1. Purpose
 
 Define how internal audits are planned, conducted, documented, and followed up to verify conformity and effectiveness of the governance/compliance system.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 2. Scope
 
 Applies to governance processes, controlled documentation, product lifecycle controls, and supporting evidence.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 3. Audit Program
 
@@ -37,10 +28,7 @@ Applies to governance processes, controlled documentation, product lifecycle con
 | Criteria | Policies/SOPs/regulations |
 | Independence | Auditor independent from audited activity |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 4. Audit Lifecycle
 
@@ -51,10 +39,7 @@ Applies to governance processes, controlled documentation, product lifecycle con
 5. Issue audit report.
 6. Track CAPA and verify closure.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 5. Findings Classification
 
@@ -64,10 +49,7 @@ Applies to governance processes, controlled documentation, product lifecycle con
 | Minor NC | Isolated/non-systemic deviation |
 | Observation | Improvement opportunity |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 6. Audit Records
 
@@ -79,10 +61,7 @@ Applies to governance processes, controlled documentation, product lifecycle con
 | Audit Report | Yes |
 | CAPA Linkage | Yes |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 7. Reporting and Follow-up
 
@@ -90,19 +69,13 @@ Applies to governance processes, controlled documentation, product lifecycle con
 - CAPA effectiveness must be verified before closure.
 - Overdue actions are escalated per governance policy.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 8. Competence Requirements
 
 Auditors must be trained in audit methods and relevant standards/regulations.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 9. KPIs
 
@@ -112,13 +85,10 @@ Auditors must be trained in audit methods and relevant standards/regulations.
 | CAPA closure timeliness | |
 | Repeat finding rate | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 10. Document History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | | | Initial draft |
+| 1.0 | 2026-03-12 | Barbara L. | Initial draft |

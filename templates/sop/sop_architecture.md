@@ -1,14 +1,11 @@
 # Technical Architectural System and Components Overview
 
-**Document ID:** `[PROJECT-ID]-ARCH-001`
-**Version:** 1.0
-**Status:** Draft
-**Owner:** System Architect / Technical Lead
-
-&nbsp;
+**Document ID:** `[PROJECT-ID]-ARCH-001`<br>
+**Version:** 1.0<br>
+**Status:** Draft<br>
+**Owner:** System Architect / Technical Lead<br>
 
 ---
-&nbsp;
 
 ## 1. Architecture Overview
 
@@ -17,10 +14,7 @@
 **Architecture Style:** (e.g., Microservices / Monolith / Event-driven)
 **Deployment Model:** (e.g., Cloud-native / On-premises / Hybrid)
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 2. System Context Diagram
 
@@ -36,10 +30,7 @@
 |-------------|------|-------------|-----------|
 | | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 3. Component Diagram
 
@@ -54,10 +45,7 @@
 |-----------|-----------|---------------|-------|
 | | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 4. Key Interfaces and APIs
 
@@ -65,10 +53,7 @@
 |-----------|------|----------|---------------|-------------|
 | | REST/gRPC/MQ | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 5. Data Flow
 
@@ -76,8 +61,8 @@
 
 ### 5.1 Primary Data Flow
 
-1. _______________
-2. _______________
+1. _______________<br>
+2. _______________<br>
 
 ### 5.2 Data Storage
 
@@ -85,10 +70,7 @@
 |-----------|---------------|-----------|-----------|
 | | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 6. Technology Stack
 
@@ -100,10 +82,7 @@
 | Infrastructure | | | |
 | AI/ML | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 7. Deployment Architecture
 
@@ -115,10 +94,7 @@
 | Staging | | | |
 | Production | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 8. Architecture Decisions
 
@@ -126,10 +102,7 @@
 |----|---------|-----------|------------------------|------|
 | ADR-001 | | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 9. Non-Functional Requirements Impact
 
@@ -140,13 +113,10 @@
 | Security | | |
 | Availability | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 10. Document History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | | | Initial draft |
+| 1.0 | 2026-03-12| Barbara L. | Initial draft |

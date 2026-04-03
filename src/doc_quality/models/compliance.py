@@ -57,3 +57,28 @@ class ProductDomainInfo(BaseModel):
     ai_system_description: Optional[str] = None
     intended_use: Optional[str] = None
     target_market: str = "EU"
+
+
+class StandardMappingRequestCreate(BaseModel):
+    standard_name: str = Field(..., min_length=3, max_length=200)
+    sop_reference: str = Field(..., min_length=3, max_length=255)
+    business_justification: str = Field(..., min_length=15, max_length=4000)
+    requester_email: str = Field(..., min_length=5, max_length=255)
+    tenant_id: str = Field(default="default", min_length=1, max_length=100)
+    project_id: Optional[str] = Field(default=None, max_length=100)
+
+
+class StandardMappingRequestRecord(BaseModel):
+    request_id: str
+    status: str
+    submitted_at: str
+    standard_name: str
+    sop_reference: str
+    business_justification: str
+    requester_email: str
+    tenant_id: str
+    project_id: Optional[str] = None
+
+
+class StandardMappingRequestListResponse(BaseModel):
+    items: list[StandardMappingRequestRecord] = Field(default_factory=list)

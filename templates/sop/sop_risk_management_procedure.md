@@ -1,32 +1,23 @@
 # Risk Management Procedure
 
-**Document ID:** `[PROJECT-ID]-PRO-RM-001`
-**Version:** 1.0
-**Status:** Draft
-**Owner:** Risk Manager / Quality Lead
-
-&nbsp;
+**Document ID:** `[PROJECT-ID]-PRO-RM-001`<br>
+**Version:** 1.0<br>
+**Status:** Draft<br>
+**Owner:** Risk Manager / Quality Lead<br>
 
 ---
-&nbsp;
 
 ## 1. Purpose
 
 Define the procedure for identifying, evaluating, treating, monitoring, and reviewing risks across the product lifecycle.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 2. Scope
 
 Covers technical, compliance, operational, security, and supplier-related risks.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 3. Risk Method
 
@@ -36,10 +27,7 @@ Covers technical, compliance, operational, security, and supplier-related risks.
 |-------------------|--------------|------------|
 | Defined by project matrix | Defined by project matrix | 1-25 |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 4. Risk Process
 
@@ -50,10 +38,7 @@ Covers technical, compliance, operational, security, and supplier-related risks.
 5. Track residual risk.
 6. Review at planned intervals.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 5. Risk Register Requirements
 
@@ -69,10 +54,7 @@ Covers technical, compliance, operational, security, and supplier-related risks.
 | Owner | Yes |
 | Status | Yes |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 6. Treatment Strategies
 
@@ -81,10 +63,7 @@ Covers technical, compliance, operational, security, and supplier-related risks.
 - Transfer
 - Accept
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 7. Review Cadence
 
@@ -93,33 +72,24 @@ Covers technical, compliance, operational, security, and supplier-related risks.
 | Full review | Quarterly (or defined) | Risk Manager |
 | Triggered review | Incident / major change | Risk + cross-functional team |
 
-&nbsp;
-
----
-&nbsp;
+--
 
 ## 8. Governance and Escalation
 
 - High/Critical risks require escalation to management.
 - Accepted residual risks require documented rationale and approval.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 9. Inputs / Outputs
 
 **Inputs:** incidents, audit findings, change requests, supplier issues, security findings.  
 **Outputs:** updated risk register, treatment plans, residual risk decisions, management reports.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 10. Document History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | | | Initial draft |
+| 1.0 | 2026-03-12 | Barbara L. | Initial draft |

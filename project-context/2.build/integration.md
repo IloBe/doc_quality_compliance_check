@@ -151,7 +151,6 @@ If backend mode is disabled, dashboard uses mock data from frontend state.
 
 These pages currently render markdown from repository files via `getStaticProps` (no runtime backend fetch):
 
-- `/doc/governance-manual`
 - `/sops`
 - `/architecture`
 

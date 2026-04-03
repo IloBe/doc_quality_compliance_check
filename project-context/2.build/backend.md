@@ -3,8 +3,8 @@
 <!-- markdownlint-disable MD031 MD032 MD038 MD040 MD056 MD060 -->
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.3.0  
-**Date:** 2026-3-31  
+**Version:** 0.4.0  
+**Date:** 2026-4-30  
 **Author persona:** `@backend-eng`  
 **AAMAD phase:** 2.build  
 
@@ -356,17 +356,39 @@ async def health_check() -> dict:
 
 | Property | Value |
 |----------|-------|
-| Request body | `ProductDomainInfo` — `domain_name`, `domain_description`, `uses_ai_ml: bool`, `intended_use` |
+| Request body | `ComplianceCheckRequest` — `document_content: str`, `document_id: str`, `domain_info: ProductDomainInfo` |
 | Response | `ComplianceCheckResult` with risk level, role, 9 requirements, gaps, score |
+| Auth | Required (`qm_lead`, `architect`, `riskmanager`, `auditor`) |
 | Framework | EU AI Act (Regulation (EU) 2024/1689) |
+| Notes | `document_content` is sanitized via `sanitize_text()` before processing |
 
 **`POST /api/v1/compliance/applicable-regulations`**
 
 | Property | Value |
 |----------|-------|
 | Request body | `ProductDomainInfo` |
-| Response | `list[str]` — names of applicable regulations detected |
+| Response | `list[ComplianceFramework]` — applicable regulatory frameworks detected |
+| Auth | Required (`qm_lead`, `architect`, `riskmanager`, `auditor`) |
 | Frameworks | EU AI Act, MDR, GDPR, ISO 9001, ISO 27001, BSI Grundschutz |
+
+**`POST /api/v1/compliance/standard-mapping-requests`**
+
+| Property | Value |
+|----------|-------|
+| Request body | `StandardMappingRequestCreate` — `standard_name`, `sop_reference`, `business_justification`, `requester_email`, `tenant_id`, `project_id` (optional) |
+| Response | `StandardMappingRequestRecord` — `request_id` (SMR-{hex}), `status`, `submitted_at`, all sanitized input fields |
+| Auth | Required (`qm_lead`, `architect`, `riskmanager`, `auditor`) |
+| Persistence | Persisted as `compliance.standard_mapping.requested` audit event in `audit_events` table |
+| Purpose | Submit a request to map an internal SOP to a named standard; creates an auditable compliance artefact |
+
+**`GET /api/v1/compliance/standard-mapping-requests`**
+
+| Property | Value |
+|----------|-------|
+| Query params | `limit` (1..200, default 25) |
+| Response | `StandardMappingRequestListResponse` — recent standard-mapping requests from audit event storage |
+| Auth | Required (`qm_lead`, `architect`, `riskmanager`, `auditor`) |
+| Purpose | List recent mapping requests for compliance review and dashboard display |
 
 **HITL review exposure status:**
 
@@ -462,9 +484,20 @@ async def health_check() -> dict:
 
 | Property | Value |
 |----------|-------|
-| Response | List of `StakeholderProfileRecord` — all configured role-template profiles |
-| Auth | Required (`qm_lead`, `auditor`, `riskmanager`) |
+| Query params | `include_inactive: bool` (default `true`) |
+| Response | `StakeholderProfileListResponse` — all configured role-template profiles |
+| Auth | Required (`qm_lead`, `auditor`, `riskmanager`, `architect`) |
 | Purpose | Populate role selector on the Stakeholders & Rights admin page |
+
+**`PUT /api/v1/admin/stakeholder-profiles/{profile_id}`**
+
+| Property | Value |
+|----------|-------|
+| Path param | `profile_id: str` (1..64 chars) |
+| Request body | `StakeholderProfileUpsertRequest` — `title`, `description`, `permissions`, `is_active` |
+| Response | `StakeholderProfileRecord` — created or updated profile |
+| Auth | Required (`qm_lead`, `auditor`, `riskmanager`, `architect`) |
+| Purpose | Create or update one stakeholder role-template profile (idempotent upsert) |
 
 **`GET /api/v1/admin/stakeholder-profiles/{profile_id}/employees`**
 
@@ -472,7 +505,7 @@ async def health_check() -> dict:
 |----------|-------|
 | Path param | `profile_id: str` |
 | Response | `StakeholderEmployeeAssignmentListResponse` — list of `StakeholderEmployeeAssignmentRecord` with `assignment_id`, `employee_name`, `created_at`, `created_by` |
-| Auth | Required |
+| Auth | Required (`qm_lead`, `auditor`, `riskmanager`, `architect`) |
 | Purpose | List all employees currently assigned to a role profile |
 
 **`POST /api/v1/admin/stakeholder-profiles/{profile_id}/employees`**
@@ -494,6 +527,236 @@ async def health_check() -> dict:
 | Response | HTTP 204 on success |
 | Auth | Required (`qm_lead` minimum) |
 | Purpose | Remove a named employee assignment from a role profile |
+
+---
+
+### 3.7 Bridge Routes (`/api/v1/bridge`)
+
+Production-grade compliance execution with HITL integration and regulatory drift detection.
+
+**`POST /api/v1/bridge/run`**
+
+| Property | Value |
+|----------|-------|
+| Request body | `BridgeRunRequest` — `document_id: str`, `domain_info: ProductDomainInfo` |
+| Response | `BridgeRunResponse` — `run_id`, `compliance_score`, `requirements`, `mandatory_gaps`, `approved`, `human_review_required`, `regulatory_update` |
+| Auth | Required (`qm_lead`, `architect`, `riskmanager`, `auditor`) |
+| Persistence | Run outcome persisted as audit event; findings stored in `skill_findings`; human review trigger stored in `bridge_human_reviews` |
+| Purpose | Execute full EU AI Act compliance run for a document, evaluate regulatory drift, and generate structured result for HITL review gate |
+
+**`GET /api/v1/bridge/regulatory-alert/{document_id}`**
+
+| Property | Value |
+|----------|-------|
+| Path param | `document_id: str` |
+| Response | `BridgeRegulatoryAlertResponse` — `regulatory_update` with drift status vs last approved run |
+| Auth | Required |
+| Purpose | Check if EU AI Act requirements have changed since last approved run; drives UI popup alerts |
+
+**`POST /api/v1/bridge/human-review/{run_id}`**
+
+| Property | Value |
+|----------|-------|
+| Path param | `run_id: str` |
+| Request body | HITL decision — `decision` (`approved`\|`rejected`), `reason`, and optional follow-up task assignment |
+| Response | Persisted `BridgeHumanReviewORM` record |
+| Auth | Required (`qm_lead`, `riskmanager`, `auditor`) |
+| Purpose | Record the HITL approval/rejection decision for a bridge run; creates auditable approval artefact |
+
+---
+
+### 3.8 Research Routes (`/api/v1/research`)
+
+Perplexity-powered regulatory research with graceful static fallback.
+
+**`POST /api/v1/research/regulations`**
+
+| Property | Value |
+|----------|-------|
+| Request body | `ResearchRequest` — `domain: str`, `description: str`, `target_market: str`, `custom_query: str \| None` |
+| Response | `ResearchResult` — `answer`, `citations`, `applicable_frameworks`, `provider`, `model_used`, `query` |
+| Auth | Required (`qm_lead`, `architect`, `riskmanager`, `auditor`) |
+| Graceful degradation | Falls back to static regulation map when `PERPLEXITY_API_KEY` is not set |
+| Observability | Result logged to `quality_observations` when Perplexity provider is used |
+| Purpose | Research applicable EU/German regulations for a product domain; supports compliance gap analysis |
+
+---
+
+### 3.9 Skills Routes (`/api/v1/skills`)
+
+Backend Skills API for CrewAI orchestrator tool calls. All endpoints support `allow_service=True` so machine-to-machine access via service role is permitted in addition to browser user roles.
+
+**`POST /api/v1/skills/get_document`**
+
+| Property | Value |
+|----------|-------|
+| Request body | `GetDocumentRequest` — `document_id: str` |
+| Response | `SkillDocumentRecord` |
+| Auth | Required (browser roles **or** service client) |
+| Error | HTTP 404 if document not found |
+
+**`POST /api/v1/skills/search_documents`**
+
+| Property | Value |
+|----------|-------|
+| Request body | `SearchDocumentsRequest` — `query: str`, `limit: int` |
+| Response | `SearchDocumentsResponse` — matched documents |
+| Auth | Required (browser roles or service client) |
+
+**`POST /api/v1/skills/extract_text`**
+
+| Property | Value |
+|----------|-------|
+| Request body | `ExtractTextRequest` — document id or inline content |
+| Response | `ExtractTextResponse` — extracted text, content type |
+| Auth | Required (browser roles or service client) |
+| Error | HTTP 400 if file size exceeds `MAX_FILE_SIZE_MB` |
+
+**`POST /api/v1/skills/write_finding`**
+
+| Property | Value |
+|----------|-------|
+| Request body | `WriteFindingRequest` — `document_id`, `finding_type`, `title`, `description`, `severity`, `evidence` |
+| Response | `FindingRecord` |
+| Auth | Required (browser roles or service client) |
+| Error | HTTP 404 if referenced document not found |
+
+**`POST /api/v1/skills/log_event`**
+
+| Property | Value |
+|----------|-------|
+| Request body | `LogEventRequest` — full `AuditEventORM` field set |
+| Response | `AuditEventRecord` |
+| Auth | Required (browser roles or service client) |
+| Purpose | Orchestrator emits run/step audit events directly via this skill endpoint |
+
+---
+
+### 3.10 Risk Templates Routes (`/api/v1/risk-templates`)
+
+Full CRUD for RMF (Risk Management File) and FMEA risk templates with AI-assisted row suggestions and CSV export.
+
+**`GET /api/v1/risk-templates`**
+
+| Property | Value |
+|----------|-------|
+| Query params | `template_type` (`RMF`\|`FMEA`, optional), `product` (optional) |
+| Response | `RiskTemplateListResponse` |
+| Auth | Required (`qm_lead`, `riskmanager`, `architect`, `auditor`) |
+
+**`POST /api/v1/risk-templates`**
+
+| Property | Value |
+|----------|-------|
+| Request body | `CreateRiskTemplateRequest` — `template_type`, `template_title`, `product`, `version`, `rows` |
+| Response | `RiskTemplate` (created) |
+| Auth | Required |
+
+**`GET /api/v1/risk-templates/{template_id}`**
+
+| Property | Value |
+|----------|-------|
+| Response | `RiskTemplate` with all rows |
+| Error | HTTP 404 if not found |
+| Auth | Required |
+
+**`PUT /api/v1/risk-templates/{template_id}`**
+
+| Property | Value |
+|----------|-------|
+| Request body | `UpdateRiskTemplateRequest` |
+| Response | Updated `RiskTemplate` |
+| Auth | Required |
+
+**`DELETE /api/v1/risk-templates/{template_id}`**
+
+| Property | Value |
+|----------|-------|
+| Response | HTTP 204 |
+| Auth | Required |
+
+**`PUT /api/v1/risk-templates/defaults/{template_type}`**
+
+| Property | Value |
+|----------|-------|
+| Path param | `template_type: str` (`RMF`\|`FMEA`) |
+| Request body | `EnsureDefaultRiskTemplateRequest` |
+| Response | `RiskTemplate` — created or existing default |
+| Auth | Required |
+| Purpose | Idempotent endpoint to seed the default template for a type on first use |
+
+**`GET /api/v1/risk-templates/{template_id}/export/csv`**
+
+| Property | Value |
+|----------|-------|
+| Response | `text/csv` stream — all rows exported |
+| Auth | Required |
+| Purpose | Excel-compatible CSV export for FMEA tables and risk management records (SAD §3.1 requirement) |
+
+**`POST /api/v1/risk-templates/{template_id}/ai-suggest-row`**
+
+| Property | Value |
+|----------|-------|
+| Request body | `AiSuggestRowRequest` — partial row fields and context hint |
+| Response | `AiSuggestRowResponse` — AI-suggested field values |
+| Auth | Required |
+| Graceful degradation | Falls back to empty/default suggestions when `ANTHROPIC_API_KEY` is not set |
+
+---
+
+### 3.11 Audit Trail Routes (`/api/v1/audit-trail`)
+
+Governance-focused read-only audit trail access and audit schedule management.
+
+**`GET /api/v1/audit-trail/events`**
+
+| Property | Value |
+|----------|-------|
+| Query params | `window_hours` (1..8760, default 720), `limit` (1..1000, default 200), `event_type`, `actor_id`, `subject_type`, `subject_id` (all optional filters) |
+| Response | `AuditEventListResponse` — filtered audit event timeline |
+| Auth | Required (`qm_lead`, `auditor`, `riskmanager`, `architect`) |
+| Purpose | Power the Audit Trail governance page; filter by actor, subject, or event type |
+
+**`GET /api/v1/audit-trail/events/{event_id}`**
+
+| Property | Value |
+|----------|-------|
+| Path param | `event_id: str` |
+| Response | `AuditEventRecord` — full event payload with provenance fields |
+| Auth | Required |
+| Error | HTTP 404 if not found |
+
+**`GET /api/v1/audit-trail/schedule`**
+
+| Property | Value |
+|----------|-------|
+| Query params | `tenant_id` (default `default_tenant`), `org_id`, `project_id` (optional) |
+| Response | `AuditScheduleRecord` — planned internal/external audit dates, notified body |
+| Auth | Required |
+
+**`PUT /api/v1/audit-trail/schedule`**
+
+| Property | Value |
+|----------|-------|
+| Request body | `UpsertAuditScheduleRequest` — `internal_audit_date`, `external_audit_date`, `external_notified_body`, `tenant_id`, `org_id`, `project_id` |
+| Response | Updated `AuditScheduleRecord` |
+| Auth | Required |
+| Purpose | Persist audit planning dates for compliance governance and calendar views |
+
+---
+
+### 3.12 Dashboard Routes (`/api/v1/dashboard`)
+
+Aggregated analytics endpoints powering Command Center KPIs and document risk views.
+
+**`GET /api/v1/dashboard/summary`**
+
+| Property | Value |
+|----------|-------|
+| Query params | `timeframe` (`week`\|`month`\|`year`, default `month`) |
+| Response | `DashboardSummaryResponse` — KPIs (`open_documents`, `closed_documents`, `active_jobs`, `compliance_pass_rate`, `bridge_runs_done`), `risk_distribution` (high/limited/minimal counts), document rows with per-row compliance check results |
+| Auth | Required (session authenticated) |
+| Purpose | Populate the Command Center dashboard with current quality/compliance KPIs |
 
 ---
 
@@ -665,22 +928,35 @@ Returns persisted review records as a list, with filtering/pagination support in
 
 All tables use SQLAlchemy declarative base and are created/migrated via Alembic.
 
-| Table | Migration | Key columns | Purpose |
+| Table | ORM Class | Key columns | Purpose |
 |---|---|---|---|
-| `user_sessions` | 001 | `session_id`, `user_email`, `role`, `created_at`, `expires_at` | Browser session store |
-| `hitl_reviews` | 002 | `review_id`, `document_id`, `reviewer_name`, `verdict`, `created_at` | HITL review records |
-| `audit_events` | 003 | `event_id`, `event_type`, `actor_id`, `subject_type`, `subject_id`, `payload`, `event_time` | Append-only compliance audit trail |
-| `skill_documents` | 004 | `doc_id`, `title`, `type`, `content_hash`, `created_at` | Document registry for Skills API |
-| `skill_findings` | 005 | `finding_id`, `doc_id`, `aspect`, `severity`, `description` | Analysis findings per document |
-| `quality_observations` | 006 | `obs_id`, `source_component`, `aspect`, `outcome`, `score`, `latency_ms`, `payload` (JSON), `event_time` | AI quality telemetry from workflow agents |
-| `stakeholder_profiles` | 007 | `profile_id`, `role_name`, `permissions` (JSON), `created_at` | Role-template profiles for governance |
-| `stakeholder_employee_assignments` | 008 | `assignment_id`, `profile_id`, `employee_name`, `created_by`, `created_at` | Persistent employee-to-role assignments for audit governance |
+| `user_sessions` | `UserSessionORM` | `session_id`, `session_token_hash`, `user_email`, `user_roles` (JSON), `user_org`, `is_revoked`, `expires_at`, `created_at`, `last_seen_at` | Browser session store; token stored as hash only |
+| `app_users` | `AppUserORM` | `user_id`, `email`, `password_hash`, `roles` (JSON), `org`, `is_active`, `is_locked`, `created_at`, `updated_at` | Application user credentials with hashed passwords |
+| `password_recovery_tokens` | `PasswordRecoveryTokenORM` | `token_id`, `user_email`, `token_hash`, `requested_ip`, `expires_at`, `used_at`, `attempt_count`, `requested_at` | Single-use recovery tokens; only the hash is stored |
+| `hitl_reviews` | `ReviewRecordORM` | `review_id`, `document_id`, `status`, `reviewer_name`, `reviewer_role`, `review_date`, `modifications_required` (JSON), `comments`, `approval_date`, `created_at`, `updated_at` | HITL review records with modification requests |
+| `audit_events` | `AuditEventORM` | `event_id`, `tenant_id`, `org_id`, `project_id`, `event_time`, `event_type`, `actor_type`, `actor_id`, `subject_type`, `subject_id`, `trace_id`, `correlation_id`, `payload` (JSON) | Append-only compliance audit trail; multi-tenancy + provenance fields; designed for range partitioning on `event_time` |
+| `audit_schedules` | `AuditScheduleORM` | `schedule_id`, `tenant_id`, `org_id`, `project_id`, `internal_audit_date`, `external_audit_date`, `external_notified_body`, `updated_by`, `created_at`, `updated_at` | Persistent governance audit planning schedule |
+| `bridge_human_reviews` | `BridgeHumanReviewORM` | `review_id`, `run_id`, `document_id`, `decision`, `reason`, `reviewer_email`, `reviewer_roles` (JSON), `reviewed_at`, `next_task_type`, `next_task_assignee`, `next_task_instructions`, `assignee_notified` | Persistent HITL approval/rejection decisions per bridge run |
+| `skill_documents` | `SkillDocumentORM` | `document_id`, `filename`, `content_type`, `document_type`, `extracted_text`, `source`, `created_at`, `updated_at` | Document registry for Skills API; stores extracted text for orchestrator tool calls |
+| `document_locks` | `DocumentLockORM` | `document_id` (PK), `locked_by`, `locked_at`, `expires_at` | TTL-based document editing lock; prevents concurrent modification by multiple users |
+| `skill_findings` | `FindingORM` | `finding_id`, `document_id`, `finding_type`, `title`, `description`, `severity`, `evidence` (JSON), `created_at` | Analysis findings per document created through Skills API |
+| `quality_observations` | `QualityObservationORM` | `observation_id`, `event_time`, `source_component`, `aspect`, `outcome`, `score`, `latency_ms`, `error_type`, `hallucination_flag`, `subject_type`, `subject_id`, `trace_id`, `correlation_id`, `payload` (JSON) | AI quality telemetry from workflow agents; `payload` stores LLM trace fields for `rich_payload` extraction |
+| `stakeholder_profiles` | `StakeholderProfileORM` | `profile_id`, `title`, `description`, `permissions` (JSON), `is_active`, `created_by`, `updated_by`, `created_at`, `updated_at` | Governance role-template profiles with permission sets |
+| `stakeholder_employee_assignments` | `StakeholderEmployeeAssignmentORM` | `assignment_id`, `profile_id`, `employee_name`, `created_by`, `created_at` | Persistent employee-to-role assignments; unique constraint on `(profile_id, employee_name)` |
+| `risk_templates` | `RiskTemplateORM` | `template_id`, `template_type` (`RMF`\|`FMEA`), `template_title`, `product`, `version`, `status`, `created_by`, `template_metadata` (JSON), `created_at`, `updated_at` | Risk template header records |
+| `risk_template_rows` | `RiskTemplateRowORM` | `row_id`, `template_id`, `row_order`, `row_data` (JSON), `created_at` | Individual data rows belonging to a risk template |
 
 ### Key ORM classes
 
+**`AuditEventORM`** — append-only audit trail with full provenance fields (`tenant_id`, `org_id`, `project_id`, `actor_type`/`actor_id`, `subject_type`/`subject_id`, `trace_id`, `correlation_id`). The `payload` JSON column carries event-specific data. Designed for range partitioning on `event_time` for long-term retention.
+
+**`DocumentLockORM`** — lightweight lock ownership record; `document_id` is the primary key (one lock per document). `expires_at` enables TTL-based auto-expiry via application-level check.
+
 **`QualityObservationORM`** — persists all quality signals. The `payload` column stores the full observation dict (including LLM trace fields) as JSON, enabling both structured column queries and flexible `rich_payload` extraction at the API layer.
 
-**`StakeholderEmployeeAssignmentORM`** — stores who is assigned to which governance role. `profile_id` is a foreign key to `StakeholderProfileORM`. `created_by` captures the authenticated user email at assignment time. Unique constraint on `(profile_id, employee_name)` prevents accidental duplicates.
+**`BridgeHumanReviewORM`** — HITL approval artefact for bridge runs; `next_task_type` / `next_task_assignee` fields support follow-up task assignment for `rerun_bridge` or `manual_follow_up` workflows.
+
+**`StakeholderEmployeeAssignmentORM`** — stores who is assigned to which governance role. `created_by` captures the authenticated user email at assignment time. Unique constraint on `(profile_id, employee_name)` prevents accidental duplicates.
 
 ---
 
@@ -690,31 +966,89 @@ All tables use SQLAlchemy declarative base and are created/migrated via Alembic.
 
 ```python
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    # Application
     app_name: str = "Doc Quality Compliance Check"
     app_version: str = "0.1.0"
     environment: Literal["development", "staging", "production"] = "development"
+    debug: bool = False
+
+    # API
+    api_host: str = "0.0.0.0"
+    api_port: int = 8000
     api_prefix: str = "/api/v1"
+
+    # Security
     secret_key: str = "change-me-in-production"
-    log_level: str = "INFO"
-    log_format: Literal["json", "console"] = "console"
+    allowed_file_types: list[str] = [".pdf", ".docx", ".md", ".txt"]
     max_file_size_mb: int = 10
     session_cookie_name: str = "dq_session"
-    session_cookie_secure: bool = False
+    session_cookie_secure: bool = False  # auto-set to True outside development
+    # Global request rate limiting
     global_rate_limit_enabled: bool = True
     global_rate_limit_requests: int = 240
     global_rate_limit_window_seconds: int = 60
+    # Session TTL policy
+    session_ttl_short_minutes: int = 120         # remember_me=False
+    session_ttl_remember_me_minutes: int = 7200  # remember_me=True
+    # MVP user provisioning (override via env vars — never commit real credentials)
+    auth_mvp_email: str = "mvp-user@example.invalid"
+    auth_mvp_password: str = "CHANGE_ME_BEFORE_USE"
+    auth_mvp_roles: str = "qm_lead"
+    auth_mvp_org: str = "QM-CORE-STATION"
+    auth_auto_provision_mvp_user: bool = True
+    # Password recovery
+    auth_recovery_ttl_minutes: int = 15
+    auth_recovery_rate_limit_count: int = 5
+    auth_recovery_rate_limit_window_minutes: int = 15
+    auth_recovery_debug_expose_token: bool = False  # must stay False in production
+    # Login abuse protection
     auth_login_rate_limit_count: int = 8
     auth_login_rate_limit_window_seconds: int = 300
     auth_login_lockout_seconds: int = 600
+
+    # AI / Anthropic
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-3-5-sonnet-20241022"
+
+    # AI / Perplexity (regulatory research)
     perplexity_api_key: str = ""
     perplexity_model: str = "sonar-pro"
+    perplexity_api_base_url: str = "https://api.perplexity.ai"
+
+    # Logging
+    log_level: str = "INFO"
+    log_format: Literal["json", "console"] = "console"
+
+    # Observability (OpenTelemetry + Prometheus)
+    metrics_enabled: bool = True
+    tracing_enabled: bool = True
+    tracing_exporter: Literal["none", "console", "otlp"] = "none"
+    tracing_otlp_endpoint: str = ""
+    tracing_sampling_ratio: float = 1.0
+    telemetry_service_name: str = "doc-quality-api"
+
+    # Storage paths
+    templates_dir: str = "templates"
     reports_output_dir: str = "reports"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # Database (set DATABASE_URL in .env — never commit credentials)
+    database_url: str = "postgresql+psycopg2://dbuser:CHANGE_ME@localhost:5432/doc_quality"
+    database_echo: bool = False
+
+    @model_validator(mode="after")
+    def validate_security_defaults(self) -> "Settings":
+        """Enforce secure defaults; fail-fast in production if defaults are unchanged."""
+        if self.environment != "development":
+            self.session_cookie_secure = True
+        if self.environment == "production" and self.secret_key.strip() == "change-me-in-production":
+            raise ValueError("SECRET_KEY must be explicitly configured in production")
+        return self
+
 
 def get_settings() -> Settings:
+    """Return application settings singleton."""
     return Settings()
 ```
 
@@ -884,10 +1218,10 @@ return result
 
 ```python
 persona=backend-eng
-action=develop-be
-timestamp=2026-3-31
+action=align-code-vs-sad-backend
+timestamp=2026-4-30
 adapter=AAMAD-vscode
 artifact=project-context/2.build/backend.md
-version=0.3.0
+version=0.4.0
 status=complete
 ```

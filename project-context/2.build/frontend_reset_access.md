@@ -8,39 +8,39 @@
 
 ## Purpose
 
-Complete the password reset flow using a time-bound recovery token validated by the backend.
+Complete password reset flow using a time-bound recovery token validated by backend.
 
 ## Current implementation
 
-- Reads `token` from the query string.
-- Verifies the token before showing the password reset form.
-- Blocks reset submission when the token is invalid or expired.
+- Reads `token` from query string.
+- Verifies token before showing reset form.
+- Blocks submission when token is invalid or expired.
 - Collects `newPassword` and `confirmPassword`.
-- Requires client-side validation before submission.
-- Shows success feedback with a link back to `/login`.
+- Enforces client-side validation before submission.
+- Shows success feedback with inline link back to `/login`.
 
 ## Data sources and state
 
-- Backend verification endpoint: `POST /api/v1/auth/recovery/verify`.
-- Backend reset endpoint: `POST /api/v1/auth/recovery/reset`.
+- Verification endpoint: `POST /api/v1/auth/recovery/verify`.
+- Reset endpoint: `POST /api/v1/auth/recovery/reset`.
 
 ## UX and behavior contract
 
-- While token verification is in progress, the page shows a validation state.
-- Invalid or expired tokens show a blocking message and a link to request a new recovery link.
-- Client-side validation currently enforces:
-  - minimum password length of 10 characters,
-  - exact password confirmation match.
-- On success, the page shows a confirmation message instead of auto-redirecting.
+- While token verification runs, page shows `Validating recovery token...` state.
+- Invalid/expired token shows blocking message + `/forgot-access` path.
+- Client validation enforces:
+  - minimum password length 10,
+  - exact confirmation match.
+- Success renders confirmation message; route is not auto-redirected.
 
 ## Known boundaries
 
-- The page links back to `/login` after success; it does not currently auto-navigate there.
-- Password policy guidance is minimal in the UI and may be expanded later.
+- Post-success flow is user-driven navigation back to `/login`.
+- Password policy guidance in UI remains intentionally minimal.
 
 ## Acceptance criteria
 
-- Valid token allows the reset form to appear.
-- Invalid or expired token blocks reset and points the user to `/forgot-access`.
-- Weak or mismatched passwords are rejected before submission.
-- Successful reset ends with a clear message and path back to login.
+- Valid token reveals reset form.
+- Invalid/expired token blocks form and links to `/forgot-access`.
+- Weak or mismatched passwords are rejected before request.
+- Successful reset shows clear confirmation and login path.

@@ -1,26 +1,20 @@
 # Business and Product Goals
 
-**Document ID:** `[PROJECT-ID]-BIZ-001`
-**Version:** 1.0
-**Status:** Draft
-**Owner:** Product Owner / Business Analyst
-
-&nbsp;
+**Document ID:** `[PROJECT-ID]-BIZ-001`<br>
+**Version:** 1.0<br>
+**Status:** Draft<br>
+**Owner:** Product Owner / Business Analyst<br>
 
 ---
-&nbsp;
 
 ## 1. Executive Summary
 
 > _Provide a concise (2–3 sentence) summary of the product and its primary business purpose._
 
-**Product Name:** _______________
-**Product Vision:** _______________
-
-&nbsp;
+**Product Name:** _______________<br>
+**Product Vision:** _______________<br>
 
 ---
-&nbsp;
 
 ## 2. Business Context
 
@@ -38,13 +32,10 @@
 
 > _How does this product align with the organisation's strategic goals?_
 
-- Strategic goal 1: _______________
-- Strategic goal 2: _______________
-
-&nbsp;
+- Strategic goal 1: _______________<br>
+- Strategic goal 2: _______________<br>
 
 ---
-&nbsp;
 
 ## 3. Product Goals
 
@@ -62,10 +53,7 @@
 |---|------|----------|
 | 1 | | High / Medium / Low |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 4. Key Performance Indicators (KPIs)
 
@@ -73,39 +61,30 @@
 |-----|----------|--------|-------------------|
 | | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 5. Constraints and Assumptions
 
 ### 5.1 Business Constraints
 
-- Budget: _______________
-- Timeline: _______________
-- Regulatory: _______________
+- Budget: _______________<br>
+- Timeline: _______________<br>
+- Regulatory: _______________<br>
 
 ### 5.2 Assumptions
 
-1. _______________
-2. _______________
-
-&nbsp;
+1. _______________<br>
+2. _______________<br>
 
 ---
-&nbsp;
 
 ## 6. Out of Scope
 
 > _Explicitly list what this product/project does NOT cover._
 
-- _______________
-
-&nbsp;
+- _______________<br>
 
 ---
-&nbsp;
 
 ## 7. Approval
 

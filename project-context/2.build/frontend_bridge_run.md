@@ -4,11 +4,11 @@
 **Route:** `/doc/[docId]/bridge`  
 **Protection:** Protected route inside `AppShell`  
 **Owner persona:** `@frontend-eng`  
-**Status:** Implemented document-session page with mock and optional backend mode
+**Status:** Implemented document-session page with hybrid runtime behavior
 
 ## Purpose
 
-Execute and evidence a single document-level Bridge run with step-by-step visibility, readable control outcomes, and audit-friendly logs.
+Execute and evidence a single document-level Bridge run with step visibility, readable control outcomes, and audit-friendly logs.
 
 ## Route and component structure
 
@@ -18,54 +18,55 @@ Execute and evidence a single document-level Bridge run with step-by-step visibi
 
 ## Current implementation
 
-- Resolves the document from the mock store by `docId`.
-- In backend mode, creates a fallback placeholder document when `docId` is not found in the mock store.
-- Shows page title, session ID, `Why this page matters`, and `Live Session` tag.
-- Renders a four-step pipeline:
+- Resolves document from local store by `docId`; in backend mode can create fallback document header when local record is missing.
+- Shows page title, session ID, `Live Session` tag, and `Why this page matters` panel toggle.
+- Renders four-step pipeline:
   - Inspection Agent
   - Compliance Agent
   - Research Agent
   - Quality Gate
-- Maintains a timestamped stream-log panel.
+- Maintains timestamped stream-log panel.
 - Provides `Execute Bridge Run` and `Exit Workflow` actions.
-- Updates document status to `Approved` when a backend run returns `approved=true`.
+- Provides mandatory human review panel after run completion (approve/reject with reason and optional follow-up task fields).
 
 ## Runtime modes and backend integration
 
 - Backend mode is enabled with `NEXT_PUBLIC_BRIDGE_SOURCE=backend`.
-- API origin follows the same `NEXT_PUBLIC_API_ORIGIN` / same-origin logic as other frontend clients.
-- Backend endpoints used by the current page:
+- Backend endpoints currently used:
   - `POST /api/v1/bridge/run/eu-ai-act`
   - `GET /api/v1/bridge/alerts/eu-ai-act/{document_id}`
-- Auth transport requires cookie-backed session requests.
+  - `GET /api/v1/bridge/human-review/{run_id}`
+  - `POST /api/v1/bridge/human-review/{run_id}`
+- Auth transport uses cookie-backed session requests.
+- In backend mode the run auto-starts once per load for authorized users.
 
 ## Backend-mode behavior contract
 
-- On page load in backend mode, the page checks for regulatory alerts.
-- If the backend reports `requires_document_update=true`, a regulatory popup is shown.
-- In backend mode, the run auto-starts once per page load for authorized users.
-- Compliance rows use backend `requirements` data when available.
-- API failures surface as an error banner while keeping the page usable.
+- On load, page checks regulatory alert state.
+- If backend reports `requires_document_update=true`, regulatory popup is shown.
+- Compliance rows consume backend requirement payload when available.
+- Existing human review (if present) is fetched and rendered.
+- API failures surface in-page error messages while preserving page usability.
 
 ## UX and behavior contract
 
-- The execute button is disabled when the user lacks `bridge.run` permission.
-- Step states are visually distinct for pending, running, and completed phases.
-- Compliance step shows checked ISO/SOP-style controls with pass/fail badges.
-- Research step shows cross-referenced regulations with pass/fail badges.
-- Quality Gate shows a concise final result summary after the run reaches the last step.
-- Session ID stays visible for traceability.
+- Execute button is disabled when user lacks `bridge.run` permission.
+- Step states are distinct for pending/running/completed.
+- Compliance and research sections show pass/fail control outcomes.
+- Quality Gate presents concise final summary.
+- Human review panel enforces minimum reason input and conditional assignee requirement for manual follow-up rejection.
+- Session ID remains visible for traceability.
 
 ## Known boundaries
 
-- Non-backend mode uses simulated delays, mock checks, and generated logs.
-- The `Context Parameters` panel is currently static presentation content.
-- This page is more implementation-complete than the overview page, but still mixes mock and live behavior by design.
+- Non-backend mode uses simulated delays, derived checks, and local review-record fallback.
+- Context parameter surfaces remain mostly presentation-oriented.
+- Page is implementation-rich but still intentionally hybrid (mock + live) by design.
 
 ## Acceptance criteria
 
-- A run can execute without runtime errors.
-- Compliance, Research, and Quality Gate sections show readable outcome details.
-- Backend mode calls alert and run endpoints with authenticated session cookies.
-- Regulatory update popup appears when the backend marks a document update as required.
-- Final state is understandable without opening additional routes.
+- Run executes without runtime errors.
+- Compliance, Research, and Quality Gate sections show readable details.
+- Backend mode calls alert/run/review endpoints with authenticated cookies.
+- Regulatory popup appears when backend marks update required.
+- Human review submission updates page state and status messaging.

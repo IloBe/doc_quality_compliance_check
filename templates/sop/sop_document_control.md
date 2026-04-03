@@ -1,32 +1,23 @@
 # Document Control SOP
 
-**Document ID:** `[PROJECT-ID]-SOP-DC-001`
-**Version:** 1.0
-**Status:** Draft
-**Owner:** Compliance & Quality Lead
-
-&nbsp;
+**Document ID:** `[PROJECT-ID]-SOP-DC-001`<br>
+**Version:** 1.0<br>
+**Status:** Draft<br>
+**Owner:** Compliance & Quality Lead<br>
 
 ---
-&nbsp;
 
 ## 1. Purpose
 
 Define how controlled documents are created, reviewed, approved, published, updated, archived, and retired.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 2. Scope
 
 Applies to SOPs, policies, templates, work instructions, forms, and governance records used in the project.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 3. Roles and Responsibilities
 
@@ -37,10 +28,7 @@ Applies to SOPs, policies, templates, work instructions, forms, and governance r
 | Approver | Grants formal release approval |
 | Quality Lead | Maintains document index and retention |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 4. Document Lifecycle
 
@@ -50,10 +38,7 @@ Applies to SOPs, policies, templates, work instructions, forms, and governance r
 4. Effective
 5. Obsolete / Archived
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 5. Mandatory Metadata
 
@@ -67,10 +52,7 @@ Applies to SOPs, policies, templates, work instructions, forms, and governance r
 | Approval | Yes |
 | Change Summary | Yes |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 6. Versioning Rules
 
@@ -78,10 +60,7 @@ Applies to SOPs, policies, templates, work instructions, forms, and governance r
 - Minor version increment for clarifications/editorial updates.
 - Obsolete versions remain retrievable and clearly marked.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 7. Review and Approval Workflow
 
@@ -92,10 +71,7 @@ Applies to SOPs, policies, templates, work instructions, forms, and governance r
 | 3 | Approver authorizes release | Approval record |
 | 4 | Publish effective version | Published file + index update |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 8. Distribution and Access
 
@@ -103,10 +79,7 @@ Applies to SOPs, policies, templates, work instructions, forms, and governance r
 - Access is role-based and least-privilege.
 - Only current effective versions may be used operationally.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 9. Retention and Archiving
 
@@ -116,10 +89,7 @@ Applies to SOPs, policies, templates, work instructions, forms, and governance r
 | Approval records | Define per policy | |
 | Change history | Define per policy | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 10. Compliance Evidence
 
@@ -128,13 +98,10 @@ Applies to SOPs, policies, templates, work instructions, forms, and governance r
 - Effective-date traceability
 - Archive traceability for obsolete documents
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 11. Document History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | | | Initial draft |
+| 1.0 | 2026-03-12 | Barbara L. | Initial draft |

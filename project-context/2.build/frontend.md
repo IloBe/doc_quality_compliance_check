@@ -3,8 +3,8 @@
 <!-- markdownlint-disable MD007 MD009 MD013 MD022 MD031 MD032 MD034 MD036 MD037 -->
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.6.0  
-**Date:** 2026-3-31  
+**Version:** 0.7.0  
+**Date:** 2026-4-3  
 **Author persona:** `@frontend-eng`  
 **AAMAD phase:** 2.build  
 
@@ -21,7 +21,7 @@ This document reflects the **current shipped implementation**, not the earlier s
 - **Runtime:** Next.js application in `frontend/` with the Pages Router.
 - **Auth model:** backend-issued HTTP-only session cookie, checked on protected route load.
 - **Shell model:** authenticated pages render inside `AppShell` with sidebar, topbar, operations drawer, and blocking modal.
-- **Data model:** hybrid frontend — auth/recovery and optional dashboard analytics use backend APIs; several workflow pages still use a mock Zustand store for demo continuity.
+- **Data model:** hybrid frontend — auth/recovery, document upload/retrieval, and document lock actions are backend-integrated with graceful demo fallback for continuity.
 - **Content model:** architecture and SOP library pages render markdown from repository templates at build time.
 - **Operational model:** local development normally runs frontend on `localhost:3000` and backend on `127.0.0.1:8000`.
 
@@ -73,12 +73,19 @@ frontend/
 │   ├── OperationsDrawer.tsx — Running jobs / operation visibility
 │   ├── BlockingModal.tsx    — Exit confirmation while operations are active
 │   ├── DocBridgePage.tsx    — Bridge run experience component
-│   └── WhyThisPageMatters.tsx — Context helper panel used across pages
+│   ├── PageHeaderWithWhy.tsx — Standardized page header + purpose narrative
+│   ├── FooterInfoCard.tsx   — Standardized governance footer note surface
+│   └── documentHub/         — Document Hub page + card components
 ├── lib/
 │   ├── authClient.ts        — Auth/recovery API client + health check logic
 │   ├── authContext.tsx      — Current user context + permission helpers
 │   ├── rbac.ts              — Frontend permission mapping
 │   ├── mockStore.ts         — Zustand-backed mock data for demo workflows
+│   ├── documentUploadClient.ts — Document upload API + demo fallback
+│   ├── documentRetrievalClient.ts — Persistent document list/get client
+│   ├── documentLockClient.ts — Document lock acquire/release API + fallback
+│   ├── riskActionClient.ts  — Risk action persistence + fallback
+│   ├── riskTemplateClient.ts — Risk template persistence client
 │   ├── dashboardClient.ts   — Optional live dashboard aggregation client
 │   └── observabilityClient.ts — Admin observability API + metrics client
 ├── pages/
@@ -87,10 +94,19 @@ frontend/
 │   ├── index.tsx            — Document Hub
 │   ├── dashboard.tsx        — Dashboard analytics page
 │   ├── compliance.tsx       — Governance / standards overview
-│   ├── workflow.tsx         — Workflow orchestration overview
-│   ├── bridge.tsx           — Route alias to workflow page
+│   ├── bridge.tsx           — Bridge orchestration overview page
+│   ├── risk.tsx             — RMF/FMEA governance and actions
+│   ├── exports.tsx          — Export registry
+│   ├── audit-trail.tsx      — Audit events and schedule
+│   ├── auditor-workstation.tsx — Human review workstation
+│   ├── auditor-vault.tsx    — Read-only evidence inventory
+│   ├── artifact-lab/        — Artifact run list + run detail views
+│   ├── help/index.tsx       — Help center
+│   ├── help/qa.tsx          — Q&A reference page
+│   ├── help/glossary.tsx    — Glossary page
 │   ├── architecture.tsx     — arc42 library view from markdown templates
 │   ├── sops.tsx             — SOP library view from markdown templates
+│   ├── doc/[docId]/bridge.tsx — Dynamic document bridge route
 │   ├── admin/index.tsx      — Admin center overview
 │   ├── admin/observability.tsx — Tracing/quality telemetry view
 │   ├── admin/stakeholders.tsx — Stakeholder role templates and rights matrix
@@ -123,13 +139,22 @@ The frontend currently has two route classes:
    - `/reset-access`
 
 2. **Protected workstation routes**
-   - `/` (Document Hub)
-   - `/dashboard`
-   - `/compliance`
-   - `/workflow`
-   - `/bridge` (alias/export of workflow)
-   - `/architecture`
-   - `/sops`
+  - `/` (Document Hub)
+  - `/dashboard`
+  - `/compliance`
+  - `/bridge`
+  - `/risk`
+  - `/exports`
+  - `/audit-trail`
+  - `/auditor-workstation`
+  - `/auditor-vault`
+  - `/artifact-lab`
+  - `/artifact-lab/[runId]`
+  - `/architecture`
+  - `/sops`
+  - `/help`
+  - `/help/qa`
+  - `/help/glossary`
   - `/admin`
   - `/admin/observability`
   - `/admin/stakeholders`
@@ -222,6 +247,9 @@ The frontend is currently **hybrid**, not uniformly backend-driven.
 
 - **Login / logout / session check**
 - **Forgot-access / reset-access**
+- **Document upload** via `POST /api/v1/documents/upload`
+- **Document retrieval** via `GET /api/v1/documents` and `GET /api/v1/documents/{id}`
+- **Document locking** via `POST /api/v1/documents/{id}/lock/acquire` and `.../release`
 - **Optional dashboard summary** when `NEXT_PUBLIC_DASHBOARD_SOURCE=backend`
 - **Auth health badge** on login
 - **Admin observability summary** via `GET /api/v1/observability/quality-summary?window_hours=…`
@@ -230,13 +258,14 @@ The frontend is currently **hybrid**, not uniformly backend-driven.
 - **Admin metrics snapshot** via backend `/metrics` endpoint (proxied through Next.js rewrite)
 - **Stakeholder profiles** via `GET /api/v1/admin/stakeholder-profiles`
 - **Stakeholder employee assignments** via `GET/POST/DELETE /api/v1/admin/stakeholder-profiles/{id}/employees`
+- **Risk action log persistence** via `/api/v1/risk-templates/actions` (with fallback)
 
 ### 4.2 Mock/demo-driven today
 
 `frontend/lib/mockStore.ts` still powers several workstation experiences with Zustand state:
 
-- document cards and filters in Document Hub
-- lock acquisition simulation
+- document card rendering and local filtering in Document Hub
+- local lock-state synchronization after backend lock/unlock calls
 - export queue simulation
 - bridge run status simulation
 - operations-running status used by shell modal behavior
@@ -262,10 +291,11 @@ Implemented as `frontend/pages/index.tsx`.
 
 Current behavior:
 
-- lists documents from the mock store,
+- loads persisted documents from backend on mount, then merges into local state,
 - supports query/project filtering,
 - enforces permission-sensitive actions via `useCan(...)`,
-- allows mock lock acquisition,
+- supports lock acquire/release with backend API and demo fallback,
+- supports upload with backend persistence and demo fallback,
 - links into bridge workflows.
 
 ### 5.2 Dashboard (`/dashboard`)
@@ -289,9 +319,9 @@ Current behavior:
 - acts primarily as a reference/guidance surface,
 - is not yet the full backend compliance-check execution UI described in older MVP docs.
 
-### 5.4 Workflow / Bridge overview (`/workflow`, `/bridge`)
+### 5.4 Bridge overview (`/bridge`)
 
-Implemented as `frontend/pages/workflow.tsx`, with `bridge.tsx` re-exporting that page.
+Implemented as `frontend/pages/bridge.tsx` (self-contained, no alias).
 
 Current behavior:
 
@@ -353,6 +383,46 @@ Current behavior:
   - Bulk-add mode: toggled separately; accepts a textarea with one name per line, deduplicates, fires parallel async POSTs, and shows a success/fail count message on completion.
   - Each assignment has an inline Remove button (`DELETE …/employees/{assignment_id}`).
 
+### 5.9 Risk workspace (`/risk`)
+
+Implemented as `frontend/pages/risk.tsx`.
+
+Current behavior:
+
+- supports RMF/FMEA record handling and status transitions,
+- writes risk action trail via `riskActionClient` (backend-first, demo fallback),
+- creates risk templates via `riskTemplateClient`,
+- keeps UI responsive through local view models and filtered table projections.
+
+### 5.10 Reporting and audit pages
+
+Implemented as:
+
+- `frontend/pages/exports.tsx`
+- `frontend/pages/audit-trail.tsx`
+- `frontend/pages/auditor-workstation.tsx`
+- `frontend/pages/auditor-vault.tsx`
+
+Current behavior:
+
+- **Exports Registry** tracks export status, filtering, and download dialog UX.
+- **Audit Trail** provides schedule and event-level inspection surfaces.
+- **Auditor Workstation** supports reviewer decision workflows.
+- **Auditor Vault** provides a read-only, consolidated evidence inventory for audit retrieval.
+
+### 5.11 Help center pages (`/help*`)
+
+Implemented as:
+
+- `frontend/pages/help/index.tsx`
+- `frontend/pages/help/qa.tsx`
+- `frontend/pages/help/glossary.tsx`
+
+Current behavior:
+
+- provides governance snippets, Q&A quick references, and glossary support,
+- complements topbar contextual help with persistent reference content.
+
 ---
 
 ## Section 6 – Role Awareness and Permission Checks
@@ -405,7 +475,7 @@ The frontend is more advanced than the original static MVP concept, but it is **
 
 Important current boundaries:
 
-- Document Hub still uses mock data rather than the full documents API.
+- Document Hub rendering still depends on local store composition, while persistence and lock ownership are backend-backed.
 - Compliance page is currently a governance reference view, not a full interactive compliance run form.
 - Workflow/Bridge surfaces are partially demo-oriented and do not expose every orchestrator/runtime state via live backend APIs.
 - Dashboard can be live-backed, but defaults to mock mode for resilience.
@@ -440,8 +510,10 @@ This is the correct state to document for the current codebase.
 - Auth is **backend-session based**, not localStorage-token based.
 - Protected pages are **shell-wrapped** after session validation.
 - The current UI is **hybrid live/mock by design**.
+- Document lock ownership follows **backend-first control with demo fallback**, preserving continuity under degraded backend conditions.
 - Template-library pages are **build-time markdown renderers**.
 - The login-page Auth API badge is **default-on and direct-health-based** for stable demo behavior.
+- Primary pages standardize a **Governance note** footer card convention for consistent page-level guidance.
 
 ---
 
@@ -449,4 +521,4 @@ This is the correct state to document for the current codebase.
 
 - Reviewed against current code in `frontend/pages`, `frontend/components`, `frontend/lib`, and `frontend/next.config.js`.
 - Updated to remove obsolete references to single-file HTML/CSS/JS architecture.
-- Aligned with `README.md`, `IMPLEMENTATION_PLAN.md`, and `project-context/2.build/backend.md` as of 2026-3-31.
+- Aligned with `README.md`, `IMPLEMENTATION_PLAN.md`, and `project-context/2.build/backend.md` as of 2026-4-3.

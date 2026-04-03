@@ -1,32 +1,23 @@
 # CAPA SOP (Corrective and Preventive Action)
 
-**Document ID:** `[PROJECT-ID]-SOP-CAPA-001`
-**Version:** 1.0
-**Status:** Draft
-**Owner:** Quality Manager / Compliance Lead
-
-&nbsp;
+**Document ID:** `[PROJECT-ID]-SOP-CAPA-001`<br>
+**Version:** 1.0<br>
+**Status:** Draft<br>
+**Owner:** Quality Manager / Compliance Lead<br>
 
 ---
-&nbsp;
 
 ## 1. Purpose
 
 Define how nonconformities are corrected and prevented through structured CAPA workflow, root-cause analysis, and effectiveness verification.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 2. Scope
 
 Applies to findings from audits, incidents, complaints, monitoring, testing, and risk reviews.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 3. CAPA Workflow
 
@@ -38,10 +29,7 @@ Applies to findings from audits, incidents, complaints, monitoring, testing, and
 6. Verify effectiveness.
 7. Close with evidence.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 4. CAPA Record Requirements
 
@@ -57,10 +45,7 @@ Applies to findings from audits, incidents, complaints, monitoring, testing, and
 | Effectiveness Result | Yes |
 | Closure Approval | Yes |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 5. Root Cause Methods
 
@@ -68,10 +53,7 @@ Applies to findings from audits, incidents, complaints, monitoring, testing, and
 - Fishbone (Ishikawa)
 - Fault tree (as needed)
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 6. Effectiveness Verification
 
@@ -81,10 +63,7 @@ Applies to findings from audits, incidents, complaints, monitoring, testing, and
 | No recurrence period | Monitoring evidence |
 | Audit confirmation | Follow-up audit result |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 7. Escalation Rules
 
@@ -92,10 +71,7 @@ Applies to findings from audits, incidents, complaints, monitoring, testing, and
 - Recurrent issues trigger systemic review.
 - High-risk CAPAs require priority handling.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 8. Metrics
 
@@ -105,13 +81,10 @@ Applies to findings from audits, incidents, complaints, monitoring, testing, and
 | Recurrence rate | |
 | Mean days to closure | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 9. Document History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | | | Initial draft |
+| 1.0 | 2026-03-12| Barbara L. | Initial draft |

@@ -1,14 +1,11 @@
 # Stakeholders
 
-**Document ID:** `[PROJECT-ID]-STK-001`
-**Version:** 1.0
-**Status:** Draft
-**Owner:** Project Manager / Business Analyst
-
-&nbsp;
+**Document ID:** `[PROJECT-ID]-STK-001`<br>
+**Version:** 1.0<br>
+**Status:** Draft<br>
+**Owner:** Project Manager / Business Analyst<br>
 
 ---
-&nbsp;
 
 ## 1. Stakeholder Register
 
@@ -17,10 +14,7 @@
 | STK-01 | | | High/Med/Low | High/Med/Low | |
 | STK-02 | | | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 2. Stakeholder Groups
 
@@ -43,10 +37,7 @@
 | Customers / Clients | | |
 | Partners / Vendors | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 3. RACI Matrix
 
@@ -57,10 +48,7 @@
 | Compliance review | | | | |
 | Final approval | | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 4. Communication Plan
 
@@ -69,10 +57,7 @@
 | | Status update | Weekly | | |
 | | Review meeting | Monthly | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 5. Stakeholder Concerns & Mitigation
 
@@ -80,13 +65,10 @@
 |-------------|---------|-------------------|
 | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 6. Document History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | | | Initial draft |
+| 1.0 | 2026-03-12 | Barbara L. | Initial draft |

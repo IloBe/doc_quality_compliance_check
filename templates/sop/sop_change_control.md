@@ -1,32 +1,23 @@
 # Change Control SOP
 
-**Document ID:** `[PROJECT-ID]-SOP-CHG-001`
-**Version:** 1.0
-**Status:** Draft
-**Owner:** Engineering Lead / Quality Lead
-
-&nbsp;
+**Document ID:** `[PROJECT-ID]-SOP-CHG-001`<br>
+**Version:** 1.0<br>
+**Status:** Draft<br>
+**Owner:** Engineering Lead / Quality Lead<br>
 
 ---
-&nbsp;
 
 ## 1. Purpose
 
 Define how changes impacting product behavior, compliance evidence, security posture, or controlled documentation are requested, assessed, approved, implemented, and verified.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 2. Scope
 
 Applies to product code, infrastructure, configurations, workflows, and controlled documents.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 3. Change Classification
 
@@ -36,10 +27,7 @@ Applies to product code, infrastructure, configurations, workflows, and controll
 | Normal | Risk-assessed planned change | Cross-functional approval |
 | Emergency | Urgent fix with retrospective review | Incident authority + retrospective board |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 4. Required Inputs (Change Request)
 
@@ -53,10 +41,7 @@ Applies to product code, infrastructure, configurations, workflows, and controll
 | Verification Plan | Yes |
 | Rollback/Contingency Plan | Yes |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 5. Workflow
 
@@ -67,10 +52,7 @@ Applies to product code, infrastructure, configurations, workflows, and controll
 5. Execute release decision.
 6. Perform post-change review and record evidence.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 6. Testing and Evidence
 
@@ -81,10 +63,7 @@ Applies to product code, infrastructure, configurations, workflows, and controll
 | Security verification | Scan / review results |
 | Release decision | Approval record |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 7. Emergency Changes
 
@@ -92,19 +71,13 @@ Applies to product code, infrastructure, configurations, workflows, and controll
 - Require compensating controls where needed.
 - Mandatory retrospective review within defined timeframe.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 8. Segregation of Duties
 
 No individual should self-approve high-impact changes where independence is required.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 9. Metrics
 
@@ -115,13 +88,10 @@ No individual should self-approve high-impact changes where independence is requ
 | Emergency change ratio | |
 | Lead time to approval | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 10. Document History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | | | Initial draft |
+| 1.0 | 2026-03-12 | Barbara L. | Initial draft |

@@ -1,32 +1,23 @@
 # Supplier Management SOP
 
-**Document ID:** `[PROJECT-ID]-SOP-SUP-001`
-**Version:** 1.0
-**Status:** Draft
-**Owner:** Procurement / Compliance Lead
-
-&nbsp;
+**Document ID:** `[PROJECT-ID]-SOP-SUP-001`<br>
+**Version:** 1.0<br>
+**Status:** Draft<br>
+**Owner:** Procurement / Compliance Lead<br>
 
 ---
-&nbsp;
 
 ## 1. Purpose
 
 Define supplier qualification, approval, monitoring, and re-evaluation for suppliers impacting compliance, security, service continuity, or evidence integrity.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 2. Scope
 
 Applies to cloud providers, hosting, authentication, logging, storage, and other critical third parties.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 3. Supplier Risk Tiering
 
@@ -36,10 +27,7 @@ Applies to cloud providers, hosting, authentication, logging, storage, and other
 | Tier 2 | Medium | Supporting service provider |
 | Tier 3 | Low | Non-critical supplier |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 4. Qualification and Selection
 
@@ -50,10 +38,7 @@ Applies to cloud providers, hosting, authentication, logging, storage, and other
 | Service reliability | SLA / uptime history |
 | Data handling | DPA / processing terms |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 5. Approval Workflow
 
@@ -63,10 +48,7 @@ Applies to cloud providers, hosting, authentication, logging, storage, and other
 4. Contract and SLA reviewed/approved.
 5. Supplier activated in approved register.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 6. Ongoing Monitoring
 
@@ -76,10 +58,7 @@ Applies to cloud providers, hosting, authentication, logging, storage, and other
 | Security/compliance review | At least annually |
 | Incident review | Event-driven |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 7. Incident and Nonconformity Handling
 
@@ -87,10 +66,7 @@ Applies to cloud providers, hosting, authentication, logging, storage, and other
 - Required notifications and response SLAs are enforced.
 - CAPA opened for repeated or critical supplier issues.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 8. Re-evaluation and Offboarding
 
@@ -100,10 +76,7 @@ Applies to cloud providers, hosting, authentication, logging, storage, and other
 | Major incident | Immediate risk review |
 | Service termination | Secure offboarding + data disposition evidence |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 9. Records
 
@@ -112,13 +85,10 @@ Applies to cloud providers, hosting, authentication, logging, storage, and other
 - Contracts/SLAs/DPAs
 - Monitoring reports and incidents
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 10. Document History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | | | Initial draft |
+| 1.0 | 2026-03-12 | Barbara L. | Initial draft |

@@ -4,46 +4,53 @@
 **Route:** `/`  
 **Protection:** Protected route inside `AppShell`  
 **Owner persona:** `@frontend-eng`  
-**Status:** Implemented, mock-backed workspace entry page
+**Status:** Implemented, hybrid persisted/demo workspace entry page
 
 ## Purpose
 
-Serve as the operational landing page for governed documentation assets so users can filter records, inspect ownership/status, acquire locks, and launch Bridge workflows.
+Serve as the controlled landing page for governed documentation assets so users can search records, inspect ownership/status, upload files, manage edit locks, and launch Bridge workflows.
 
 ## Current implementation
 
-- Shows pre-title label `Home` and title `Document Hub`.
-- Shows a `LuInfo` icon that toggles the `Why this page matters` helper panel.
-- Supports query-based filtering through `q` and `project` URL params.
-- Mirrors query param `q` into local filter state for input editing.
-- Renders document cards from the Zustand mock store.
-- Exposes `Upload Document`, `Acquire Lock`, and Bridge-launch actions.
+- Renders standardized header via `PageHeaderWithWhy` (`Home` → `Document Hub`).
+- Supports query-driven filtering through `q` and `project` URL params.
+- Mirrors query param `q` into local filter state for user editing.
+- Loads persisted documents on mount via `listDocuments()` and merges them into local store state.
+- Exposes `Upload Document`, lock action button, and Bridge-launch actions.
+- Uses a bottom `Governance note` footer card for page-level policy guidance.
 
 ## Data sources and permissions
 
-- Document source is `useMockStore(state => state.documents)`.
-- Lock acquisition uses `useMockStore(state => state.acquireLock)`.
+- Primary render source is `useMockStore(state => state.documents)`.
+- Persisted list ingestion comes from `documentRetrievalClient` (`GET /api/v1/documents`).
+- Upload uses `documentUploadClient` (`POST /api/v1/documents/upload`) with demo fallback.
+- Lock actions use `documentLockClient` (`.../lock/acquire`, `.../lock/release`) with demo fallback.
+- Local lock synchronization uses `acquireLock`, `releaseLock`, and `setDocumentLock` from mock store.
 - Edit permission is controlled by `useCan('doc.edit')`.
 - Bridge-launch permission is controlled by `useCan('bridge.run')`.
 
 ## UX and behavior contract
 
 - Search input filters by document ID, title, type, and product.
-- Pressing `Enter` updates the route query without a full navigation refresh.
-- Upload is currently a permission-gated UI action, not a fully wired document-ingest workflow on this page.
-- Lock buttons show either `Acquire Lock` or `Locked by ...` state.
-- Bridge entry links to `/doc/{docId}/bridge` when the role permits it.
-- An explicit empty state is shown when filters produce no matches.
+- Pressing `Enter` updates route query via shallow navigation.
+- Upload validates file extension before request and surfaces user-facing success/error messages.
+- Lock button behavior is ownership-aware:
+  - unlocked → `Acquire Lock`
+  - locked by current user → `Release Lock`
+  - locked by another owner → disabled + owner displayed
+- Bridge entry links to `/doc/{docId}/bridge` when role permits it.
+- Empty-state card appears when filters produce no matches.
 
 ## Known boundaries
 
-- Document Hub still uses mock data rather than the live documents API.
-- Project filtering is query-driven but still works against the local mock dataset.
-- Upload and lock behavior are demo-friendly UI flows, not yet full backend document orchestration.
+- Rendering still relies on local store composition for responsiveness.
+- Persistence and lock APIs degrade gracefully to demo behavior when backend is unavailable.
+- Status filter UI currently remains presentational (`Status: All`) rather than a separate backend-driven filter control.
 
 ## Acceptance criteria
 
-- Existing query filters are reflected in the visible UI state.
+- Existing query filters are reflected in visible UI state.
 - Role-restricted actions are disabled rather than silently hidden.
+- Upload success inserts a new card immediately and reports backend/demo mode result.
+- Lock acquire/release flows show explicit user feedback and owner conflict messaging.
 - Users with `bridge.run` permission can open a document Bridge session.
-- Empty-state and card metadata remain clear and audit-oriented.

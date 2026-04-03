@@ -116,42 +116,40 @@ Client module: `frontend/lib/stakeholderClient.ts`
 
 ## Header style
 
-Both admin sub-pages (`/admin/observability`, `/admin/stakeholders`) implement the same header pattern as the Dashboard:
+All admin pages use the standardized `PageHeaderWithWhy` pattern:
 
-- breadcrumb label above the page title (`Admin / Observability`, `Admin / Stakeholders & Rights`),
-- inline info icon button (`LuInfo`) that toggles a `WhyThisPageMatters` context panel,
-- subtitle paragraph with page purpose.
+- breadcrumb-style eyebrow label (`System Administration`, `Admin / Observability`, `Admin / Access Governance`),
+- explicit page purpose subtitle,
+- context explanation rendered via the shared page-header framework.
 
 ---
 
 ## UX and behavior contract
 
-- Admin section must remain discoverable from the left navigation with nested subitems.
-- Observability page must show explicit loading / error states in backend mode.
-- Technical metrics must degrade gracefully when the metrics endpoint is unavailable (returns `null` values, not a page error).
-- Both admin pages must render within the same workstation shell patterns as other protected pages.
-- Demo mode must clearly label itself via the blue banner to prevent operator confusion.
-- Bulk-add must show a count message confirming how many names were added successfully and how many failed.
+- Admin section remains discoverable from left navigation with nested subitems.
+- Observability page shows explicit loading/error states in backend mode.
+- Metrics retrieval degrades gracefully if `/metrics` is unavailable (null snapshot values, no page crash).
+- Admin pages render within shared protected shell conventions.
+- Demo mode is clearly labeled via blue banner to prevent operator confusion.
+- Stakeholder bulk-add shows success/fail summary count.
+- `/admin` overview page uses standardized `Governance note` footer convention.
 
 ---
 
 ## Acceptance criteria
 
-- Clicking `Admin` in the sidebar reveals navigable subitems (`Observability`, `Stakeholders & Rights`).
-- `/admin/observability` in demo mode shows KPI cards, aspect table, component breakdown table, and three prompt/output trace cards without any backend connection.
-- `/admin/observability` in backend mode fetches all four endpoints and renders the same structure with live data.
-- `/admin/stakeholders` allows role template permission toggling in UI.
-- `/admin/stakeholders` allows adding a single employee name, which appears in the assignment list below the role.
-- `/admin/stakeholders` bulk-add mode accepts newline-separated names, deduplicates, and shows a success/fail count message.
-- Assignments survive page refresh (backend persistence).
-- Route protection remains session-based via `_app.tsx`; unauthorized users are redirected to `/login`.
-- All tests in `tests/test_observability_api.py` and `tests/test_stakeholder_profiles_api.py` pass (4/4 each).
+- Clicking `Admin` reveals navigable subitems (`Observability`, `Stakeholders & Rights`).
+- `/admin/observability` demo mode renders KPI/aspect/workflow/prompt-output sections without backend dependency.
+- `/admin/observability` backend mode fetches summary, traces, workflow breakdown, and metrics snapshot.
+- `/admin/stakeholders` supports profile save, single assignment add/remove, and bulk assignment add.
+- Assignment rows persist across page refresh (backend persistence).
+- Route protection remains session-based via `_app.tsx`; unauthorized users redirect to `/login`.
 
 ---
 
 ## Known boundaries
 
-- Permission-toggle save action on the Stakeholders page currently updates local UI state; backend persistence for the permission matrix itself (not employee names) is a planned future increment (Phase A.2).
-- No in-UI distributed trace explorer exists; the page visualizes summary telemetry and metric snapshots.
-- Prometheus data shown is a concise snapshot, not a full dashboard replacement.
-- Product-user chatbot support is a planned follow-up module; it will emit the same prompt/output telemetry pattern when implemented.
+- Permission matrix persistence exists through profile save flow, but broader policy rollout controls remain a future governance increment.
+- No in-UI distributed trace explorer; page focuses on quality telemetry summary views.
+- Prometheus surface is concise snapshot, not a full monitoring dashboard replacement.
+- Product-user chatbot support remains a future module.

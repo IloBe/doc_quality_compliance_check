@@ -1,14 +1,11 @@
 # Quality Requirements
 
-**Document ID:** `[PROJECT-ID]-QR-001`
-**Version:** 1.0
-**Status:** Draft
-**Owner:** Quality Manager / System Architect
-
-&nbsp;
+**Document ID:** `[PROJECT-ID]-QR-001`<br>
+**Version:** 1.0<br>
+**Status:** Draft<br>
+**Owner:** Quality Manager / System Architect<br>
 
 ---
-&nbsp;
 
 ## 1. Quality Goals
 
@@ -20,10 +17,7 @@
 | 2 | | | |
 | 3 | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 2. Quality Scenarios
 
@@ -66,10 +60,7 @@
 | AI-02 | Bias assessment | Fairness | Demographic parity |
 | AI-03 | Explainability | Interpretable | SHAP values available |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 3. Compliance Requirements
 
@@ -80,10 +71,7 @@
 | ISO 9001 | Yes/No | | |
 | MDR | Yes/No | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 4. Quality Assurance Measures
 
@@ -94,10 +82,7 @@
 | Security scan | Automated | Weekly | Security | SAST/DAST |
 | Performance test | Automated | Per release | QA | k6/locust |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 5. Acceptance Criteria
 
@@ -109,13 +94,10 @@
 - [ ] Security scan: no critical/high findings
 - [ ] Compliance review signed off
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 6. Document History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | | | Initial draft |
+| 1.0 | 2026-03-12 | Barbara L. | Initial draft |

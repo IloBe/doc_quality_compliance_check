@@ -8,35 +8,35 @@
 
 ## Purpose
 
-Start the password recovery flow in a way that avoids exposing whether an account exists.
+Start password recovery without exposing whether an account exists.
 
 ## Current implementation
 
-- Renders a single-form recovery request page.
-- Accepts work-email input and submits it through `requestPasswordRecovery(email)`.
-- Shows the backend-provided generic message after submission.
-- Provides a route back to `/login`.
+- Renders a compact single-form recovery page.
+- Accepts work-email input and submits via `requestPasswordRecovery(email)`.
+- Shows backend-provided confirmation message after submission.
+- Shows optional dev-mode `reset_url` link when backend returns it.
+- Provides navigation back to `/login`.
 
 ## Data sources and state
 
 - Backend endpoint: `POST /api/v1/auth/recovery/request`.
-- The response may include `reset_url` in development-oriented flows.
+- Response payload may include `reset_url` for development/testing flows.
 
 ## UX and behavior contract
 
-- Response messaging must remain generic and non-enumerating.
-- The page should stay simple and low-friction.
-- If the backend returns `reset_url`, the page may show a dev-mode recovery link for local testing.
-- Errors are shown inline without leaking account-existence details.
+- Response messaging remains generic and non-enumerating.
+- Errors render inline and should not leak account-existence details.
+- Page remains intentionally low-friction and outside protected shell.
 
 ## Known boundaries
 
-- The optional debug recovery link is for development/test workflows and should not be documented as a production-facing feature.
-- This page initiates recovery only; it does not verify tokens or set a new password.
+- Debug recovery link is for development/testing only, not production-facing UX.
+- This page initiates recovery only; it does not verify token or set new password.
 
 ## Acceptance criteria
 
-- Submitting the form returns a visible confirmation message.
-- UI text does not expose whether the email belongs to an account.
-- The page can optionally surface a dev-mode reset link when supplied by the backend.
-- Users can navigate back to `/login` cleanly.
+- Submitting form returns visible confirmation message.
+- UI text does not expose account existence.
+- Optional dev reset link appears only when backend supplies it.
+- User can navigate back to `/login` cleanly.

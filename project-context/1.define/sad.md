@@ -838,12 +838,21 @@ The above architectural decisions are elaborated with detailed acceptance criter
 ## API Overview
 
 The application exposes a RESTful API with the following main routes (for traceability):
-- `/api/v1/documents` — Document upload, analysis, and retrieval
-- `/api/v1/compliance` — Compliance checking and regulatory mapping
+- `/api/v1/documents` — Document upload, analysis, retrieval, and document lock management
+- `/api/v1/compliance` — EU AI Act compliance checking, regulatory mapping, and standard-mapping requests
 - `/api/v1/reports` — PDF report generation and download
-- `/api/v1/templates` — Template listing and retrieval
-- `/api/v1/research` — Regulatory research and evidence gathering
-- `/api/v1/reviews` — HITL review creation, update, and listing
+- `/api/v1/templates` — SOP/arc42 template listing and retrieval
+- `/api/v1/research` — Perplexity-powered regulatory research with static fallback
+- `/api/v1/bridge` — Production-grade compliance execution with HITL gate and regulatory drift detection
+- `/api/v1/skills` — Backend Skills API for CrewAI orchestrator tool calls (machine-to-machine)
+- `/api/v1/risk-templates` — RMF/FMEA risk template CRUD with CSV export and AI-assisted rows
+- `/api/v1/audit-trail` — Governance audit trail read access and audit schedule management
+- `/api/v1/dashboard` — Aggregated compliance KPIs and document risk analytics
+- `/api/v1/observability` — Quality observation ingestion, LLM trace access, and Prometheus metrics
+- `/api/v1/admin` — Stakeholder profile governance and employee assignment management
+- `/api/v1/auth` — Email/password authentication, session management, and password recovery
+
+**Note on HITL review route surface:** The HITL persistence layer (`hitl_workflow.py`) and `ReviewRecordORM` are implemented, but a dedicated `/api/v1/reviews` route is not yet exposed as a standalone router. HITL review decisions for bridge runs are accessible via `/api/v1/bridge/human-review/{run_id}`.
 
 All routes are versioned and documented for traceability and audit purposes.
 

@@ -54,6 +54,17 @@ class SkillDocumentORM(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
+class DocumentLockORM(Base):
+    """Persistent lock ownership for document editing control."""
+
+    __tablename__ = "document_locks"
+
+    document_id = Column(String(64), primary_key=True, index=True)
+    locked_by = Column(String(255), nullable=False, index=True)
+    locked_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True, index=True)
+
+
 class FindingORM(Base):
     """Persistent finding record created through the Skills API."""
 
@@ -241,3 +252,32 @@ class StakeholderEmployeeAssignmentORM(Base):
     employee_name = Column(String(255), nullable=False, index=True)
     created_by = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class RiskTemplateORM(Base):
+    """Persistent risk template header (RMF or FMEA)."""
+
+    __tablename__ = "risk_templates"
+
+    template_id = Column(String(64), primary_key=True, index=True)
+    template_type = Column(String(10), nullable=False, index=True)  # 'RMF' | 'FMEA'
+    template_title = Column(String(255), nullable=False)
+    product = Column(String(255), nullable=False, index=True)
+    version = Column(String(20), nullable=False, default="1.0.0")
+    status = Column(String(20), nullable=False, default="Draft", index=True)
+    created_by = Column(String(100), nullable=False)
+    template_metadata = Column("template_metadata", JSON, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class RiskTemplateRowORM(Base):
+    """Persistent data row belonging to a risk template."""
+
+    __tablename__ = "risk_template_rows"
+
+    row_id = Column(String(64), primary_key=True, index=True)
+    template_id = Column(String(64), nullable=False, index=True)
+    row_order = Column(Integer, nullable=False, index=True)
+    row_data = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))

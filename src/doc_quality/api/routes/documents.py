@@ -1,5 +1,6 @@
 """API routes for document upload and analysis."""
 from io import BytesIO
+from datetime import datetime
 
 from docx import Document as DocxDocument
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
@@ -12,8 +13,10 @@ from ...core.database import get_db
 from ...core.session_auth import require_roles
 from ...core.security import sanitize_text, validate_file_size, validate_filename
 from ...models.document import DocumentAnalysisResult, DocumentType
+from ...models.orm import DocumentLockORM
 from ...services.document_analyzer import analyze_document
-from ...services.skills_service import persist_document
+from ...services.document_lock_service import acquire_lock, get_lock_state, release_lock
+from ...services.skills_service import get_document as get_document_from_db, persist_document, search_documents
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -22,6 +25,57 @@ class AnalyzeTextRequest(BaseModel):
     content: str
     filename: str
     doc_type: DocumentType | None = None
+
+
+class DocumentSummaryResponse(BaseModel):
+    """Document metadata used by frontend listing/get endpoints."""
+
+    document_id: str
+    filename: str
+    document_type: DocumentType
+    overall_score: float = 0.0
+    status: str = "Draft"
+    version: str = "0.1.0"
+    product: str = "AI-Diagnostics-Core"
+    updated_at: datetime | None = None
+    updated_by: str | None = None
+    locked_by: str | None = None
+
+
+class DocumentListResponse(BaseModel):
+    """Response model for document list endpoint."""
+
+    documents: list[DocumentSummaryResponse]
+
+
+class AcquireLockRequest(BaseModel):
+    """Acquire/renew lock request."""
+
+    actor_id: str
+    ttl_minutes: int = 30
+
+
+class ReleaseLockRequest(BaseModel):
+    """Release lock request."""
+
+    actor_id: str
+
+
+class DocumentLockResponse(BaseModel):
+    """Document lock response payload."""
+
+    ok: bool
+    document_id: str
+    locked_by: str | None = None
+    locked_at: datetime | None = None
+    expires_at: datetime | None = None
+    message: str
+
+
+class SearchDocumentsRequest(BaseModel):
+    """Request model for document search."""
+    query: str = ""
+    limit: int = 50
 
 
 @router.post("/analyze", response_model=DocumentAnalysisResult)
@@ -99,3 +153,161 @@ async def upload_document(
         document_id=result.document_id,
     )
     return result
+
+
+@router.get("/{document_id}", response_model=DocumentAnalysisResult)
+async def get_document_by_id(
+    document_id: str,
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles("qm_lead", "architect", "riskmanager", "auditor")),
+) -> DocumentAnalysisResult:
+    """Retrieve a document by ID from persistent storage."""
+    document = get_document_from_db(db, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail=f"Document not found: {document_id}")
+    
+    return DocumentAnalysisResult(
+        document_id=document.document_id,
+        filename=document.filename,
+        document_type=DocumentType(document.document_type),
+        overall_score=0.0,  # Placeholder; actual score would need to be stored separately
+    )
+
+
+@router.get("/{document_id}/summary", response_model=DocumentSummaryResponse)
+async def get_document_summary_by_id(
+    document_id: str,
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles("qm_lead", "architect", "riskmanager", "auditor")),
+) -> DocumentSummaryResponse:
+    """Retrieve a document summary by ID including current lock state."""
+    document = get_document_from_db(db, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail=f"Document not found: {document_id}")
+
+    lock_state = get_lock_state(db, document_id)
+    return DocumentSummaryResponse(
+        document_id=document.document_id,
+        filename=document.filename,
+        document_type=DocumentType(document.document_type),
+        overall_score=0.0,
+        updated_at=document.updated_at,
+        locked_by=lock_state.locked_by,
+    )
+
+
+@router.get("", response_model=DocumentListResponse)
+async def list_all_documents(
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles("qm_lead", "architect", "riskmanager", "auditor")),
+) -> DocumentListResponse:
+    """List all documents from persistent storage (database)."""
+    from ...models.skills import SearchDocumentsRequest as SkillsSearchRequest
+    
+    # Use the skills service to search for all documents with a broad limit
+    search_result = search_documents(db, SkillsSearchRequest(query="", limit=1000))
+    
+    active_locks = {row.document_id: row for row in db.query(DocumentLockORM).all()}
+
+    documents = [
+        DocumentSummaryResponse(
+            document_id=doc.document_id,
+            filename=doc.filename,
+            document_type=DocumentType(doc.document_type),
+            overall_score=0.0,
+            updated_at=doc.updated_at,
+            locked_by=active_locks.get(doc.document_id).locked_by if active_locks.get(doc.document_id) else None,
+        )
+        for doc in search_result.results
+    ]
+    
+    return DocumentListResponse(documents=documents)
+
+
+@router.get("/{document_id}/lock", response_model=DocumentLockResponse)
+async def get_document_lock(
+    document_id: str,
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles("qm_lead", "architect", "riskmanager", "auditor")),
+) -> DocumentLockResponse:
+    """Get active lock owner for a document."""
+    state = get_lock_state(db, document_id)
+    return DocumentLockResponse(
+        ok=True,
+        document_id=document_id,
+        locked_by=state.locked_by,
+        locked_at=state.locked_at,
+        expires_at=state.expires_at,
+        message="Lock state loaded",
+    )
+
+
+@router.post("/{document_id}/lock/acquire", response_model=DocumentLockResponse)
+async def acquire_document_lock(
+    document_id: str,
+    request: AcquireLockRequest,
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles("qm_lead", "architect", "riskmanager", "auditor")),
+) -> DocumentLockResponse:
+    """Acquire or renew a document lock."""
+    try:
+        result = acquire_lock(
+            db,
+            document_id=document_id,
+            actor_id=request.actor_id,
+            ttl_minutes=request.ttl_minutes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not result.ok and result.message == "Document not found":
+        raise HTTPException(status_code=404, detail=result.message)
+    if not result.ok:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": result.message,
+                "locked_by": result.locked_by,
+            },
+        )
+
+    return DocumentLockResponse(
+        ok=True,
+        document_id=result.document_id,
+        locked_by=result.locked_by,
+        locked_at=result.locked_at,
+        expires_at=result.expires_at,
+        message=result.message,
+    )
+
+
+@router.post("/{document_id}/lock/release", response_model=DocumentLockResponse)
+async def release_document_lock(
+    document_id: str,
+    request: ReleaseLockRequest,
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles("qm_lead", "architect", "riskmanager", "auditor")),
+) -> DocumentLockResponse:
+    """Release a document lock owned by the caller actor."""
+    try:
+        result = release_lock(db, document_id=document_id, actor_id=request.actor_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not result.ok:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": result.message,
+                "locked_by": result.locked_by,
+            },
+        )
+
+    return DocumentLockResponse(
+        ok=True,
+        document_id=result.document_id,
+        locked_by=result.locked_by,
+        locked_at=result.locked_at,
+        expires_at=result.expires_at,
+        message=result.message,
+    )

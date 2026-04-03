@@ -109,9 +109,31 @@ Use separate terminals so PostgreSQL, the API, and the UI run at the same time.
 
    Start uvicorn backend server:
 
+    In general on CLI via:
+    ```powershell
+    .\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
+    ``` 
+
+    If issues appear:
    ```powershell
+   # Option A — navigate first, then start (two separate commands, safest)
+   Set-Location c:\Dev\doc-quality-compliance-check\doc_quality_compliance_check
    .\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
    ```
+
+   ```powershell
+   # Option B — run from workspace root without changing directory
+   $env:PYTHONPATH = "c:\Dev\doc-quality-compliance-check\doc_quality_compliance_check"
+   c:\Dev\doc-quality-compliance-check\doc_quality_compliance_check\.venv\Scripts\python.exe `
+     -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload `
+     --reload-dir "c:\Dev\doc-quality-compliance-check\doc_quality_compliance_check\src"
+   ```
+
+   > **⚠ PowerShell pitfall:** Do **not** combine `cd` and the `python` call on a single line without
+   > a semicolon separator (e.g. `cd .\doc_quality_compliance_check\.\.venv\Scripts\python.exe -m ...`).
+   > PowerShell parses `-m` as a named parameter of `Set-Location` and throws
+   > *"NamedParameterNotFound"*. Always use two separate lines (Option A) or the `$env:PYTHONPATH`
+   > form (Option B) when running from the workspace root.
 
    Expected log line:
    - `Uvicorn running on http://127.0.0.1:8000`

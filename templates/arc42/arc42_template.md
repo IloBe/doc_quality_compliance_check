@@ -1,25 +1,20 @@
 # arc42 Architecture Documentation Template
 
-**Project/System:** _______________
-**Version:** 1.0
-**Date:** _______________
-**Authors:** _______________
-**Status:** Draft
-
-&nbsp;
+**Project/System:** _______________<br>
+**Version:** 1.0<br>
+**Date:** _______________<br>
+**Authors:** _______________<br>
+**Status:** Draft<br>
 
 ---
-&nbsp;
 
 > This template follows the arc42 documentation structure (https://arc42.org).
 > arc42 is licensed under the Creative Commons Attribution 4.0 license.
 
 > For the MVP, arc42 architecture documentation we use file-based formats only, relying on stable reviewed versions. The app shall check the appropriate version. User gets a message if the format and structure has changed to handle the existing versions appropriately for certifications and audits. The official download page is: https://arc42.org/download
 
-&nbsp;
 
 ---
-&nbsp;
 
 ## 1. Introduction and Goals
 
@@ -45,10 +40,7 @@
 |------|------|-------------|
 | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 2. Constraints
 
@@ -70,10 +62,7 @@
 |-----------|-------------|
 | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 3. Context and Scope
 
@@ -99,10 +88,7 @@
 |---------|-----------|---------|-------------|
 | | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 4. Solution Strategy
 
@@ -113,13 +99,10 @@
 | | | |
 
 **Key Architectural Decisions:**
-1. _______________
-2. _______________
-
-&nbsp;
+1. _______________<br>
+2. _______________<br>
 
 ---
-&nbsp;
 
 ## 5. Building Block View
 
@@ -141,10 +124,7 @@
 
 > (Add additional levels as needed)
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 6. Runtime View
 
@@ -164,10 +144,7 @@ System -> Actor: Response
 |---------|-------------|-------------|
 | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 7. Deployment View
 
@@ -193,10 +170,7 @@ System -> Actor: Response
 
 > (Add additional detail as needed)
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 8. Concepts
 
@@ -231,10 +205,7 @@ System -> Actor: Response
 
 > Strategy for error handling and resilience patterns.
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 9. Architecture Decisions
 
@@ -242,16 +213,13 @@ System -> Actor: Response
 
 ### ADR-001: [Title]
 
-**Status:** Accepted | Proposed | Deprecated
-**Date:** _______________
-**Context:** _______________
-**Decision:** _______________
-**Consequences:** _______________
-
-&nbsp;
+**Status:** Accepted | Proposed | Deprecated<br>
+**Date:** _______________<br>
+**Context:** _______________<br>
+**Decision:** _______________<br>
+**Consequences:** _______________<br>
 
 ---
-&nbsp;
 
 ## 10. Quality Requirements
 
@@ -278,10 +246,7 @@ Quality
 |----|-----------------|---------|---------|--------|
 | QS-01 | | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 11. Risks and Technical Debt
 
@@ -297,10 +262,7 @@ Quality
 |----|-------------|--------|----------------|
 | TD-01 | | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## 12. Glossary
 
@@ -309,32 +271,29 @@ Quality
 | API | Application Programming Interface |
 | | |
 
-&nbsp;
-
 ---
-&nbsp;
 
 ## Document History
 
 | Version | Date | Author | Description |
 |---------|------|--------|-------------|
-| 1.0 | | | Initial arc42 template |
+| 1.0     | 2026-02-24 |  Jan M.  | Initial arc42 template |
 
 > All templates are initially created by QM personnel, who are responsible for delivering the correct format and content, including main help description parts. This ensures that each template fulfills the expected content requirements for the assigned author (e.g., DevOps engineer adds the deployment diagram, SW Architect adds ADRs).
 > It must be possible to generate an explicit PDF file for each arc42 template section, supporting cases where sections are too large for a single file.
 
 > The arc42 architecture template includes the following elements:
-> - Introduction and Goals
-> - Constraints
-> - Context and Scope
-> - Solution Strategy
-> - Building Block View
-> - Runtime View
-> - Deployment View
-> - Crosscutting Concepts
-> - Architectural Decisions
-> - Quality Requirements
-> - Risks and Technical Debt
-> - Glossary
->
-> In the UI and navigation panel, these items shall be available as subitems under the arc42 element together. By click on a subitem, the associated part of the arc42 template shall be visible.
+  - Introduction and Goals
+  - Constraints
+  - Context and Scope
+  - Solution Strategy
+  - Building Block View
+  - Runtime View
+  - Deployment View
+  - Crosscutting Concepts
+  - Architectural Decisions
+  - Quality Requirements
+  - Risks and Technical Debt
+  - Glossary
+
+In the UI and navigation panel, these items shall be available as subitems under the arc42 element together. By click on a subitem, the associated part of the arc42 template shall be visible.
