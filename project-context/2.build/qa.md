@@ -157,7 +157,7 @@ tests/test_template_manager.py::test_get_template_with_file           PASSED
 
 **Latest inventory snapshot (2026-4-5):** `pytest --collect-only -q` now reports **172 collected tests**.
 
-**Latest coverage baseline (2026-4-5):** Full-suite execution with coverage reports **85.53% total coverage**, which currently passes the enforced **85%** threshold gate.
+**Latest coverage baseline (2026-4-5):** Full-suite execution with coverage reports **86.09% total coverage**, which currently passes the enforced **85%** threshold gate.
 
 ---
 
@@ -600,7 +600,7 @@ Priority route-family gaps are closed. The next concrete QA gaps are:
 | Item | Status | Completed | Exit Criteria |
 |------|--------|-----------|---------------|
 | Route-to-test drift gate | ✅ COMPLETE | 2026-4-5 | 57/57 routes mapped; pytest integration active; 0 unmapped routes |
-| pytest-cov threshold gate | ✅ COMPLETE | 2026-4-5 | 85% fail-under threshold active; current coverage 85.53% |
+| pytest-cov threshold gate | ✅ COMPLETE | 2026-4-5 | 85% fail-under threshold active; current coverage 86.09% |
 
 ### In-Progress Expansions (Phase 2)
 

@@ -34,7 +34,7 @@ The repository already contains:
 Current validated baseline on 2026-4-5:
 - `172` collected tests
 - `172` passing tests
-- `85.53%` total backend coverage
+- `86.09%` total backend coverage
 - active `pytest-cov` fail-under gate at `85%`
 - active route-to-test drift gate for backend FastAPI routes
 - baseline Playwright smoke suite configured

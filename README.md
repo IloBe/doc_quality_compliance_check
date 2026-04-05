@@ -2,6 +2,13 @@
 
 AI-assisted compliance and quality assurance platform for software documentation.
 
+<!-- Badges -->
+[![Browser E2E Smoke](https://github.com/IloBe/doc_quality_compliance_check/actions/workflows/browser-e2e-smoke.yml/badge.svg)](https://github.com/IloBe/doc_quality_compliance_check/actions/workflows/browser-e2e-smoke.yml)
+[![DAST ZAP Baseline](https://github.com/IloBe/doc_quality_compliance_check/actions/workflows/dast-zap-baseline.yml/badge.svg)](https://github.com/IloBe/doc_quality_compliance_check/actions/workflows/dast-zap-baseline.yml)
+[![Python](https://img.shields.io/badge/python-%E2%89%A53.12-blue)](https://www.python.org/downloads/release/python-3120/)
+[![License](https://img.shields.io/github/license/IloBe/doc_quality_compliance_check)](https://github.com/IloBe/doc_quality_compliance_check/blob/main/LICENSE)
+[![Pytest Coverage](https://img.shields.io/badge/pytest%20coverage-86.09%25-brightgreen)](project-context/2.build/qa.md)
+
 Current implementation baseline:
 
 - **Frontend:** Next.js + React + TypeScript browser app in `frontend/`
