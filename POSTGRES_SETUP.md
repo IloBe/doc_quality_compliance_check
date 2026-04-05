@@ -70,7 +70,7 @@ The initialization script (`init_postgres.py`) automatically:
 | --- | --- | --- |
 | 1. Test Connection | Connects to PostgreSQL server on `localhost:5432` | (System `postgres` database) |
 | 2. Create Database | Creates `doc_quality` database if missing | New empty database |
-| 3. Run Migrations | Alembic applies migrations 001→011 | **Core tables verified by initializer:** |
+| 3. Run Migrations | Alembic applies migrations 001→012 | **Core tables verified by initializer:** |
 | | | • `hitl_reviews` — Human-in-the-loop review records |
 | | | • `skill_documents` — Uploaded/analyzed documents |
 | | | • `skill_findings` — Compliance findings |
@@ -273,4 +273,4 @@ Before deploying to production:
 - Alembic Documentation: [https://alembic.sqlalchemy.org/](https://alembic.sqlalchemy.org/)
 - SAD Requirement AD-5: Storage backend (PostgreSQL + filesystem)
 - SAD Requirement R-1: HITL persistence to PostgreSQL DB
-- Migrations: `migrations/versions/` (`001_initial_hitl_reviews.py` → `011_risk_templates.py`)
+- Migrations: `migrations/versions/` (`001_initial_hitl_reviews.py` → `012_document_workflow_status.py`)

@@ -73,6 +73,7 @@ doc_quality_compliance_check/
 │   │       │       └── __init__.py
 │   │       │
 │   │       ├── services/                           ← Business logic & orchestration layer
+│   │       │   ├── compliance_alert_service.py     ← Compliance alert lifecycle & notification
 │   │       │   ├── compliance_checker.py           ← EU AI Act, ISO, GDPR compliance logic
 │   │       │   ├── document_analyzer.py            ← Document parsing & quality assessment
 │   │       │   ├── document_lock_service.py        ← Document locking lifecycle & conflict prevention
@@ -101,6 +102,7 @@ doc_quality_compliance_check/
 │   │       ├── models/                             ← Pydantic models & SQLAlchemy ORM
 │   │       │   ├── orm.py                          ← All ORM classes (UserSessionORM, ReviewRecordORM, AuditEventORM, etc.)
 │   │       │   ├── compliance.py                   ← Compliance check & requirement models
+│   │       │   ├── compliance_alerts.py            ← Compliance alert & alert archive models
 │   │       │   ├── document.py                     ← Document analysis & section models
 │   │       │   ├── quality.py                      ← AI quality observation & evaluation models
 │   │       │   ├── report.py                       ← Report format & generation models
@@ -111,11 +113,20 @@ doc_quality_compliance_check/
 │   │       │   ├── stakeholder.py                  ← Stakeholder profile & employee assignment models
 │   │       │   └── __init__.py
 │   │       │
-│   │       ├── agents/                             ← LLM agent definitions (future expandable)
-│   │       │   └── [agent specs & configurations]
+│   │       ├── agents/                             ← LLM agent definitions (rule-based + agentic)
+│   │       │   ├── compliance_agent.py              ← ComplianceCheckAgent (EU AI Act checking)
+│   │       │   ├── doc_check_agent.py               ← Document structure & quality analysis agent
+│   │       │   ├── research_agent.py                ← External research & regulation lookup agent
+│   │       │   └── __init__.py
 │   │       │
-│   │       ├── prompts/                            ← LLM prompt templates
-│   │       │   └── [compliance, analysis, review prompts]
+│   │       ├── prompts/                            ← LLM prompt templates & system prompts
+│   │       │   ├── doc_check_agent_v1.txt           ← Document analysis prompt template
+│   │       │   ├── research_prompt_v1.txt           ← Research request prompt
+│   │       │   └── research_system_prompt_v1.txt    ← Research system context prompt
+│   │       │
+│   │       ├── tools/                              ← Development & QA tools
+│   │       │   ├── route_coverage_audit.py          ← Route-to-test drift detector (CI-integrated)
+│   │       │   └── __init__.py
 │   │       │
 │   │       └── __init__.py
 │   │
@@ -136,7 +147,8 @@ doc_quality_compliance_check/
 │   │       ├── 008_stakeholder_employee_assignments.py ← Employee-to-role assignment table
 │   │       ├── 009_audit_schedule.py               ← Audit scheduling & calendar table
 │   │       ├── 010_bridge_human_reviews.py         ← Bridge run HITL review linkage
-│   │       └── 011_risk_templates.py               ← FMEA & RMF risk template tables
+│       ├── 011_risk_templates.py               ← FMEA & RMF risk template tables
+│       └── 012_document_workflow_status.py     ← Document workflow status tracking
 │   │
 │   ├── tests/                                      ← Integration & unit tests
 │   │   ├── conftest.py                             ← Pytest fixtures & shared test setup
@@ -144,18 +156,32 @@ doc_quality_compliance_check/
 │   │   ├── test_auth_authorization_api.py          ← RBAC authorization tests
 │   │   ├── test_auth_rate_limit_api.py             ← Rate limiting & throttle tests
 │   │   ├── test_auth_recovery_api.py               ← Password recovery flow tests
+│   │   ├── test_audit_trail_api.py                 ← Audit event timeline & schedule tests
 │   │   ├── test_bridge_run_api.py                  ← EU AI Act bridge execution tests
 │   │   ├── test_compliance_checker.py              ← Compliance checking logic tests
+│   │   ├── test_compliance_standard_mapping_api.py ← Compliance standard mapping tests
 │   │   ├── test_dashboard_api.py                   ← Dashboard aggregation tests
 │   │   ├── test_document_analyzer.py               ← Document parsing & analysis tests
+│   │   ├── test_document_hub_live_api.py           ← Document Hub API endpoint tests
+│   │   ├── test_document_lock_api.py               ← Document lock/unlock flow tests
+│   │   ├── test_documents_read_api.py              ← Document retrieval API tests
 │   │   ├── test_error_envelope_api.py              ← Error response format tests
 │   │   ├── test_hitl_workflow.py                   ← Human review lifecycle tests
 │   │   ├── test_integration_api_workflow.py        ← End-to-end workflow tests
+│   │   ├── test_observability_api.py               ← Observability & telemetry API tests
 │   │   ├── test_report_generator.py                ← Report generation tests
-│   │   ├── test_research_service.py                ← Research service tests
+│   │   ├── test_reports_download_api.py            ← Report download & export tests
+│   │   ├── test_research_api.py                    ← Research API endpoint tests
+│   │   ├── test_research_alerts_api.py             ← Research alerts handling tests
+│   │   ├── test_research_service.py                ← Research service logic tests
+│   │   ├── test_risk_templates_api.py              ← Risk template CRUD API tests
+│   │   ├── test_risk_templates_defaults_api.py     ← Risk template seeding & defaults tests
 │   │   ├── test_skills_api.py                      ← Skills API endpoint tests
+│   │   ├── test_stakeholder_profiles_api.py        ← Stakeholder profile & assignment tests
 │   │   ├── test_template_manager.py                ← Template loading tests
-│   │   └── test_uat_workflow.py                    ← User acceptance testing workflows
+│   │   ├── test_templates_api.py                   ← Template library API tests
+│   │   ├── test_uat_workflow.py                    ← User acceptance testing workflows
+│   │   └── __init__.py
 │   │
 │   └── reports/                                    ← Generated compliance reports (output directory)
 │
@@ -171,6 +197,7 @@ doc_quality_compliance_check/
 │   │   │   ├── dashboard.tsx                       ← KPI dashboard (mock or backend toggle)
 │   │   │   ├── bridge.tsx                          ← EU AI Act compliance runner (redirects to artifact lab)
 │   │   │   ├── compliance.tsx                      ← Compliance standards display (EU AI Act, ISO, GDPR, etc.)
+│   │   │   ├── alert-archive.tsx                   ← Compliance alert archive (persisted/demo-backed)
 │   │   │   ├── architecture.tsx                    ← arc42 template viewer (markdown-rendered, typography-styled)
 │   │   │   ├── sops.tsx                            ← Standard operating procedures (SOP) library
 │   │   │   ├── audit-trail.tsx                     ← Read-only audit event timeline & compliance scheduling
@@ -253,6 +280,7 @@ doc_quality_compliance_check/
 │   │   │   │
 │   │   │   ├── compliance/                         ← Compliance standards page components
 │   │   │   │   ├── StandardCard.tsx                ← Compliance standard summary card
+│   │   │   │   ├── StandardsGroup.tsx              ← Grouped compliance standards container
 │   │   │   │   ├── AlertsPanel.tsx                 ← Active compliance alert list
 │   │   │   │   ├── AlertArchiveList.tsx            ← Archived compliance alert list
 │   │   │   │   └── ShortcutCards.tsx               ← Quick-action shortcut cards
@@ -488,6 +516,7 @@ doc_quality_compliance_check/
 | `/dashboard` | `frontend/pages/dashboard.tsx` | KPI dashboard |
 | `/bridge` | `frontend/pages/bridge.tsx` | EU AI Act compliance runner |
 | `/compliance` | `frontend/pages/compliance.tsx` | Compliance standards |
+| `/alert-archive` | `frontend/pages/alert-archive.tsx` | Compliance alert archive |
 | `/compliance/request-standard-mapping` | `frontend/pages/compliance/request-standard-mapping.tsx` | Standard-to-request mapping |
 | `/architecture` | `frontend/pages/architecture.tsx` | arc42 architecture template |
 | `/sops` | `frontend/pages/sops.tsx` | SOP library |
@@ -510,6 +539,7 @@ doc_quality_compliance_check/
 
 | Service | File | Responsibility |
 | --- | --- | --- |
+| **Compliance Alert Service** | `src/doc_quality/services/compliance_alert_service.py` | Compliance alert lifecycle & notification |
 | **Compliance Checker** | `src/doc_quality/services/compliance_checker.py` | EU AI Act, ISO, GDPR compliance analysis |
 | **Document Analyzer** | `src/doc_quality/services/document_analyzer.py` | Text extraction & quality assessment |
 | **Document Lock** | `src/doc_quality/services/document_lock_service.py` | Document locking lifecycle & conflict prevention |

@@ -1,6 +1,6 @@
 # PostgreSQL Infrastructure Setup — Summary
 
-**Date:** April 3, 2026  
+**Date:** April 5, 2026  
 **Phase:** Phase 0 (MVP) Database Infrastructure  
 **Status:** Ready for deployment
 
@@ -22,7 +22,7 @@ Made SQLAlchemy dialect-aware so connection parameters adapt to database type:
 Automated, idempotent initialization that:
 1. Tests PostgreSQL connectivity
 2. Creates `doc_quality` database if missing
-3. Applies all 11 Alembic migrations automatically
+3. Applies all 12 Alembic migrations automatically
 4. Verifies schema integrity (required tables + columns)
 5. Provides colored output with clear error messages and next steps
 

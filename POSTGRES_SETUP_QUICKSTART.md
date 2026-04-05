@@ -18,7 +18,7 @@ The Doc Quality system requires PostgreSQL for Phase 0 (MVP) to support:
    - Made SQLAlchemy dialect-aware (SQLite fallback for testing, PostgreSQL for production)
    - Prevents `connect_timeout` errors when switching databases
 
-2. ✅ **Created Alembic migrations** (11 migrations, ready to apply)
+2. ✅ **Created Alembic migrations** (12 migrations, ready to apply)
    - `001_initial_hitl_reviews.py` — HITL review workflow tables
    - `002_skills_api_tables.py` — Skill documents, findings, audit tables
    - `003_audit_events_provenance.py` — Audit trail with tenant/org fields
@@ -30,6 +30,7 @@ The Doc Quality system requires PostgreSQL for Phase 0 (MVP) to support:
    - `009_audit_schedule.py` — Audit scheduling & calendar table
    - `010_bridge_human_reviews.py` — Bridge run HITL review linkage
    - `011_risk_templates.py` — FMEA & RMF risk template tables
+   - `012_document_workflow_status.py` — Document workflow status tracking tables
 
 3. ✅ **Generated initialization script** (`init_postgres.py`)
    - Automated: Test connection → Create DB → Run migrations → Verify schema
@@ -117,7 +118,7 @@ $env:DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/doc_
 **What it does:**
 1. Tests PostgreSQL connection
 2. Creates `doc_quality` database (if missing)
-3. Runs Alembic migrations (applies all 11 migration scripts)
+3. Runs Alembic migrations (applies all 12 migration scripts)
 4. Verifies all tables and columns exist
 
 **Expected output:**
@@ -198,7 +199,7 @@ curl.exe -i -sS -H "Content-Type: application/json" `
 **Expected response (200 OK with session cookie):**
 ```
 HTTP/1.1 200 OK
-date: Fri, 03 Apr 2026 09:00:00 GMT
+date: Fri, 05 Apr 2026 09:00:00 GMT
 content-type: application/json
 set-cookie: dq_session=xxxx...; HttpOnly; Max-Age=7200; Path=/; SameSite=lax
 
