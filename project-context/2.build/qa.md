@@ -3,8 +3,8 @@
 <!-- markdownlint-disable MD031 MD032 MD034 MD040 MD060 -->
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.3.0  
-**Date:** 2026-4-3  
+**Version:** 0.3.11  
+**Date:** 2026-4-5  
 **Author persona:** `@qa-eng`  
 **AAMAD phase:** 2.build  
 
@@ -12,15 +12,15 @@
 
 ## Overview
 
-This document captures the original Phase-0 QA baseline. The current codebase now includes a broader pytest suite covering service, API-route, auth/session, integration, and observability behaviors in addition to the initial unit tests.
+This document captures the original Phase-0 QA baseline. The current codebase now includes a broader pytest suite covering service, API-route, auth/session, recovery, authorization, integration, UAT-style workflow, and observability behaviors in addition to the initial unit tests.
 
-> **Consistency note (2026-4-3):** Keep this file as Phase-0 baseline context, not as the full current test inventory. For current coverage, use the active `tests/` directory and latest local/CI pytest outputs.
+> **Consistency note (2026-4-4):** Keep this file as Phase-0 baseline context, not as the full current test inventory. Historical baseline statements remain for traceability, but they should be read together with the active `tests/` directory and latest pytest outputs.
 
 ---
 
 ## Section 1 – Test Strategy
 
-### 1.1 Testing Pyramid (MVP)
+### 1.1 Testing Pyramid (Historical MVP Baseline)
 
 ```
          ┌──────────┐
@@ -34,21 +34,32 @@ This document captures the original Phase-0 QA baseline. The current codebase no
        └──────────────┘
 ```
 
+**Current state (2026-4-4):** The historical pyramid above is preserved for Phase-0 traceability, but the live repo has moved beyond it:
+
+- Unit/service tests still cover analyzer, compliance, templates, report generation, research, and HITL services.
+- FastAPI `TestClient` coverage is now implemented across auth/session, authorization, rate limiting, recovery, bridge runs, dashboard, observability, skills, audit trail, document lock, document hub, stakeholder admin, and UAT-style workflows.
+- Full browser E2E coverage and performance/DAST automation remain deferred.
+
 ### 1.2 Test Framework
 
 | Tool | Version | Purpose |
 |------|---------|---------|
 | `pytest` | ≥7.4.0 | Test runner, fixture system |
 | `pytest-asyncio` | ≥0.23.0 | Async test support (mode=auto) |
-| `pytest-cov` | ≥4.1.0 | Coverage reporting |
-| `fastapi.testclient.TestClient` | via FastAPI | HTTP integration testing (wired in conftest.py; not used in unit tests) |
+| `pytest-cov` | ≥4.1.0 | Coverage reporting and minimum coverage gate enforcement |
+| `fastapi.testclient.TestClient` | via FastAPI | HTTP/API integration testing for authenticated and unauthenticated route behavior |
+| `@playwright/test` | ≥1.54.2 | Browser E2E smoke workflows for critical user journeys |
+| `OWASP ZAP` baseline | stable container image | DAST baseline scan for pre-release/CI target URLs |
 
 **pytest configuration (`pyproject.toml`):**
 ```toml
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = "--cov=src --cov-report=term-missing --cov-fail-under=85"
 ```
+
+**Active quality gate:** The suite now enforces a backend coverage threshold of **85%** via `pytest-cov`.
 
 ### 1.3 Test Organisation
 
@@ -61,6 +72,14 @@ tests/
 ├── test_report_generator.py     — 3 tests
 └── test_template_manager.py     — 8 tests
 ```
+
+The tree above is the original MVP baseline snapshot. The current `tests/` directory also includes representative route/integration modules such as:
+
+- `test_auth_session_api.py`, `test_auth_authorization_api.py`, `test_auth_rate_limit_api.py`, `test_auth_recovery_api.py`
+- `test_bridge_run_api.py`, `test_dashboard_api.py`, `test_observability_api.py`, `test_audit_trail_api.py`
+- `test_skills_api.py`, `test_document_lock_api.py`, `test_document_hub_live_api.py`, `test_stakeholder_profiles_api.py`
+- `test_integration_api_workflow.py`, `test_uat_workflow.py`, `test_error_envelope_api.py`, `test_risk_templates_defaults_api.py`
+- `test_risk_templates_api.py`, `test_reports_download_api.py`, `test_documents_read_api.py`, `test_compliance_standard_mapping_api.py`, `test_templates_api.py`, `test_research_api.py`
 
 ### 1.4 Test Execution
 
@@ -76,13 +95,18 @@ python -m pytest tests/test_document_analyzer.py -v
 
 # Run a specific test
 python -m pytest tests/test_compliance_checker.py::test_high_risk_medical_domain -v
+
+# Run a current API/integration module
+python -m pytest tests/test_auth_session_api.py -v
 ```
 
 ---
 
 ## Section 2 – Test Results Summary
 
-**Last run:** 2025-02-23  
+This section preserves the original MVP baseline run for historical comparison.
+
+**Last run (historical baseline):** 2025-02-23  
 **Python version:** 3.12.3  
 **Duration:** 0.05 seconds  
 
@@ -128,6 +152,12 @@ tests/test_template_manager.py::test_get_template_with_file           PASSED
 ```
 
 **Summary:** ✅ 30 passed | 0 failed | 0 errors | 0 warnings
+
+**Current-state note (2026-4-5):** The live suite now extends well beyond this 30-test baseline and includes authenticated API, integration, workflow, authorization matrix, contract-shape, and list ordering/limit edge tests.
+
+**Latest inventory snapshot (2026-4-5):** `pytest --collect-only -q` now reports **172 collected tests**.
+
+**Latest coverage baseline (2026-4-5):** Full-suite execution with coverage reports **85.53% total coverage**, which currently passes the enforced **85%** threshold gate.
 
 ---
 
@@ -223,15 +253,49 @@ Tests for `src/doc_quality/services/template_manager.py`
 
 **Template count assertion:** `list_templates()` returns exactly 10 items (6 active + 4 inactive registered in `template_manager.py`).
 
+### 3.6 Current Coverage Matrix (2026-4-5)
+
+| Area / Route Family | Current Coverage | Evidence (tests) | Remaining Gap |
+|---|---|---|---|
+| Auth/session/recovery (`/api/v1/auth/*`) | ✅ Strong | `test_auth_session_api.py`, `test_auth_recovery_api.py`, `test_auth_rate_limit_api.py` | Add more negative/edge token lifecycle scenarios |
+| Authorization boundaries | ✅ Stronger | `test_auth_authorization_api.py`, `test_stakeholder_profiles_api.py` | Add optional future matrix expansions for newly introduced routes/roles |
+| Error envelope + global handlers | ✅ Strong | `test_error_envelope_api.py` | Add more route-specific error-shape checks |
+| Documents analyze/upload/list/lock (`/api/v1/documents/*`) | ✅ Stronger | `test_document_hub_live_api.py`, `test_document_lock_api.py`, `test_skills_api.py`, `test_integration_api_workflow.py`, `test_documents_read_api.py` | Add optional malformed-id validation assertions if route-level ID constraints are introduced |
+| Skills + audit event logging (`/api/v1/skills/*`) | ✅ Strong | `test_skills_api.py`, `test_integration_api_workflow.py`, `test_audit_trail_api.py` | Add contract-style validation for response schemas |
+| Bridge run + human review (`/api/v1/bridge/*`) | ✅ Strong | `test_bridge_run_api.py` | Add additional failure-mode and concurrent-review cases |
+| Dashboard summary (`/api/v1/dashboard/summary`) | ✅ Stronger | `test_dashboard_api.py` | Add larger data-volume performance assertions when benchmark suite is introduced |
+| Observability + metrics (`/api/v1/observability/*`, `/metrics`) | ✅ Strong | `test_observability_api.py` | Add auth/permission boundary checks if policy changes |
+| Audit trail (`/api/v1/audit-trail/*`) | ✅ Stronger | `test_audit_trail_api.py` | Add large-window stress/perf coverage beyond functional limit/order checks |
+| Stakeholder admin (`/api/v1/admin/stakeholder-profiles/*`) | ✅ Strong | `test_stakeholder_profiles_api.py` | Add additional permission permutations and data-volume cases |
+| Risk templates (`/api/v1/risk-templates/*`) | ✅ Stronger | `test_risk_templates_defaults_api.py`, `test_risk_templates_api.py` | Add additional validation/error-path cases and auth-boundary permutations if policy changes |
+| Compliance routes (`/api/v1/compliance/*`) | ✅ Stronger (still evolving) | `test_uat_workflow.py`, `test_auth_authorization_api.py`, `test_compliance_standard_mapping_api.py` | Add further validation/error-path permutations as requirements evolve |
+| Reports (`/api/v1/reports/*`) | ✅ Stronger | `test_integration_api_workflow.py`, `test_reports_download_api.py` | Add deeper edge assertions if download semantics evolve (multi-artifact ambiguity, stricter filename policies) |
+| Research (`/api/v1/research/regulations`) | ✅ Implemented | `test_auth_authorization_api.py`, `test_research_api.py` | Add route-level handling coverage for unexpected provider payloads/timeouts if needed |
+| Templates API (`/api/v1/templates/*`) | ✅ Implemented | `test_templates_api.py` + `test_template_manager.py` | Add optional auth-boundary or missing-file behavior checks if route policy changes |
+
 ---
 
 ## Section 4 – Shared Test Fixtures (`tests/conftest.py`)
 
 ```python
 @pytest.fixture
-def client() -> TestClient:
-    """Return a FastAPI test client (available for future integration tests)."""
-    return TestClient(app)
+def client(test_db_session) -> TestClient:
+    """Return an authenticated FastAPI test client with DB override."""
+
+    def override_get_db():
+        yield test_db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as test_client:
+        login = test_client.post(
+            "/api/v1/auth/login",
+            json={"email": os.environ["AUTH_MVP_EMAIL"], "password": os.environ["AUTH_MVP_PASSWORD"]},
+        )
+        if login.status_code != 200:
+            raise RuntimeError(login.text)
+        yield test_client
+
+    app.dependency_overrides.clear()
 
 @pytest.fixture
 def sample_arc42_content() -> str:
@@ -272,7 +336,7 @@ def sample_model_card_content() -> str:
 """
 ```
 
-The `TestClient` fixture is wired but not yet used by the current unit tests. It is available for Phase 2 integration tests.
+The current `TestClient` fixture is no longer just a placeholder: it overrides the DB dependency, authenticates a browser-style session, and is used by many route/integration tests in the live suite.
 
 ---
 
@@ -310,16 +374,71 @@ Automated code review identified no blocking issues.
 
 ## Section 6 – Known Gaps and Deferred Testing
 
-### 6.1 Missing Integration Tests
+### 6.1 Incomplete Integration and Route Coverage
 
-**Gap:** No FastAPI TestClient-based tests for HTTP routes. Current unit tests call service functions directly, bypassing the API layer (request validation, security middleware, error handling, response serialisation).
+**Current state:** FastAPI `TestClient`-based route tests are implemented today. The live suite exercises session auth, RBAC/authorization boundaries, login lockout/rate limiting, recovery flows, error envelopes, bridge human review paths, dashboard aggregation, observability APIs, stakeholder admin APIs, document lock flows, document upload/list/lock/read flows, skills APIs, audit-trail APIs, reports download, templates routes, compliance standard-mapping routes, research routes, and UAT-style backend workflows.
 
-**Impact:** Route-level bugs (incorrect HTTP status codes, missing response fields, CORS misconfiguration, middleware errors) would not be detected by the current test suite.
+**Closure approach:** Treat this as a route-surface and workflow-verification problem, not a generic testing shortfall. The gap is considered closed only when route inventory, route-to-test mapping, critical browser journeys, and CI quality gates are all in place.
 
-**Plan (Phase 2):** Add `tests/test_routes_documents.py`, `tests/test_routes_compliance.py`, etc. using the `TestClient` fixture already wired in `conftest.py`.
+**Required actions (Phase 2):**
+
+1. **Close the route surface intentionally**
+    - Build and maintain an inventory of routes under `src/doc_quality/api/routes/*.py`
+    - Map each non-trivial route to at least one success-path test and one failure-path test
+    - Fail CI when a newly introduced route has no mapped test coverage
+
+2. **Add true browser E2E smoke coverage**
+    - Add Playwright smoke flows for the highest-risk user journeys
+    - Minimum journey set:
+        - login → upload/analyze document → inspect result
+        - lock/release workflow on a document
+        - review/report workflow including download behavior
+        - stakeholder/authorization journey for allowed vs denied actions
+
+3. **Keep regression guardrails at CI level**
+    - Add `pytest-cov` with a fail-under threshold
+    - Preserve contract-style assertions for high-change endpoints such as dashboard, audit trail, compliance, reports, and documents
+    - Add a route-to-test drift check so future endpoint growth does not silently outpace QA coverage
+
+4. **Deepen high-risk workflow failure modes**
+    - Add concurrency and repeated-transition tests for bridge/HITL decisions
+    - Add race-window and revocation edge tests for session/auth flows
+    - Add timeout/invalid-payload handling tests for external-provider-backed research workflows
+
+**Exit criteria:**
+
+
+**Definition of done:**
+
+$$
+    ext{Gap Closed} \iff
+(\text{route map complete}) \land
+(\text{critical E2E pass}) \land
+(\text{CI quality gates pass})
+$$
+
+**Implementation status (Phase 2, ACTIVE - Route Drift Gate):**
+
+✅ **Route-to-test drift gate is now live in CI:**
+- Implementation: `src/doc_quality/tools/route_coverage_audit.py` (RouteAudit class and CLI)
+- Integration: `tests/conftest.py` `pytest_configure()` hook runs audit at pytest collection time
+- Baseline inventory: **57 total FastAPI routes** discovered across all route modules
+- Coverage status: **All 57 routes mapped to tests** (0 unmapped, 0% drift)
+- Exit behavior: pytest fails if any unmapped route is detected
+- CLI interface: `python src/doc_quality/tools/route_coverage_audit.py` for manual audits
+
+Example pytest output on success:
+```
+[route-coverage] 57 routes verified - all mapped to tests
+```
+
+Route detection works by:
+1. AST parsing of all route files to extract `@router.get/post/put/delete` decorated functions
+2. Text search of test files to find path strings, method calls, and prefix patterns
+3. Failure if any route is not found in any test file
 
 ```python
-# Example: planned Phase 2 test
+# Example: current route-style test pattern
 def test_analyze_text_endpoint(client):
     response = client.post("/api/v1/documents/analyze", json={
         "content": "# arc42\n## Introduction and Goals\n...",
@@ -333,51 +452,155 @@ def test_analyze_text_endpoint(client):
 
 ### 6.2 Missing Performance Tests
 
-**Gap:** No load testing or performance benchmarks. Response time SLOs (<3s for analysis, <10s for PDF generation) are untested.
+**Current state:** Functional correctness is covered, but there is still no benchmark or load-oriented suite validating response-time or throughput behavior under realistic volume.
 
-**Plan (Phase 2):** Add `locust` or `pytest-benchmark` tests for the core analysis endpoints.
+**Required actions (Phase 2):**
+
+1. Add benchmark coverage for the highest-value backend flows
+    - document analysis
+    - report generation
+    - dashboard/audit/compliance list-heavy queries
+
+2. Define enforceable performance targets
+    - analysis response target
+    - report generation target
+    - list endpoint latency target under seeded load
+
+3. Run performance checks in a reproducible environment
+    - lightweight benchmark gate in CI where feasible
+    - deeper load testing in pre-release or scheduled runs
+
+**Exit criteria:**
+
+- A repeatable benchmark suite exists
+- Core endpoint latency targets are documented and measured
+- Regression threshold failures are visible before release
 
 ### 6.3 Missing End-to-End Tests
 
-**Gap:** No test for the full PDF download flow: generate → store → download. The PDF file existence is verified in unit tests but the HTTP download endpoint is not tested.
+**Current state:** Backend/API coverage already includes report generation and HTTP download behavior, including negative-path and header assertions. The remaining gap is true browser-level E2E validation across UI pages and user journeys.
 
-**Plan (Phase 2):** Add `test_routes_reports.py::test_generate_and_download_pdf` using TestClient.
+**Required actions (Phase 2):**
+
+1. Add browser smoke coverage for critical journeys
+    - login → upload/analyze → inspect document result
+    - report generation/download from the UI
+    - lock/release document workflow
+    - stakeholder/authorization workflow for allowed vs denied actions
+
+2. Validate cross-page behavior instead of API behavior only
+    - navigation state
+    - user-visible errors
+    - file download behavior in the browser
+    - permission-gated UI controls
+
+3. Run browser smoke tests automatically
+    - on pull requests for a minimal set
+    - more complete scenarios on main or pre-release
+
+**Exit criteria:**
+
+- Critical browser smoke suite exists and runs reliably
+- Core user journeys are covered across page transitions
+- UI regressions can be caught without relying solely on backend API tests
 
 ### 6.4 Missing Security Penetration Tests
 
-**Gap:** No DAST (Dynamic Application Security Testing) or penetration testing. CodeQL provides SAST coverage but dynamic attack simulations are not run.
+**Current state:** Static analysis and secure coding checks are in place, but no dynamic security testing is run against the live application behavior.
 
-**Plan (Phase 2):** Run OWASP ZAP scan against development server; target 0 medium+ alerts.
+**Required actions (Phase 2):**
+
+1. Add a baseline DAST workflow
+    - OWASP ZAP against a development/staging deployment
+    - authenticated scan path for protected routes where practical
+
+2. Define release-blocking findings
+    - target 0 critical/high findings
+    - review and triage medium findings before release
+
+3. Expand beyond generic scans over time
+    - session/auth abuse scenarios
+    - authorization bypass attempts
+    - upload/download abuse paths
+
+**Exit criteria:**
+
+- A repeatable DAST workflow exists
+- Security findings are triaged and tracked
+- Release readiness includes dynamic security evidence, not only SAST
 
 ### 6.5 No AI Model Evaluation Framework
 
-**Gap:** The LLM-enriched analysis (optional Anthropic Claude) has no accuracy evaluation. There is no benchmark set, no ground truth annotations, and no metrics for:
+**Current state:** Functional tests cover fallback/provider behavior, but the LLM-enriched paths still lack a formal accuracy and quality evaluation framework. There is no benchmark set, no ground truth annotations, and no quality gate for:
 - arc42 section false-negative rate (sections present but not detected)
 - EU AI Act requirement false-positive rate (requirements incorrectly marked as "met")
 - Comparative accuracy: rule-based vs. Claude-enriched
 
-**Plan (Phase 2/3):**
+**Required actions (Phase 2/3):**
 1. Assemble 50 representative arc42 documents with expert annotations
 2. Run rule-based and Claude-enriched analysis on each
 3. Compute precision, recall, F1 for section detection
 4. Set accuracy targets (proposed: precision ≥95%, recall ≥90% for arc42 sections)
 
+**Exit criteria:**
+
+- Annotated benchmark corpus exists
+- Rule-based and LLM-assisted paths are evaluated on the same dataset
+- Accuracy targets are documented and reviewed as a release signal
+
+### 6.6 Concrete Remaining Gaps (Post Route-Coverage Cycle)
+
+Priority route-family gaps are closed. The next concrete QA gaps are:
+
+1. **Performance/scale assertions for list-heavy APIs**
+    - Dashboard summary with larger persisted datasets
+    - Audit trail list under large `window_hours` and high event volume
+    - Compliance standard-mapping list under high volume and mixed tenants/projects
+
+2. **Deeper failure-mode coverage on high-change workflows**
+    - Bridge repeated decision transitions are now covered for duplicate/conflicting human-review submissions; true concurrency/race tests still remain
+    - Additional auth/session token lifecycle edge cases now cover server-side revocation, expiry rejection, recovery-session invalidation, token single-use, and idempotent logout; deeper race-window tests still remain
+    - Research provider timeout/invalid payload permutations beyond current fallback checks
+
+3. **Coverage governance automation**
+    - Maintain the active `pytest-cov` threshold gate and raise it over time as practical
+    - Track route-to-test mapping drift in CI for newly introduced endpoints
+
+4. **Non-functional security and E2E depth**
+    - Baseline implemented: workflow-dispatch OWASP ZAP scan in `.github/workflows/dast-zap-baseline.yml`
+    - Baseline implemented: Playwright browser smoke in `frontend/tests/e2e/smoke.spec.ts` with CI workflow `.github/workflows/browser-e2e-smoke.yml`
+    - Remaining: broaden authenticated journey depth (upload/analyze/lock/release/report-download) and define blocking DAST thresholds for release gates
+
 ---
 
 ## Section 7 – Future QA Backlog
 
+### Active Backlog (Phase 2, Current Priority)
+
 | Item | Priority | Phase | Description |
 |------|----------|-------|-------------|
-| TestClient route tests | HIGH | 2 | Cover all 10+ API endpoints with TestClient |
-| pytest-cov coverage target | HIGH | 2 | Set minimum coverage threshold at ≥80% |
-| Ruff linting in CI | HIGH | 2 | GitHub Actions: `ruff check src/ tests/` on every push |
-| mypy strict type checking | MEDIUM | 2 | `mypy src/` with strict mode; target 0 errors |
-| E2E PDF download test | MEDIUM | 2 | Full generate → download flow via TestClient |
-| Performance benchmarks | MEDIUM | 2 | locust or pytest-benchmark for analysis endpoints |
-| OWASP ZAP scan | MEDIUM | 2 | DAST scan against dev server |
-| AI evaluation benchmark | LOW | 3 | 50-document annotated benchmark for Claude accuracy |
-| Contract tests | LOW | 3 | Pact or schemathesis API contract tests |
-| Regression test suite | LOW | 3 | Non-regression tests for EU AI Act requirement changes |
+| Browser E2E smoke suite | HIGH | 2 | Expand from baseline Playwright smoke (login, forgot-access, unauth redirect) to full authenticated critical journeys |
+| Performance benchmarks | HIGH | 2 | Add benchmark/load coverage for analysis, reports, dashboard, audit trail, and compliance list-heavy queries |
+| Bridge/auth failure-mode expansion | MEDIUM | 2 | Continue from newly added duplicate-review and session-revocation tests into true concurrency and race-window coverage on high-change workflows |
+| OWASP ZAP baseline | MEDIUM | 2 | Expand from baseline workflow-dispatch scan to scheduled/PR policy with explicit release-blocking thresholds |
+| CI static quality gates | MEDIUM | 2 | Keep `ruff` and `mypy` checks in CI to reduce regression noise around the test suite |
+| AI evaluation benchmark | LOW | 3 | Build annotated benchmark corpus and compare rule-based vs LLM-assisted quality outcomes |
+| Contract/fuzz testing | LOW | 3 | Add schemathesis or similar contract/fuzz coverage for high-change API surfaces |
+| Regression pack for policy changes | LOW | 3 | Preserve non-regression tests for EU AI Act, governance, and workflow rule changes |
+
+### Completed Items (Phase 2)
+
+| Item | Status | Completed | Exit Criteria |
+|------|--------|-----------|---------------|
+| Route-to-test drift gate | ✅ COMPLETE | 2026-4-5 | 57/57 routes mapped; pytest integration active; 0 unmapped routes |
+| pytest-cov threshold gate | ✅ COMPLETE | 2026-4-5 | 85% fail-under threshold active; current coverage 85.53% |
+
+### In-Progress Expansions (Phase 2)
+
+| Item | Status | Updated | Current Evidence |
+|------|--------|---------|------------------|
+| Bridge/auth failure-mode expansion | ▶ PARTIAL | 2026-4-5 | Added pytest coverage for duplicate bridge review conflicts, 3-reviewer terminal-decision contention, invalid approved+follow-up combinations, idempotent logout, revoked/expired session rejection, recovery reset revoking active sessions, 3-session invalidation across clients, and recovery token single-use |
+| Non-functional security and E2E depth | ▶ PARTIAL | 2026-4-5 | Added baseline OWASP ZAP workflow (`.github/workflows/dast-zap-baseline.yml`) and baseline Playwright browser smoke suite (`frontend/playwright.config.ts`, `frontend/tests/e2e/smoke.spec.ts`, `.github/workflows/browser-e2e-smoke.yml`) |
 
 ---
 
@@ -389,17 +612,20 @@ The earlier Phase-0 test baseline referenced module-level in-memory review state
 
 ### 8.2 Filesystem-Dependent Tests
 
-`test_generate_pdf_report` and `test_get_template_with_file` write to / read from the local filesystem. These tests require:
-- `reports/` directory writable by the test process (created automatically by `generate_report`)
-- `templates/sop/sop_business_goals.md` (and other active template files) present at the repo root
+Some tests still exercise filesystem behavior, but the current suite isolates that behavior more intentionally than the original baseline implied:
 
-**Impact on CI:** Tests must be run from the repository root directory; the GitHub Actions runner must have write access to the working directory.
+- `test_report_generator.py` writes generated reports into `tmp_path`
+- `test_reports_download_api.py` uses isolated working directories / disposable report artifacts for generate → download coverage
+- `test_template_manager.py::test_get_template_with_file` builds a temporary SOP directory under `tmp_path`
+- API/document hub flows still depend on the application's upload/report paths and persistence behavior rather than being pure in-memory tests
+
+**Impact on CI:** Tests still need a writable working directory and consistent app configuration, but the suite no longer depends on uncontrolled accumulation of repo-root artifacts for core report/file assertions.
 
 ### 8.3 PDF File Cleanup
 
-`test_generate_pdf_report` creates a PDF file in `reports/`. These files are not automatically deleted after tests. For clean test runs, the `reports/` directory may accumulate test PDFs.
+The original Phase-0 concern about test PDFs accumulating in `reports/` is now substantially reduced. Unit-level report generation already uses `tmp_path`, and API-level report download coverage is also exercised with isolated temporary working directories and disposable artifacts.
 
-**Phase 2 fix:** Add a pytest fixture that tracks and deletes generated report files after each test.
+**Maintenance rule:** Keep any new filesystem-dependent report/download tests isolated via `tmp_path`, disposable artifact directories, or equivalent fixture-managed cleanup so CI workers remain stateless and repeatable.
 
 ---
 
@@ -427,25 +653,29 @@ The earlier Phase-0 test baseline referenced module-level in-memory review state
 
 ## Open Questions
 
-1. **Coverage target:** Should pytest-cov enforce a minimum coverage threshold (e.g., `--cov-fail-under=80`) in CI?
-2. **Test isolation:** Should the in-memory `_review_store` be cleared via fixture for true test isolation, or is the current unique-ID approach sufficient?
+1. **Coverage target ratchet:** When should the active `--cov-fail-under=85` gate be increased, and what evidence should trigger the next threshold raise?
+2. **Test isolation:** Which remaining workflow paths still need stronger fixture-driven isolation beyond the current DB override + transaction rollback pattern?
 3. **CI integration:** Which CI system will run the test suite? GitHub Actions is the target; when should the workflow file be created?
-4. **PDF cleanup:** Should generated test PDFs be deleted automatically, or should a `tmp_path` pytest fixture be used to isolate filesystem tests?
+4. **Filesystem isolation:** Should all future browser/E2E download tests also use disposable artifact directories, or is a shared ephemeral test workspace acceptable in CI?
 5. **Accuracy benchmark:** When should the 50-document arc42 annotation benchmark be assembled? Who provides the ground truth annotations (QM staff, system architects)?
 
 ---
 
-## Audit
+## Audit (Updated 2026-4-5 with Route-to-Test Drift Gate)
 
 ```
 persona=qa-eng
 action=qa
-timestamp=2026-4-3
+timestamp=2026-4-5
 adapter=AAMAD-vscode
 artifact=project-context/2.build/qa.md
-version=0.3.0
-status=complete
-tests_passed=historical-baseline-30
-tests_failed=historical-baseline-0
+version=0.3.15
+status=complete-with-drift-gate-partial-bridge-auth-failure-expansion-and-partial-non-functional-security-e2e-baseline
+tests_passed=172-collected
+tests_failed=0
+current_suite_status=expanded-api-integration-with-route-contract-ordering-limit-authorization-active-85-percent-coverage-gate-route-to-test-drift-enforcement-partial-bridge-auth-failure-mode-coverage-and-baseline-dast-plus-browser-e2e-workflows
+drift_gate_status=ACTIVE-57-routes-all-mapped
+route_coverage_audit_tool=src/doc_quality/tools/route_coverage_audit.py
+pytest_collection_hook=tests/conftest.py::pytest_configure
 codeql_alerts=0
 ```

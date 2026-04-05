@@ -1,7 +1,6 @@
 ---
 name: Integration Engineer
-description: Integrates frontend chat interface with CrewAI backend API endpoint for
-  MVP chat flow.
+description: Integrates frontend chat interface with CrewAI backend API endpoint for MVP chat flow.
 tools:
 - editFiles
 - terminalLastCommand

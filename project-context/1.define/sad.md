@@ -2,8 +2,8 @@
 # System Architecture Document (SAD) — Doc Quality Compliance Check
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.8.0  
-**Date:** 2026-3-31  
+**Version:** 0.8.3  
+**Date:** 2026-4-4  
 **Author persona:** `@system-arch`  
 **Standard:** ISO/IEC/IEEE 42010:2022 — Architecture Description  
 **AAMAD phase:** 1.define  
@@ -30,7 +30,7 @@ This architecture follows the **KISS principle** (Keep It Simple, Stupid) for MV
 
 The architecture is designed to satisfy the following ISO 25010 quality characteristics in priority order:
 
-1. **Functional Suitability** — All PRD P0 requirements (F1–F7) are implemented and tested
+1. **Functional Suitability** — Core PRD P0 capabilities are implemented; remaining gaps are concentrated in partial UI wiring and broader end-to-end test coverage
 2. **Security** — BSI Grundschutz baseline; GDPR-compliant logging; OWASP Top 10 mitigations
 3. **Maintainability** — Full type hints, Pydantic v2 models, modular service layer, pytest suite
 4. **Performance Efficiency** — <3s document analysis, <10s PDF generation (synchronous, single instance)
@@ -259,28 +259,31 @@ The system is decomposed into five logical layers:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                  Presentation Layer                          │
-│           (Modern Multi-Page SOTA UI Experience)             │
-│   [Command Center] [The Bridge] [Artifact Lab] [Audit Log]   │
+│        (Next.js Multi-Page React/TypeScript Frontend)        │
+│ [Doc Hub] [Dashboard] [Bridge] [Artifact Lab] [Admin Center] │
 │                                                             │
 │   Goal: The multi-page frontend is designed to fulfill trust, clarity, traceability, and speed—while feeling modern and uplifting. The visual style will use a white-blue-green colour palette to evoke trust, calm, and progress. Dark mode is selectable by user. Detailed UI requirements will be clarified later; for now, the mood-enhancing style and UX principles are prioritized.
 │                                                             │
 │   After login, the first page presents a left navigation pane with the following elements:
+│     - Home (Doc Hub)
+│     - Compliance Standards
 │     - Dashboard
-│     - Documents (all types, powerful filtering)
-│         - Authors (especially from SW development) are responsible for maintaining arc42 documentation.
-│         - QM personnel, requirement engineers, product owners, etc. primarily work with rich text editors for governance and compliance documents.
+│     - Bridge
+│     - Artifact Lab
+│     - Auditor Vault
 │     - SOPs
-│     - Forms & Records
-│     - Risk (RMF / FMEA)
-│         - Excel import/export must be supported for FMEA tables and related risk management records.
-│         - Severity and probability scales must be configurable per product; recommendations and explanations should be available via the Help page for main parts and terminology.
+│     - Risk (FMEA / RMF)
+│         - Risk actions currently use a backend-first client with demo fallback on legacy endpoint failure.
+│         - CSV export exists on the backend risk-template surface.
 │     - Architecture (arc42)
-│     - Reviews
-│         - For the MVP, lighter approvals are requested; 21 CFR Part 11-style e-signatures and strict audit controls are out-of-scope for now.
-│     - Help
-│         - The Help page shall include a short description and explanation (max 3 sentences) of main QM terminology, ISO norms (ISO 42001, ISO 27001), NIS2, and EU AI Act.
-│         - It must be possible to add further topics and items to the Help page; content must be editable and stored in the PostgreSQL database.
-│     - Admin (Products, roles, risk scales)
+│     - Exports Registry
+│     - Audit Trail
+│     - Auditor Workstation
+│     - Help & Snippets
+│         - Includes Help, Q&A, and Glossary routes in the current pages router.
+│     - Admin
+│         - Observability
+│         - Stakeholders & Rights
 │                                                             │
 │   fetch() → /api/v1/* endpoints                       │
 └─────────────────────────────┬───────────────────────────────┘
@@ -524,11 +527,22 @@ Developer       Client (UI)       HITL Service         PostgreSQL (DB)
 
 ### 3.3 Deployment View
 
-**MVP Deployment (single instance):**
+**MVP Deployment (current local topology):**
 
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                   Host Machine (Linux/macOS/Windows)      │
+│                                                          │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │  Next.js Process                                   │  │
+│  │  Port: 3000                                        │  │
+│  │                                                    │  │
+│  │  Serves current frontend pages/router UX           │  │
+│  │  Rewrites:                                         │  │
+│  │   • /api/:path*  → FastAPI /api/:path*             │  │
+│  │   • /health      → FastAPI /health                 │  │
+│  │   • /metrics     → FastAPI /metrics                │  │
+│  └────────────────────────────────────────────────────┘  │
 │                                                          │
 │  ┌────────────────────────────────────────────────────┐  │
 │  │  Python 3.12 Process (uvicorn)                     │  │
@@ -540,7 +554,8 @@ Developer       Client (UI)       HITL Service         PostgreSQL (DB)
 │  │   • /api/v1/*  (REST API)                         │  │
 │  │   • /docs      (Swagger UI)                        │  │
 │  │   • /health    (health check)                      │  │
-│  │   • /          (StaticFiles → frontend/)           │  │
+│  │   • /metrics   (Prometheus scrape endpoint)        │  │
+│  │   • /          (StaticFiles compatibility mount)   │  │
 │  │                                                    │  │
 │  │  ┌──────────────┐   ┌────────────────────────┐    │  │
 │  │  │ templates/   │   │ reports/               │    │  │
@@ -572,7 +587,7 @@ services:
       - reports:/app/reports
       - ./templates:/app/templates:ro
     environment:
-      - DATABASE_URL=sqlite:///app/data/reviews.db
+      - DATABASE_URL=postgresql+psycopg2://dbuser:CHANGE_ME@db:5432/doc_quality
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 ```
 
@@ -699,10 +714,10 @@ For MVP/Phase 0, the architecture uses backend-owned **email/password authentica
 | **AD-2** | Data validation library | marshmallow, Pydantic v1, Pydantic v2, attrs | **Pydantic v2** | Type safety, FastAPI native, v2 performance improvements, strict mode available, field validators |
 | **AD-3** | PDF generation | WeasyPrint, wkhtmltopdf, ReportLab, fpdf2 | **ReportLab** | Pure Python (no system-level dependencies), production-proven, rich layout control, no Chromium/Qt runtime required |
 | **AD-4** | LLM integration model | Required dependency, optional dependency, not included | **Optional dependency** | KISS: rule-based core delivers compliance value without API key; Claude adds semantic depth when available; reduces adoption friction |
-| **AD-5** | Storage backend | PostgreSQL, Redis, filesystem | **DB and Filesystem (MVP)** | For MVP: PostgreSQL DB setup and file storage, with ORM; reports/ directory for PDFs eg for exports or temporary local storage; in-memory dict storage for reviews and approved documents, Forms and SOPs, consistent storage at least before reboot or shutdown or triggered by user; documented path to PostgreSQL |
+| **AD-5** | Storage backend | PostgreSQL, Redis, filesystem | **PostgreSQL + local filesystem (MVP)** | PostgreSQL is the primary store for persistent governance, auth/session, audit, observability, and stakeholder data; the local `reports/` directory remains acceptable for generated export artifacts in MVP; demo/frontend local state may exist for non-approval UX but is not a system of record |
 | **AD-6** | Input sanitisation | Custom regex, OWASP sanitiser, bleach, html.escape | **bleach** | Battle-tested, OWASP-aligned, configurable allow-lists, widely used in production; no custom security code |
 | **AD-7** | Logging library | standard logging, loguru, structlog | **structlog** | JSON-structured output (required for EU AI Act Art. 12 logging compliance), processor pipeline, context binding |
-| **AD-8** | Frontend framework | React, Vue, Angular, typscript, HTML/JS | **Modern Multi-page UI with React and tyscript** | KISS: build toolchain if necessary only, no npm, no bundler; tab navigation is simple enough for plain JS; reduces maintenance surface; changes possible according detailed frontend requirements |
+| **AD-8** | Frontend framework | React, Vue, Angular, plain HTML/JS | **Next.js pages-router app with React + TypeScript** | Matches the implemented multi-page frontend, supports protected-route bootstrap, proxy rewrites for first-party auth cookies, and keeps frontend state/UI modules organized without custom routing glue |
 | **AD-9** | Configuration management | os.environ, python-dotenv, pydantic-settings | **pydantic-settings** | Type-safe settings, native Pydantic v2 integration, `.env` file support, validation on startup |
 | **AD-10** | Testing framework | unittest, pytest, hypothesis | **pytest** | Industry standard, rich plugin ecosystem (pytest-asyncio, pytest-cov), cleaner test syntax |
 | **AD-11** | Prompt management | Inline strings, DB-stored prompts, versioned files | **Versioned prompt files in `prompts/` directory** | Auditability, reproducibility, rollback support, and lower prompt drift risk across releases |
@@ -727,11 +742,11 @@ The above architectural decisions are elaborated with detailed acceptance criter
 
 | Risk ID | Risk | Probability | Impact | Mitigation | Timeline |
 |---------|------|-------------|--------|------------|----------|
-| **R-1** | Approved review records (HITL, SOP, risk) not persisted to PostgreSQL DB | **HIGH** | **MEDIUM** | Mandatory: Persist all approved records in PostgreSQL via append-only audit events + materialized current-state tables; enforce immutable snapshots and retention/archival policy so no approved document is lost | Immediate |
-| **R-2** | Documents (HITL reviews, SOPs, risk records) not persisted to DB at account session end (logout, app exit, shutdown) | **HIGH** | **MEDIUM** | Mandatory: All documents of mentioned types must be stored in PostgreSQL DB at session end; enforce as architectural requirement; no data loss on logout/app exit/shutdown | Immediate |
+| **R-1** | Browser-facing document workflows are not yet uniformly backed by persistent PostgreSQL history across every artifact type | **MEDIUM** | **MEDIUM** | Continue converging partial/mock-first UI flows onto the already-implemented backend persistence model; keep approval-critical review records on append-only audit events + current-state tables | Phase 2 |
+| **R-2** | Some non-approval UX paths still rely on local state or filesystem-backed artifacts before explicit persistence steps occur | **MEDIUM** | **MEDIUM** | Expand explicit save/finalize flows so relevant document classes are persisted consistently and users are informed when data is local-only vs system-of-record data | Phase 2 |
 | **R-3** | Model API rate limits or outage (Anthropic, OpenAI, vLM, MoE, etc.) | **MEDIUM** | **LOW** | Graceful fallback to rule-based core; cost control enforced for all model APIs; monitoring and alerting for outages and quota breaches | Already mitigated |
 | **R-4** | Large file (>10 MB) blocks event loop | **MEDIUM** | **MEDIUM** | 10 MB limit enforced; background tasks + streaming in Phase 2; UI feedback for file status is an architectural requirement (app user must be informed if file is too large); confidence-gated OCR fallback required for scanned/low-quality files in supported size range | Phase 2 |
-| **R-5** | No authentication and authorisation for app login and critical actions | **HIGH** | **HIGH** | Authentication and authorisation are mandatory for app login and all HITL, risk, and compliance workflows; enforce as architectural requirement for traceability and auditability | Immediate |
+| **R-5** | Enterprise-grade identity integration and multi-instance auth hardening are not yet complete | **MEDIUM** | **HIGH** | Keep current backend-owned session auth + RBAC as the secure baseline; add enterprise SSO and distributed/shared lockout support in later phases | Phase 2+ |
 | **R-6** | arc42 section detection false negatives | **MEDIUM** | **MEDIUM** | Regex patterns cover common heading styles; LLM enrichment covers non-standard headings; HITL review ensures completeness | Ongoing |
 | **R-7** | PDF file accumulation in local reports/ dir | **LOW** | **LOW** | Manual cleanup; scheduled cleanup task in Phase 2; UI indicator for report status | Phase 2 |
 | **R-8** | EU AI Act guidance updates requiring rule changes | **LOW** | **HIGH** | Requirements engine is data-driven (list of dicts); updates require only data changes; HITL review for regulatory changes | On guidance release |
@@ -743,13 +758,11 @@ The above architectural decisions are elaborated with detailed acceptance criter
 
 | Item | Debt Type | Impact | Payoff Plan |
 |------|-----------|--------|-------------|
-| In-memory HITL review store | Architecture | Reviews lost on restart | PostgreSQL persistence, Phase 0 |
-| No database layer | Architecture | No query/filter capability | PostgreSQL, Phase 0 |
 | No enterprise SSO or distributed identity provider integration yet | Security | Larger organizations still need centralized identity integration | OIDC/OAuth2/LDAP/SAML, Phase 2+ |
-| No integration tests | Testing | Route-level bugs undetected | TestClient tests, >= Phase 1 |
+| Incomplete integration test coverage | Testing | Some route surfaces and end-to-end flows can still regress without dedicated coverage | Expand existing TestClient-based API/integration tests across remaining routes and critical workflows, Phase 2 |
 | No CI/CD pipeline | Operations | Manual test/deploy | GitHub Actions, Phase 2 |
-| No Docker image | Operations | Non-reproducible deployment | Dockerfile, Phase 2 |
-| No file storage backend | Architecture | Reports stored on local FS | At least: PostgreSQL for approved reports, Phase 0 |
+| No full application containerization path | Operations | Main app/frontend deployment remains less reproducible than desired | Add production-ready Docker image(s) for the main app/frontend path; align with existing dev Docker Compose and orchestrator Dockerfile, Phase 2 |
+| No production-grade file/object storage backend | Architecture | Generated reports still depend on local filesystem storage in MVP | Add durable object/file storage for exported artifacts while keeping PostgreSQL as the system of record for approval-critical review/audit data, Phase 2+ |
 | LLM prompt governance gaps | Maintainability | Prompt drift and non-reproducible LLM behavior | Mandatory: versioned prompt files in `prompts/` directory with change rationale and version identifiers; enforce in code review checklist (Immediate) |
 
 ---
@@ -818,11 +831,11 @@ The above architectural decisions are elaborated with detailed acceptance criter
 ## Assumptions
 
 1. MVP is deployed as a single-instance service (no load balancer, no horizontal scaling).
-2. arc42 documents are in markdown or plain text format. For binary DOCX/PDF parsing, the architecture uses text-layer extraction first and enforces confidence-gated OCR fallback for scanned/low-quality documents, following transcribe+structure+grounding principles with output-format-first model selection.
+2. arc42 documents are in markdown or plain text format. For binary DOCX/PDF parsing, the architecture uses text-layer extraction first and includes a confidence-gated OCR decision path for scanned/low-quality documents; full OCR execution integration remains a Phase 2+ enhancement following transcribe+structure+grounding principles with output-format-first model selection.
 3. The rule-based compliance engine is deterministic for the same input; LLM enrichment may produce slightly different outputs across runs (non-deterministic by nature).
 4. `reports/` directory is writable by the uvicorn process; filesystem persistence of PDFs exists locally for user, final approved report result shall be stored in DB for MVP.
 5. `templates/sop/` markdown files are static for MVP; template versioning is a Phase 2 concern.
-6. CORS origins `localhost:3000` and `localhost:8000` are sufficient for MVP; production deployment behind a reverse proxy will require CORS origin update.
+6. Current MVP CORS allow-list includes `localhost`, `127.0.0.1`, and `0.0.0.0` for ports `3000` and `8000`; production deployment behind a reverse proxy will require explicit deployment-domain updates.
 7. HITL persistence uses PostgreSQL-backed audit events + current-state projections; in-memory review state is not accepted for approval-critical records.
 8. The LLM API client is initialised only when a supported `API_KEY` (OpenAI, Anthropic, etc.) is set; no API calls are made without an explicit key.
 
@@ -848,11 +861,12 @@ The application exposes a RESTful API with the following main routes (for tracea
 - `/api/v1/risk-templates` — RMF/FMEA risk template CRUD with CSV export and AI-assisted rows
 - `/api/v1/audit-trail` — Governance audit trail read access and audit schedule management
 - `/api/v1/dashboard` — Aggregated compliance KPIs and document risk analytics
-- `/api/v1/observability` — Quality observation ingestion, LLM trace access, and Prometheus metrics
+- `/api/v1/observability` — Quality observation ingestion, quality summaries, and LLM trace access
 - `/api/v1/admin` — Stakeholder profile governance and employee assignment management
 - `/api/v1/auth` — Email/password authentication, session management, and password recovery
+- `/metrics` — Prometheus scrape endpoint for operational telemetry
 
-**Note on HITL review route surface:** The HITL persistence layer (`hitl_workflow.py`) and `ReviewRecordORM` are implemented, but a dedicated `/api/v1/reviews` route is not yet exposed as a standalone router. HITL review decisions for bridge runs are accessible via `/api/v1/bridge/human-review/{run_id}`.
+**Note on HITL review route surface:** The HITL persistence layer (`hitl_workflow.py`) and `ReviewRecordORM` are implemented, but a dedicated `/api/v1/reviews` route is not yet exposed as a standalone router. HITL review decisions for bridge runs are accessible via `/api/v1/bridge/runs/{run_id}/human-review`.
 
 All routes are versioned and documented for traceability and audit purposes.
 
@@ -860,80 +874,62 @@ All routes are versioned and documented for traceability and audit purposes.
 
 ## Phase 0 Hardening Checklist (Production-Grade Baseline)
 
-This checklist defines the minimum hardening scope for Phase 0 so the current MVP can be used as a safe production starting point.
+This checklist defines the minimum hardening scope for Phase 0. The items below are aligned to the current implementation status so the document distinguishes completed controls from remaining release work.
 
 ### 1) Enforce production-safe security defaults
 
 - **Objective:** Remove insecure defaults and enforce explicit production configuration.
-- **Code changes (exact):**
-  - Update [src/doc_quality/core/config.py](src/doc_quality/core/config.py):
-    - Replace weak default `secret_key` with required non-default validation (fail startup if unchanged in `production`).
-    - Set `session_cookie_secure=True` automatically when `environment != development`.
-    - Set `auth_recovery_debug_expose_token=False` by default.
-  - Update [src/doc_quality/core/session_auth.py](src/doc_quality/core/session_auth.py):
-    - Replace hardcoded cookie alias `dq_session` in dependencies with configured cookie name from `session_cookie_name`.
-- **Documentation updates:**
-  - Add environment variable matrix and secure defaults to `README.md` and deployment docs.
-  - Document startup fail-fast behavior for insecure production config.
+- **Status:** Implemented in code.
+- **Current implementation:**
+  - [src/doc_quality/core/config.py](src/doc_quality/core/config.py) fails startup when `SECRET_KEY` is unchanged in `production`.
+  - [src/doc_quality/core/config.py](src/doc_quality/core/config.py) automatically sets `session_cookie_secure=True` outside development.
+  - [src/doc_quality/core/config.py](src/doc_quality/core/config.py) defaults `auth_recovery_debug_expose_token=False`.
+  - [src/doc_quality/core/session_auth.py](src/doc_quality/core/session_auth.py) uses the configured `session_cookie_name` instead of a hardcoded alias.
+- **Documentation state:** Security defaults and auth/session behavior are documented; keep environment/deployment docs synchronized when new settings are added.
 
 ### 2) Add global abuse protections and login throttling
 
 - **Objective:** Protect API from brute-force, scraping, and accidental request storms.
-- **Code changes (exact):**
-  - Add request rate-limiting middleware/dependency for all `/api/v1/*` routes in [src/doc_quality/api/main.py](src/doc_quality/api/main.py).
-  - Extend auth protections in [src/doc_quality/api/routes/auth.py](src/doc_quality/api/routes/auth.py):
-    - Add login attempt throttling per IP and per account.
-    - Add temporary lockout/backoff policy after repeated failed logins.
-    - Return HTTP `429` with `Retry-After` header where applicable.
-  - Add new config fields in [src/doc_quality/core/config.py](src/doc_quality/core/config.py) for global and auth-specific limits.
-- **Documentation updates:**
-  - Document rate-limit policy and lockout behavior in API docs.
-  - Add operational runbook for handling repeated `429`/lockout events.
+- **Status:** Implemented in code; operational runbook remains lightweight.
+- **Current implementation:**
+  - [src/doc_quality/api/main.py](src/doc_quality/api/main.py) applies global rate limiting to `/api/v1/*` and returns `429` with `Retry-After`.
+  - [src/doc_quality/api/routes/auth.py](src/doc_quality/api/routes/auth.py) enforces login throttling per email and per IP with temporary lockout/backoff behavior.
+  - [src/doc_quality/core/config.py](src/doc_quality/core/config.py) contains global and auth-specific rate-limit settings.
+  - [tests/test_auth_rate_limit_api.py](tests/test_auth_rate_limit_api.py) verifies both global `429` handling and login lockout behavior.
+- **Remaining gap:** Expand operator-facing runbook guidance for diagnosing repeated `429` and lockout events if this moves beyond MVP/local use.
 
 ### 3) Tighten authorization policy and service-account scope
 
 - **Objective:** Ensure least-privilege access and prevent broad service bypass.
-- **Code changes (exact):**
-  - Refactor [src/doc_quality/core/session_auth.py](src/doc_quality/core/session_auth.py):
-    - Restrict `service` role bypass to explicit machine-to-machine endpoints only.
-    - Enforce endpoint-level role checks consistently via `require_roles(...)`.
-  - Review and update route guards in:
-    - [src/doc_quality/api/routes/compliance.py](src/doc_quality/api/routes/compliance.py)
-    - [src/doc_quality/api/routes/research.py](src/doc_quality/api/routes/research.py)
-    - [src/doc_quality/api/routes/reports.py](src/doc_quality/api/routes/reports.py)
-    - [src/doc_quality/api/routes/skills.py](src/doc_quality/api/routes/skills.py)
-  - Add explicit authorization policy map (role → endpoint/action matrix) in backend docs.
-- **Documentation updates:**
-  - Add a dedicated "Authorization Matrix" section in SAD + README.
-  - Document difference between browser session users and service clients.
+- **Status:** Implemented in code and covered by targeted tests.
+- **Current implementation:**
+  - [src/doc_quality/core/session_auth.py](src/doc_quality/core/session_auth.py) restricts `service` access to endpoints that explicitly opt in with `allow_service=True`.
+  - Protected routes use `require_roles(...)` for endpoint-level authorization.
+  - Role boundaries have been tightened on critical routes, including compliance, research, reports, skills, and stakeholder admin mutations.
+  - [tests/test_auth_authorization_api.py](tests/test_auth_authorization_api.py) verifies unauthenticated denial, role denial, and limited service-client access.
+- **Documentation state:** Authorization behavior is documented in SAD/build docs; keep the role-to-endpoint matrix updated as new protected routes are added.
 
 ### 4) Minimize information leakage in responses and recovery flows
 
 - **Objective:** Prevent exposure of sensitive internal details or account intelligence.
-- **Code changes (exact):**
-  - Update [src/doc_quality/api/routes/auth.py](src/doc_quality/api/routes/auth.py):
-    - Keep generic recovery responses in all environments.
-    - Ensure debug token/reset URL exposure is development-only and disabled by default.
-  - Add standardized API error envelope in [src/doc_quality/api/main.py](src/doc_quality/api/main.py):
-    - Normalize `4xx/5xx` responses and avoid returning raw exception internals.
-  - Review payload fields in data-returning endpoints to avoid over-exposure (e.g., restrict full extracted text where not required).
-- **Documentation updates:**
-  - Add error-handling and disclosure policy section (what is intentionally returned vs. redacted).
-  - Document incident response guidance for suspicious data exposure.
+- **Status:** Core controls implemented; payload-minimization review remains an ongoing discipline for future endpoints.
+- **Current implementation:**
+  - [src/doc_quality/api/routes/auth.py](src/doc_quality/api/routes/auth.py) returns generic recovery-request responses and only exposes debug recovery data when explicitly enabled in development.
+  - [src/doc_quality/api/main.py](src/doc_quality/api/main.py) standardizes the API error envelope for `4xx/5xx` responses and suppresses raw internal exception detail.
+  - [tests/test_auth_recovery_api.py](tests/test_auth_recovery_api.py) and [tests/test_error_envelope_api.py](tests/test_error_envelope_api.py) verify the expected disclosure boundaries.
+- **Remaining gap:** Continue reviewing newly added response models to avoid accidental over-exposure of internal or extracted content.
 
 ### 5) Add security verification tests (authz, throttling, disclosure)
 
 - **Objective:** Make security controls testable, repeatable, and release-gated.
-- **Code changes (exact):**
-  - Add/extend tests under `tests/`:
-    - `tests/test_auth_authorization_api.py`: negative role tests (`401`/`403`) per protected endpoint.
-    - `tests/test_auth_rate_limit_api.py`: brute-force and `429` behavior (with `Retry-After`).
-    - `tests/test_auth_recovery_api.py`: verify no token leakage outside allowed debug conditions.
-    - `tests/test_error_envelope_api.py`: ensure error payloads do not reveal internals.
-  - Integrate these tests into required CI checks for release readiness.
-- **Documentation updates:**
-  - Add a security test checklist and pass criteria (mandatory for release).
-  - Map each test module to the corresponding threat category (authz, abuse, leakage).
+- **Status:** Test coverage implemented; CI release-gating remains future work.
+- **Current implementation:**
+  - [tests/test_auth_authorization_api.py](tests/test_auth_authorization_api.py) covers protected-route authn/authz and service-scope boundaries.
+  - [tests/test_auth_rate_limit_api.py](tests/test_auth_rate_limit_api.py) covers brute-force/login lockout and `429` behavior.
+  - [tests/test_auth_recovery_api.py](tests/test_auth_recovery_api.py) covers recovery-token disclosure boundaries.
+  - [tests/test_error_envelope_api.py](tests/test_error_envelope_api.py) covers standardized error-envelope behavior and non-leakage expectations.
+- **Remaining gap:** Integrate these tests into formal CI checks once a repository workflow pipeline is added.
+- **Documentation state:** Keep the security test checklist and threat-category mapping synchronized with the evolving test suite.
 
 ---
 
@@ -942,12 +938,12 @@ This checklist defines the minimum hardening scope for Phase 0 so the current MV
 - Enterprise SSO via OIDC/OAuth2/LDAP/SAML (recommended for large organizations, deferred to Phase 2+)
 - Persistent distributed rate limiting and shared lockout state (e.g., Redis-backed) for multi-instance deployments (Phase 2+)
 - Scheduled cleanup task for PDF file accumulation in reports/ directory (storage management, Phase 2)
-- Integration tests for route-level bugs (Phase 2)
+- Broaden the existing TestClient-based integration suite to cover remaining route surfaces and end-to-end workflows more systematically (Phase 2)
 - CI/CD pipeline setup (Phase 2)
-- Docker image and file storage backend (Phase 2+)
+- Containerize the main app/frontend deployment path and add a production-grade file/object storage backend; current repo already includes PostgreSQL Docker Compose for local dev and an orchestrator Dockerfile (Phase 2+)
 - **Search improvement (Phase 2+)**: Adopting BM25 + dense retrieval makes sense for scale and compliance evidence quality in this product context.
-- Document/Report artefacts belong to more than one project or product, being part of a general document framework that can be reused by future projects and their products; more expierence of few project requirements are needed (Phase 3+)
-- **OCR fallback enhancement (Phase 2+)**: Build upon confidence-gated extraction pipeline with:
+- Document/report artefacts should evolve toward a reusable cross-project document framework as product scope matures and more project requirements are validated (Phase 3+)
+- **OCR fallback enhancement (Phase 2+)**: Complete the currently scaffolded confidence-gated extraction pipeline by integrating real OCR execution with:
   - Integration of SOTA OCR service (Docling, PaddleOCR, or local vLLM serving)
   - Multiple OCR profiles (form-heavy and layout-heavy) for robustness across invoices/forms/scans/multilingual pages
   - Benchmark evaluation using public datasets and domain micro-benchmarks (~50–200 real pages) scored on CER/WER, reading order accuracy, table structure fidelity, and field-level extraction precision
@@ -961,10 +957,10 @@ This checklist defines the minimum hardening scope for Phase 0 so the current MV
 
 ```Python
 persona=system-arch
-action=update-sad-v0.7.0-agentic-ux-multillm
-timestamp=2026-3-31
+action=align-sad-and-prd-with-current-implementation
+timestamp=2026-4-4
 adapter=AAMAD-vscode
 artifact=project-context/1.define/sad.md
-version=0.8.0
+version=0.8.2
 status=complete
 ```

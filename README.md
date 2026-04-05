@@ -64,6 +64,18 @@ Attached browser-page view of the Document Hub:
 
 ## Getting Started
 
+### Testing
+
+Short testing entrypoint from project root dir with .venv setting:
+
+- Run all backend tests: `python -m pytest`
+- Run one module quickly: `python -m pytest tests/test_auth_session_api.py -v`
+
+For full testing details (scope, status, workflows, role ownership, and lifecycle mapping), see:
+
+- [Testing Guide](TESTING_README.md)
+- [QA Baseline and Gap Tracker](project-context/2.build/qa.md)
+
 ### Database Setup (Phase 0 MVP)
 
 Phase 0 requires **PostgreSQL 16** for session authentication, HITL reviews, and compliance audit trails.

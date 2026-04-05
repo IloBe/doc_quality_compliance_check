@@ -261,7 +261,7 @@ Mock data structure (demo mode):
 
 ### 2.7 Stakeholder Admin API (Implemented, Always Live)
 
-The stakeholder employee assignment endpoints are always called against the live backend (no mock fallback needed — the page is an admin-only management surface):
+The stakeholder profile and employee assignment endpoints are always called against the live backend (no mock fallback needed — the page is an admin-only management surface):
 
 UI behavior for this integration (single-add vs bulk-add, deduplication, and result messaging) is documented in [frontend_admin.md](frontend_admin.md) under "Stakeholders & Rights page (`/admin/stakeholders`)".
 
@@ -276,7 +276,7 @@ DELETE /api/v1/admin/stakeholder-profiles/{profile_id}/employees/{assignment_id}
 Authorization policy (current):
 
 - `GET` profile/assignment endpoints: `qm_lead`, `riskmanager`, `auditor`, `architect`
-- `POST`/`DELETE` assignment endpoints: `qm_lead`, `riskmanager` only (governance ownership)
+- `PUT` profile + `POST`/`DELETE` assignment endpoints: `qm_lead`, `riskmanager` only (governance ownership)
 
 POST payload:
 

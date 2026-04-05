@@ -136,3 +136,44 @@ def test_dashboard_summary_respects_timeframe_filter(client, test_db_session) ->
     assert payload["documents"] == []
     assert payload["kpis"]["open_documents"] == 0
     assert payload["kpis"]["closed_documents"] == 0
+
+
+def test_dashboard_summary_response_contract_shape(client) -> None:
+    response = client.get("/api/v1/dashboard/summary?timeframe=month")
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert set(payload.keys()) == {
+        "timeframe",
+        "window_start",
+        "window_end",
+        "kpis",
+        "risk_distribution",
+        "documents",
+    }
+
+    assert set(payload["kpis"].keys()) == {
+        "open_documents",
+        "closed_documents",
+        "active_jobs",
+        "closed_jobs",
+        "avg_cycle_days",
+        "compliance_pass_rate",
+        "bridge_runs_done",
+    }
+    assert set(payload["risk_distribution"].keys()) == {"high", "limited", "minimal"}
+
+    if payload["documents"]:
+        doc_row = payload["documents"][0]
+        assert set(doc_row.keys()) == {
+            "document_id",
+            "title",
+            "risk_class",
+            "cycle_days",
+            "passed_checks",
+            "failed_checks",
+            "checks",
+        }
+        if doc_row["checks"]:
+            check = doc_row["checks"][0]
+            assert set(check.keys()) == {"standard", "article", "passed"}

@@ -107,6 +107,7 @@ The following mock data is returned from `useMemo` hooks keyed on `windowHours`:
 | Endpoint | Client function |
 |---|---|
 | `GET /api/v1/admin/stakeholder-profiles?include_inactive=true` | `fetchStakeholderProfiles(true)` |
+| `PUT /api/v1/admin/stakeholder-profiles/{id}` | `saveStakeholderProfile(profileId, payload)` |
 | `GET /api/v1/admin/stakeholder-profiles/{id}/employees` | `fetchStakeholderAssignments(profileId)` |
 | `POST /api/v1/admin/stakeholder-profiles/{id}/employees` | `addStakeholderAssignment(profileId, employeeName)` |
 | `DELETE /api/v1/admin/stakeholder-profiles/{id}/employees/{assignmentId}` | `removeStakeholderAssignment(profileId, assignmentId)` |

@@ -1,7 +1,6 @@
 ---
 name: Frontend Developer
-description: Implements the MVP UI (chat interface), visible stubs for future features,
-  and consistent design.
+description: Implements the MVP UI (chat interface), visible stubs for future features, and consistent design.
 tools:
 - editFiles
 - terminalLastCommand

@@ -258,8 +258,8 @@ The frontend is currently **hybrid**, not uniformly backend-driven.
 - **Admin workflow component breakdown** via `GET /api/v1/observability/workflow-components?window_hours=…`
 - **Admin metrics snapshot** via direct backend `GET /metrics` using `NEXT_PUBLIC_HEALTH_ORIGIN` or `NEXT_PUBLIC_API_ORIGIN`
 - **Stakeholder profiles** via `GET /api/v1/admin/stakeholder-profiles?include_inactive=true`
+- **Stakeholder profile save/upsert** via `PUT /api/v1/admin/stakeholder-profiles/{id}`
 - **Stakeholder employee assignments** via `GET/POST/DELETE /api/v1/admin/stakeholder-profiles/{id}/employees`
-- **Risk action log persistence** via `/api/v1/risk-templates/actions` (backend-first with demo fallback)
 
 ### 4.2 Mock/demo-driven today
 
@@ -270,6 +270,7 @@ The frontend is currently **hybrid**, not uniformly backend-driven.
 - export queue simulation
 - bridge run status simulation
 - operations-running status used by shell modal behavior
+- risk action trail currently degrades to local demo behavior when legacy `/api/v1/risk-templates/actions` is unavailable
 
 This is intentional for the current phase: the workspace remains demoable before every backend endpoint is fully wired into the UI.
 

@@ -2,9 +2,22 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import os
 import uuid
 
+from fastapi.testclient import TestClient
+
+from src.doc_quality.api.main import app
+from src.doc_quality.core.database import get_db
 from src.doc_quality.models.orm import AuditEventORM, BridgeHumanReviewORM, SkillDocumentORM
+
+
+def _client_with_db(test_db_session) -> TestClient:
+    def override_get_db():
+        yield test_db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    return TestClient(app)
 
 
 def test_bridge_run_eu_ai_act_returns_results_and_persists_audit(client, test_db_session) -> None:
@@ -260,6 +273,109 @@ def test_bridge_human_review_can_be_fetched_after_submission(client, test_db_ses
     assert payload["reviewer_email"]
 
 
+def test_bridge_human_review_rejects_duplicate_submission_for_same_run(client, test_db_session) -> None:
+    doc_id = "DOC-BRIDGE-6"
+    doc = SkillDocumentORM(
+        document_id=doc_id,
+        filename="oversight.md",
+        content_type="text/markdown",
+        document_type="sop",
+        extracted_text="oversight traceability post-market monitoring logging",
+        source="skills_extract",
+    )
+    test_db_session.add(doc)
+    test_db_session.commit()
+
+    run = client.post(
+        "/api/v1/bridge/run/eu-ai-act",
+        json={
+            "document_id": doc_id,
+            "domain_info": {
+                "domain": "medical devices",
+                "description": "AI oversight assistant",
+                "uses_ai_ml": True,
+                "intended_use": "quality review",
+                "target_market": "EU",
+            },
+        },
+    )
+    assert run.status_code == 200
+    run_id = run.json()["run_id"]
+
+    first_review = client.post(
+        f"/api/v1/bridge/runs/{run_id}/human-review",
+        json={
+            "document_id": doc_id,
+            "decision": "approved",
+            "reason": "Initial human approval recorded.",
+        },
+    )
+    assert first_review.status_code == 200
+
+    duplicate_review = client.post(
+        f"/api/v1/bridge/runs/{run_id}/human-review",
+        json={
+            "document_id": doc_id,
+            "decision": "rejected",
+            "reason": "Conflicting second decision should be blocked.",
+            "next_task_type": "manual_follow_up",
+            "next_task_assignee": "sven.riskmanager@qm.local",
+        },
+    )
+    assert duplicate_review.status_code == 409
+    assert "already submitted" in duplicate_review.json()["error"]["message"].lower()
+
+    stored_reviews = test_db_session.query(BridgeHumanReviewORM).filter(BridgeHumanReviewORM.run_id == run_id).all()
+    assert len(stored_reviews) == 1
+    assert stored_reviews[0].decision == "approved"
+
+    review_events = test_db_session.query(AuditEventORM).filter(AuditEventORM.correlation_id == run_id).all()
+    assert len([event for event in review_events if event.event_type in {"bridge.run.approved", "bridge.run.rejected"}]) == 1
+
+
+def test_bridge_human_review_rejects_approved_decision_with_follow_up_task(client, test_db_session) -> None:
+    doc_id = "DOC-BRIDGE-7"
+    doc = SkillDocumentORM(
+        document_id=doc_id,
+        filename="evidence.md",
+        content_type="text/markdown",
+        document_type="sop",
+        extracted_text="technical documentation transparency human oversight evidence",
+        source="skills_extract",
+    )
+    test_db_session.add(doc)
+    test_db_session.commit()
+
+    run = client.post(
+        "/api/v1/bridge/run/eu-ai-act",
+        json={
+            "document_id": doc_id,
+            "domain_info": {
+                "domain": "medical devices",
+                "description": "AI compliance helper",
+                "uses_ai_ml": True,
+                "intended_use": "review support",
+                "target_market": "EU",
+            },
+        },
+    )
+    assert run.status_code == 200
+    run_id = run.json()["run_id"]
+
+    invalid_review = client.post(
+        f"/api/v1/bridge/runs/{run_id}/human-review",
+        json={
+            "document_id": doc_id,
+            "decision": "approved",
+            "reason": "Approval should not also create a follow-up task.",
+            "next_task_type": "manual_follow_up",
+            "next_task_assignee": "sven.riskmanager@qm.local",
+        },
+    )
+    assert invalid_review.status_code == 422
+    assert "must be omitted when decision is approved" in invalid_review.json()["error"]["message"].lower()
+
+
 def test_bridge_agents_reload_returns_runtime_snapshot_and_audit_event(client, test_db_session) -> None:
     response = client.post("/api/v1/bridge/agents/reload")
     assert response.status_code == 200
@@ -279,3 +395,167 @@ def test_bridge_agents_reload_returns_runtime_snapshot_and_audit_event(client, t
     )
     assert len(events) == 1
     assert events[0].correlation_id == payload["reload_id"]
+
+
+def test_bridge_human_review_multi_client_contention_allows_only_one_terminal_decision(test_db_session) -> None:
+    reviewer_a = _client_with_db(test_db_session)
+    reviewer_b = _client_with_db(test_db_session)
+    try:
+        for reviewer in (reviewer_a, reviewer_b):
+            login = reviewer.post(
+                "/api/v1/auth/login",
+                json={
+                    "email": os.environ.get("AUTH_MVP_EMAIL", "mvp-user@example.invalid"),
+                    "password": os.environ.get("AUTH_MVP_PASSWORD", "CHANGE_ME_BEFORE_USE"),
+                },
+            )
+            assert login.status_code == 200
+
+        doc_id = "DOC-BRIDGE-8"
+        doc = SkillDocumentORM(
+            document_id=doc_id,
+            filename="contention.md",
+            content_type="text/markdown",
+            document_type="sop",
+            extracted_text="human review contention sequence for same run",
+            source="skills_extract",
+        )
+        test_db_session.add(doc)
+        test_db_session.commit()
+
+        run = reviewer_a.post(
+            "/api/v1/bridge/run/eu-ai-act",
+            json={
+                "document_id": doc_id,
+                "domain_info": {
+                    "domain": "medical devices",
+                    "description": "concurrent reviewer scenario",
+                    "uses_ai_ml": True,
+                    "intended_use": "compliance workflow",
+                    "target_market": "EU",
+                },
+            },
+        )
+        assert run.status_code == 200
+        run_id = run.json()["run_id"]
+
+        decision_a = reviewer_a.post(
+            f"/api/v1/bridge/runs/{run_id}/human-review",
+            json={
+                "document_id": doc_id,
+                "decision": "approved",
+                "reason": "Reviewer A approves first.",
+            },
+        )
+        assert decision_a.status_code == 200
+
+        decision_b = reviewer_b.post(
+            f"/api/v1/bridge/runs/{run_id}/human-review",
+            json={
+                "document_id": doc_id,
+                "decision": "rejected",
+                "reason": "Reviewer B arrives late with conflicting decision.",
+                "next_task_type": "manual_follow_up",
+                "next_task_assignee": "late.reviewer@qm.local",
+            },
+        )
+        assert decision_b.status_code == 409
+        assert "already submitted" in decision_b.json()["error"]["message"].lower()
+
+        stored_reviews = test_db_session.query(BridgeHumanReviewORM).filter(BridgeHumanReviewORM.run_id == run_id).all()
+        assert len(stored_reviews) == 1
+        assert stored_reviews[0].decision == "approved"
+
+        review_events = test_db_session.query(AuditEventORM).filter(AuditEventORM.correlation_id == run_id).all()
+        assert len([event for event in review_events if event.event_type in {"bridge.run.approved", "bridge.run.rejected"}]) == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bridge_human_review_three_reviewers_only_first_decision_wins(test_db_session) -> None:
+    reviewer_a = _client_with_db(test_db_session)
+    reviewer_b = _client_with_db(test_db_session)
+    reviewer_c = _client_with_db(test_db_session)
+    try:
+        for reviewer in (reviewer_a, reviewer_b, reviewer_c):
+            login = reviewer.post(
+                "/api/v1/auth/login",
+                json={
+                    "email": os.environ.get("AUTH_MVP_EMAIL", "mvp-user@example.invalid"),
+                    "password": os.environ.get("AUTH_MVP_PASSWORD", "CHANGE_ME_BEFORE_USE"),
+                },
+            )
+            assert login.status_code == 200
+
+        doc_id = "DOC-BRIDGE-9"
+        doc = SkillDocumentORM(
+            document_id=doc_id,
+            filename="three-reviewers.md",
+            content_type="text/markdown",
+            document_type="sop",
+            extracted_text="three reviewer contention scenario",
+            source="skills_extract",
+        )
+        test_db_session.add(doc)
+        test_db_session.commit()
+
+        run = reviewer_a.post(
+            "/api/v1/bridge/run/eu-ai-act",
+            json={
+                "document_id": doc_id,
+                "domain_info": {
+                    "domain": "medical devices",
+                    "description": "three-reviewer contention",
+                    "uses_ai_ml": True,
+                    "intended_use": "compliance workflow",
+                    "target_market": "EU",
+                },
+            },
+        )
+        assert run.status_code == 200
+        run_id = run.json()["run_id"]
+
+        first = reviewer_a.post(
+            f"/api/v1/bridge/runs/{run_id}/human-review",
+            json={
+                "document_id": doc_id,
+                "decision": "approved",
+                "reason": "First reviewer approval.",
+            },
+        )
+        assert first.status_code == 200
+
+        second = reviewer_b.post(
+            f"/api/v1/bridge/runs/{run_id}/human-review",
+            json={
+                "document_id": doc_id,
+                "decision": "rejected",
+                "reason": "Second reviewer conflict.",
+                "next_task_type": "manual_follow_up",
+                "next_task_assignee": "reviewer2@qm.local",
+            },
+        )
+        third = reviewer_c.post(
+            f"/api/v1/bridge/runs/{run_id}/human-review",
+            json={
+                "document_id": doc_id,
+                "decision": "rejected",
+                "reason": "Third reviewer conflict.",
+                "next_task_type": "manual_follow_up",
+                "next_task_assignee": "reviewer3@qm.local",
+            },
+        )
+
+        assert second.status_code == 409
+        assert third.status_code == 409
+        assert "already submitted" in second.json()["error"]["message"].lower()
+        assert "already submitted" in third.json()["error"]["message"].lower()
+
+        stored_reviews = test_db_session.query(BridgeHumanReviewORM).filter(BridgeHumanReviewORM.run_id == run_id).all()
+        assert len(stored_reviews) == 1
+        assert stored_reviews[0].decision == "approved"
+
+        review_events = test_db_session.query(AuditEventORM).filter(AuditEventORM.correlation_id == run_id).all()
+        assert len([event for event in review_events if event.event_type in {"bridge.run.approved", "bridge.run.rejected"}]) == 1
+    finally:
+        app.dependency_overrides.clear()

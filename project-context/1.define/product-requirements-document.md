@@ -1,8 +1,9 @@
+<!-- markdownlint-disable MD032 MD036 MD040 MD060 -->
 # Product Requirements Document (PRD) — Doc Quality Compliance Check
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.8.0  
-**Date:** 2026-3-15  
+**Version:** 0.8.3  
+**Date:** 2026-4-4  
 **Author persona:** `@product-mgr`  
 **AAMAD phase:** 1.define  
 
@@ -21,7 +22,7 @@ Large enterprises in Germany and the EU face a massive bottleneck in AI governan
 
 ### Solution
 
-A **Multi-Agent AI Governance & Compliance Copilot** that acts as a "Regulatory-to-Workflow" bridge. Built on **Python 3.12**, **CrewAI**, and **NVIDIA Nemotron-Parse**, the system provides:
+A **Multi-Agent AI Governance & Compliance Copilot** that acts as a "Regulatory-to-Workflow" bridge. Built on **Python 3.12**, a **FastAPI + Next.js** application stack, **CrewAI-style orchestration**, and provider adapters that include an implemented Anthropic path plus a Nemotron integration target/scaffold, the system provides:
 
 1. **AI Use-Case Intake & Classification:** Automated risk classification (EU AI Act risk model) with transparent rationale and cited criteria.
 
@@ -241,6 +242,7 @@ The application must:
 ## Section 4 – Functional Requirements
 
 ### Priority Definitions
+
 - **P0 (MVP, must-have):** Required for 6-week MVP delivery
 - **P1 (Enhanced, should-have):** Second milestone priority
 - **P2 (Future, could-have):** Backlog, not committed
@@ -249,7 +251,7 @@ The application must:
 
 **F0: Dynamic Workflow Orchestration (The Manager)**
 - **Orchestration Agent:** Implements conditional logic for branching workflows.
-- **Workflow Routing:** If `Risk Level == High`, trigger mandatory **Artifact Generation** (F2) and **Compliance Check** (F3). 
+- **Workflow Routing:** If `Risk Level == High`, trigger mandatory **Artifact Generation** (F2) and **Compliance Check** (F3).
 - **Exemption Handling:** If `Exempt (e.g., pure R&D)`, terminate with an Exemption Certificate generation.
 
 **F1: AI Use-Case Intake & Classification (The "Push" Workflow)**
@@ -262,7 +264,7 @@ The application must:
 
 **F3: arc42 structural analysis & Compliance Check (The "Pull" Workflow)**
 - **Compliance Checker Agent:** Performs 12-section arc42 check and regulatory requirement cross-check.
-- **Nemotron Worker:** Uses NVIDIA Nemotron-Parse to ingest complex forms/tables from PDFs.
+- **Nemotron Adapter Target:** A Nemotron integration target exists in the orchestrator adapter layer; full complex form/table ingestion for PDFs remains a later enhancement.
 
 **F4: Reproducibility Repository & History Tracking**
 - **Persistence:** PostgreSQL history per artifact (inputs, timestamps, Agent tool call snapshots, reasoning).
@@ -277,7 +279,7 @@ The application must:
 
 - **Implementation:** ReportLab-driven PDF with embedded traceability metadata and review history.
 
-**F7: Multi-User RBAC (Role-Based Access Control):** 
+**F7: Multi-User RBAC (Role-Based Access Control):**
 
 - **Implementation:** Phase 0 uses email/password login with backend-managed HTTP-only sessions and route-level RBAC; enterprise SSO (OIDC/OAuth2/LDAP/SAML) is a later-phase enhancement.
 
@@ -310,10 +312,10 @@ The application must:
 
 | Requirement | Implementation |
 |-------------|---------------|
-| OWASP Top 10 A03 (Injection) | bleach XSS sanitisation, parameterised models |
-| OWASP Top 10 A01 (Broken Access Control) | Filename whitelist regex |
+| OWASP Top 10 A03 (Injection) | Input sanitisation at API boundaries, filename/file-size validation, and ORM-backed persistence paths |
+| OWASP Top 10 A01 (Broken Access Control) | Backend-owned sessions, route-level RBAC, and explicit service-account scoping |
 | BSI Grundschutz baseline | No secret storage in code, structured logging, input validation |
-| GDPR Art. 25 (Privacy by design) | No PII in log output; no user data persistence in MVP |
+| GDPR Art. 25 (Privacy by design) | No PII in structured logs; persisted auth/session/review/audit data is limited to governed PostgreSQL tables |
 | TLS in production | Recommended via reverse proxy (nginx); not in scope for MVP |
 
 ### 5.3 Availability and Reliability
@@ -321,7 +323,7 @@ The application must:
 | Metric | Target |
 |--------|--------|
 | Availability (single instance) | 99% (no HA in MVP) |
-| Data durability (reviews) | Non-persistent in MVP; SQLite in Phase 2 |
+| Data durability (reviews) | Approval-critical review/audit persistence is PostgreSQL-backed; generated report artifacts still use local filesystem in MVP |
 | Error handling | All service exceptions return structured JSON error responses |
 | Graceful degradation | LLM enrichment failure falls back to rule-based without error |
 
@@ -331,7 +333,7 @@ The application must:
 - Pydantic v2 for all data models (no raw dicts in service layer)
 - structlog for all logging (no `print()` statements)
 - Services are pure functions or minimal-state classes; no global mutable state
-- pytest test suite with 30 unit tests, all passing
+- Expanded pytest suite with legacy unit coverage plus API/integration/security tests
 
 ---
 
@@ -370,15 +372,15 @@ This palette of white/blue/green is a good match (trust + calm + progress). To k
 ### 6.3 Page 2: The Bridge (Orchestration & Intake)
 
 - **Multi-Step Stepper UI:** Logic-aware progress bar (Intake -> Classification -> Branching -> Result).
-- **VLM Ingestion Area:** Drag-and-drop zone for regulatory PDFs. 
+- **VLM Ingestion Area:** Drag-and-drop zone for regulatory PDFs.
 - **Agent Reasoning Window:** A sidebar showing the **Orchestrator's** live thought process (e.g., "Analyzing Art. 6(1) for High-Risk classification...").
 - **Classification Verdict:** Large, centered card showing the Risk Tier (High/Limited/Minimal) + "Why?" explanation citing regulations.
 
 ### 6.4 Page 3: The Artifact Lab (Generation / Push)
 
-- **Split-View Editor:** 
-    - **Left:** The generated arc42/SOP/Risk Assessment (Markdown preview).
-    - **Right:** Compliance citations (Linked directly to Section 1.1, 2.3, etc.).
+- **Split-View Editor:**
+  - **Left:** The generated arc42/SOP/Risk Assessment (Markdown preview).
+  - **Right:** Compliance citations (Linked directly to Section 1.1, 2.3, etc.).
 - **Agent Chat Overlay:** "Ask the Author" — Inline chat to refine specific generated sections.
 - **Export Center:** One-click export to PDF, MD, or internal wiki formats.
 
@@ -420,7 +422,7 @@ Both document types must be:
 - **Generate report form:** Document ID input + compliance check ID input
 - **Download button:** Opens PDF in new tab or triggers download
 - **Storage button:** Triggers storage in PostgreSQL as part of the specific project to implement the software product.
-- **Review history table:** Review ID | Document | Reviewer | Verdict | Timestamp | Status (Phase 2 full implementation)
+- **Review history surface:** persistent bridge human-review records and audit-trail views exist today; a richer unified review-history table remains a Phase 2 enhancement.
 
 ### 6.6 API Access
 
@@ -498,10 +500,11 @@ Both document types must be:
 - [x] Unit tests for hitl_workflow.py (6 tests)
 - [x] Unit tests for report_generator.py (3 tests)
 - [x] Unit tests for template_manager.py (8 tests)
-- [x] All 30 classical tests pass with 0 failures
+- [x] Legacy 30 classical tests pass with 0 failures
 - [x] Unit tests for LLMs/MoE and their functionality (e.g., Nemotron, Anthropic, etc.)
 - [x] LLM/MoE tests pass with ≥85% success rate (non-deterministic outputs expected)
-- [ ] Integration tests (FastAPI TestClient) — deferred to Phase 2
+- [x] Basic FastAPI TestClient integration/security coverage exists for authenticated workflows, auth, authorization, rate limiting, recovery, error envelopes, and stakeholder APIs
+- [ ] Broaden TestClient route coverage and end-to-end workflow coverage across remaining surfaces — Phase 2
 - [ ] Performance/load tests — deferred to Phase 2
 - [ ] End-to-end PDF download flow test — deferred to Phase 2
 
@@ -530,15 +533,15 @@ Both document types must be:
 ## Sources
 
 - EU AI Act (Regulation (EU) 2024/1689), Official Journal of the EU, 12 July 2024, Arts. 9–15, 43, 72, 99, Annex III, Annex IV
-- arc42 Template v8.2 Specification, Gernot Starke & Peter Hruschka, https://arc42.org
+- arc42 Template v8.2 Specification, Gernot Starke & Peter Hruschka, [https://arc42.org](https://arc42.org)
 - Model Card for Model Reporting, Mitchell et al. (2019), ACM FAccT
 - ISO/IEC 25010:2023 — Systems and Software Quality Requirements and Evaluation (SQuaRE)
-- FastAPI Documentation v0.109+, https://fastapi.tiangolo.com
-- Pydantic v2 Documentation, https://docs.pydantic.dev/latest/
-- ReportLab User Guide v4.x, https://www.reportlab.com/docs/
-- structlog Documentation, https://www.structlog.org/en/stable/
-- bleach Documentation, https://bleach.readthedocs.io/en/latest/
-- Anthropic Claude API Documentation, https://docs.anthropic.com/en/api/
+- FastAPI Documentation v0.109+, [https://fastapi.tiangolo.com](https://fastapi.tiangolo.com)
+- Pydantic v2 Documentation, [https://docs.pydantic.dev/latest/](https://docs.pydantic.dev/latest/)
+- ReportLab User Guide v4.x, [https://www.reportlab.com/docs/](https://www.reportlab.com/docs/)
+- structlog Documentation, [https://www.structlog.org/en/stable/](https://www.structlog.org/en/stable/)
+- bleach Documentation, [https://bleach.readthedocs.io/en/latest/](https://bleach.readthedocs.io/en/latest/)
+- Anthropic Claude API Documentation, [https://docs.anthropic.com/en/api/](https://docs.anthropic.com/en/api/)
 
 ---
 
@@ -547,11 +550,11 @@ Both document types must be:
 1. EU AI Act Art. 9–15 requirements are stable from August 2026 enforcement; minor guidance changes are handled via requirements engine updates.
 2. arc42 v8.2 is the reference template; organisations using customised arc42 may have reduced detection accuracy for renamed sections.
 3. Model card format follows the Mitchell et al. (2019) 9-section structure; Hugging Face model card extensions are not in scope for MVP.
-4. HITL review records are acceptable as ephemeral (in-memory) for MVP; production deployment requires database persistence.
+4. Approval-critical HITL records are persisted in PostgreSQL-backed tables today; broader generic review-history UX beyond bridge/audit views remains an incremental enhancement.
 5. PDF reports generated by ReportLab are acceptable for audit submission without a digital signature (electronic signature support is out of scope for MVP).
-6. The system handles text-based documents; scanned image documents and binary PDFs are supported via mandatory OCR fallback with transcription, structure extraction, and semantic grounding (AD-12, Phase 0).
+6. The system handles text-based documents directly; for scanned image documents and binary PDFs, the current implementation includes a scaffolded confidence-gated OCR decision path, while full OCR execution remains a Phase 2+ enhancement.
 7. "Optional LLM enrichment" means the API key may be absent; when present, Claude enrichment runs automatically without additional user action.
-8. The 30-test classical unit test suite represents all automated tests for MVP release gating; integration and E2E tests are Phase 2 enhancements to the CI/CD pipeline. Manual testing via `pytest tests/ -v` is the Phase 0 release-gate mechanism.
+8. The legacy 30-test classical unit suite no longer represents all automated coverage; the repo also includes TestClient-based API/integration/security tests. The QA document is retained as original Phase-0 baseline context, while the live test inventory is the `tests/` directory plus current pytest outputs. Formal CI release-gating remains future work, so local `pytest` execution is still the current Phase 0 release-gate mechanism.
 9. The app shall improve compliance workflows by providing easy-to-find visual concepts in the UI. For example, when SOP templates are updated to reflect new regulated guidance, document authors are notified of template changes via a visual indicator (e.g. icon beside the document label). This ensures users are aware of new requirements and can quickly adapt documentation to maintain compliance.
 
 ---
@@ -567,10 +570,15 @@ Both document types must be:
 
 ## Future-To-Do Topics
 
+- Enterprise SSO via OIDC/OAuth2/LDAP/SAML (recommended for large organizations, deferred to Phase 2+)
+- Persistent distributed rate limiting and shared lockout state (e.g., Redis-backed) for multi-instance deployments (Phase 2+)
 - Scheduled cleanup task for PDF file accumulation in reports/ directory (storage management, Phase 2)
+- Broaden the existing TestClient-based integration suite to cover remaining route surfaces and end-to-end workflows more systematically (Phase 2)
 - CI/CD pipeline setup with GitHub Actions, ruff/mypy linting, and automated pytest on every push (Phase 2)
-- Integration tests for API routes and E2E HITL workflows (Phase 2)
-- Docker image and file storage backend for archive cold tier (Phase 2–3)
+- Containerize the main app/frontend deployment path and add a production-grade file/object storage backend; current repo already includes PostgreSQL Docker Compose for local dev and an orchestrator Dockerfile (Phase 2+)
+- **Search improvement (Phase 2+)**: Adopting BM25 + dense retrieval makes sense for scale and compliance evidence quality in this product context.
+- Document/report artefacts should evolve toward a reusable cross-project document framework as product scope matures and more project requirements are validated (Phase 3+)
+- **OCR fallback enhancement (Phase 2+)**: Complete the currently scaffolded confidence-gated extraction pipeline by integrating real OCR execution with layout-aware OCR profiles, benchmark coverage, and scalable document QA/retrieval options.
 - Electronic signature support for PDF audit reports via pyhanko or equivalent (Phase 2–3)
 
 ---
@@ -579,10 +587,10 @@ Both document types must be:
 
 ```python
 persona=product-mgr
-action=update-prd-v0.7.0-agentic-ux
-timestamp=2026-3-15
+action=align-prd-with-sad-and-current-implementation
+timestamp=2026-4-4
 adapter=AAMAD-vscode
 artifact=project-context/1.define/product-requirements-document.md
-version=0.8.0
+version=0.8.2
 status=complete
 ```

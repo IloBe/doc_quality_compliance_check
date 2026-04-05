@@ -1,0 +1,45 @@
+name: dast-zap-baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Target base URL for ZAP baseline scan (staging or pre-release)'
+        required: true
+        default: 'http://127.0.0.1:8000'
+      fail_on_warning:
+        description: 'Fail job when WARN-level findings are present (true/false)'
+        required: true
+        default: 'false'
+
+jobs:
+  zap-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run OWASP ZAP baseline scan
+        env:
+          TARGET_URL: ${{ inputs.target_url }}
+          FAIL_ON_WARNING: ${{ inputs.fail_on_warning }}
+        run: |
+          mkdir -p zap-report
+          ZAP_ARGS="-t ${TARGET_URL} -J zap-baseline.json -r zap-baseline.html -w zap-baseline.md"
+          if [ "${FAIL_ON_WARNING}" = "true" ]; then
+            ZAP_ARGS="$ZAP_ARGS -I"
+          fi
+          docker run --rm \
+            -v "${{ github.workspace }}/zap-report:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py $ZAP_ARGS
+
+      - name: Upload ZAP artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-baseline-report
+          path: zap-report/
+          if-no-files-found: error

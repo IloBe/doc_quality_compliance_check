@@ -499,7 +499,7 @@ async def health_check() -> dict:
 | Path param | `profile_id: str` (1..64 chars) |
 | Request body | `StakeholderProfileUpsertRequest` — `title`, `description`, `permissions`, `is_active` |
 | Response | `StakeholderProfileRecord` — created or updated profile |
-| Auth | Required (`qm_lead`, `auditor`, `riskmanager`, `architect`) |
+| Auth | Required (`qm_lead`, `riskmanager`) |
 | Purpose | Create or update one stakeholder role-template profile (idempotent upsert) |
 
 **`GET /api/v1/admin/stakeholder-profiles/{profile_id}/employees`**
@@ -518,8 +518,8 @@ async def health_check() -> dict:
 | Path param | `profile_id: str` |
 | Request body | `StakeholderEmployeeAssignmentRequest` — `employee_name` |
 | Response | `StakeholderEmployeeAssignmentRecord` for the created row |
-| Auth | Required (`qm_lead`, `auditor`, `riskmanager`, `architect`) |
-| Validation | Duplicate name+profile combination currently raises HTTP 400 from backend validation |
+| Auth | Required (`qm_lead`, `riskmanager`) |
+| Validation | Canonical duplicate employee names are handled idempotently (case-insensitive match returns existing assignment record) |
 | Purpose | Add a named employee to a role profile (single-add from UI; called in parallel for bulk-add) |
 
 **`DELETE /api/v1/admin/stakeholder-profiles/{profile_id}/employees/{assignment_id}`**
@@ -528,7 +528,8 @@ async def health_check() -> dict:
 |----------|-------|
 | Path params | `profile_id: str`, `assignment_id: str` |
 | Response | JSON success payload — `{"success": true}` |
-| Auth | Required (`qm_lead`, `auditor`, `riskmanager`, `architect`) |
+| Auth | Required (`qm_lead`, `riskmanager`) |
+| Validation | Idempotent delete: already-removed assignments still return success payload |
 | Purpose | Remove a named employee assignment from a role profile |
 
 ---

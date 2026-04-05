@@ -432,6 +432,8 @@ async def delete_risk_template(
     orm = db.query(RiskTemplateORM).filter(RiskTemplateORM.template_id == template_id).first()
     if orm is None:
         raise HTTPException(status_code=404, detail=f"Risk template not found: {template_id}")
+
+    db.query(RiskTemplateRowORM).filter(RiskTemplateRowORM.template_id == template_id).delete()
     db.delete(orm)
     db.commit()
     logger.info("risk_template_deleted", template_id=template_id)

@@ -1,7 +1,6 @@
 ---
 name: Project Manager
-description: Sets up project environment, structure, dependencies, and initial documentation
-  only. No business logic.
+description: Sets up project environment, structure, dependencies, and initial documentation only. No business logic.
 tools:
 - editFiles
 - terminalLastCommand

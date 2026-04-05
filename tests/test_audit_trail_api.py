@@ -1,6 +1,10 @@
 """Tests for governance-focused audit trail endpoints."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
+from src.doc_quality.models.orm import AuditEventORM
+
 
 def test_audit_trail_events_returns_logged_event(client) -> None:
     log_response = client.post(
@@ -117,3 +121,108 @@ def test_audit_trail_schedule_upsert_persists_values(client) -> None:
     assert current["external_notified_body"] == "TUV SUD"
     assert current["internal_audit_date"].startswith("2026-04-28")
     assert current["external_audit_date"].startswith("2026-05-15")
+
+
+def test_audit_trail_events_respects_limit_and_desc_order(client, test_db_session) -> None:
+    now = datetime.now(timezone.utc)
+    rows = [
+        AuditEventORM(
+            event_id="evt-audit-order-1",
+            tenant_id="default",
+            org_id=None,
+            project_id=None,
+            event_time=now - timedelta(minutes=30),
+            event_type="audit.order.oldest",
+            actor_type="system",
+            actor_id="svc",
+            subject_type="workflow",
+            subject_id="wf-1",
+            trace_id=None,
+            correlation_id=None,
+            payload={"order": 1},
+            created_at=now - timedelta(minutes=30),
+        ),
+        AuditEventORM(
+            event_id="evt-audit-order-2",
+            tenant_id="default",
+            org_id=None,
+            project_id=None,
+            event_time=now - timedelta(minutes=20),
+            event_type="audit.order.middle",
+            actor_type="system",
+            actor_id="svc",
+            subject_type="workflow",
+            subject_id="wf-2",
+            trace_id=None,
+            correlation_id=None,
+            payload={"order": 2},
+            created_at=now - timedelta(minutes=20),
+        ),
+        AuditEventORM(
+            event_id="evt-audit-order-3",
+            tenant_id="default",
+            org_id=None,
+            project_id=None,
+            event_time=now - timedelta(minutes=10),
+            event_type="audit.order.newest",
+            actor_type="system",
+            actor_id="svc",
+            subject_type="workflow",
+            subject_id="wf-3",
+            trace_id=None,
+            correlation_id=None,
+            payload={"order": 3},
+            created_at=now - timedelta(minutes=10),
+        ),
+    ]
+    test_db_session.add_all(rows)
+    test_db_session.commit()
+
+    response = client.get("/api/v1/audit-trail/events?window_hours=24&event_type=audit.order&limit=2")
+    assert response.status_code == 200
+
+    items = response.json()["items"]
+    assert len(items) == 2
+    assert items[0]["event_id"] == "evt-audit-order-3"
+    assert items[1]["event_id"] == "evt-audit-order-2"
+
+
+def test_audit_trail_events_limit_validation_rejects_too_large(client) -> None:
+    response = client.get("/api/v1/audit-trail/events?window_hours=24&limit=1001")
+    assert response.status_code == 422
+
+
+def test_audit_trail_event_detail_response_contract(client) -> None:
+    log_response = client.post(
+        "/api/v1/skills/log_event",
+        json={
+            "event_type": "audit.contract.detail",
+            "actor_type": "user",
+            "actor_id": "qa.contract@example.com",
+            "subject_type": "workflow",
+            "subject_id": "wf-contract",
+            "payload": {"stage": "contract"},
+        },
+    )
+    assert log_response.status_code == 200
+    event_id = log_response.json()["event_id"]
+
+    detail = client.get(f"/api/v1/audit-trail/events/{event_id}")
+    assert detail.status_code == 200
+    payload = detail.json()
+    assert set(payload.keys()) == {
+        "event_id",
+        "event_type",
+        "actor_type",
+        "actor_id",
+        "subject_type",
+        "subject_id",
+        "trace_id",
+        "correlation_id",
+        "tenant_id",
+        "org_id",
+        "project_id",
+        "event_time",
+        "payload",
+        "created_at",
+    }

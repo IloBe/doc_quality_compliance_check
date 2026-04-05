@@ -1,7 +1,6 @@
 ---
 name: QA Engineer
-description: Validate that the MVP works as intended, record coverage, defects, and
-  future work.
+description: Validate that the MVP works as intended, record coverage, defects, and future work.
 tools:
 - editFiles
 - terminalLastCommand

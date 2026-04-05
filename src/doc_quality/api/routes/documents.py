@@ -12,7 +12,7 @@ from ...core.config import get_settings
 from ...core.database import get_db
 from ...core.session_auth import require_roles
 from ...core.security import sanitize_text, validate_file_size, validate_filename
-from ...models.document import DocumentAnalysisResult, DocumentType
+from ...models.document import DocumentAnalysisResult, DocumentStatus, DocumentType
 from ...models.orm import DocumentLockORM
 from ...services.document_analyzer import analyze_document
 from ...services.document_lock_service import acquire_lock, get_lock_state, release_lock
@@ -170,6 +170,7 @@ async def get_document_by_id(
         document_id=document.document_id,
         filename=document.filename,
         document_type=DocumentType(document.document_type),
+        status=DocumentStatus.PENDING,
         overall_score=0.0,  # Placeholder; actual score would need to be stored separately
     )
 

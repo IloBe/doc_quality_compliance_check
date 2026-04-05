@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from src.doc_quality.api.main import app
 from src.doc_quality.core.database import Base, SessionLocal, get_db
 from src.doc_quality.models.orm import ReviewRecordORM
+from src.doc_quality.tools.route_coverage_audit import RouteAudit
 
 # Use explicit API key in tests for route authentication.
 os.environ.setdefault("SECRET_KEY", "test-api-key")
@@ -18,6 +19,26 @@ os.environ.setdefault("AUTH_MVP_PASSWORD", "CHANGE_ME_BEFORE_USE")  # nosec B105
 
 # Use in-memory SQLite for testing
 TEST_SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+
+
+def pytest_configure(config):
+    """Run route-to-test drift audit at test collection time.
+    
+    This hook runs before test collection to ensure all FastAPI routes
+    are mapped to at least one test. Fails early if drift is detected.
+    """
+    try:
+        audit = RouteAudit()
+        audit.run()
+    except Exception as e:
+        pytest.exit(f"Route-to-test drift audit failed: {e}", 1)
+
+    if not audit.all_routes_mapped:
+        print("\n" + audit.report(verbose=False))
+        pytest.exit(f"Route-to-test drift detected: {len(audit.unmapped_routes)} route(s) unmapped", 1)
+
+    if config.option.verbose > 0:
+        print(f"\n[route-coverage] {len(audit.routes)} routes verified - all mapped to tests")
 
 
 @pytest.fixture(scope="function")
