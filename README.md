@@ -1,6 +1,6 @@
 <!-- Badges -->
 [![Python](https://img.shields.io/badge/python-%E2%89%A53.12-blue)](https://www.python.org/downloads/release/python-3120/)
-[![License](https://img.shields.io/github/license/IloBe/doc_quality_compliance_check)](https://github.com/IloBe/doc_quality_compliance_check/blob/main/LICENSE)
+[![CrewAI](https://img.shields.io/badge/crewai-%E2%89%A50.130.0-8A2BE2)](https://pypi.org/project/crewai/)
 [![Pytest Coverage](https://img.shields.io/badge/pytest%20coverage-86.09%25-brightgreen)](project-context/2.build/qa.md)
 
 # Compliance and Quality Check of Technical and Product Software Documentation
