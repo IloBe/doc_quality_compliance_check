@@ -404,6 +404,13 @@ doc_quality_compliance_check/
 │   │       ├── Dockerfile                          ← Container image for orchestrator
 │   │       ├── README.md                           ← Orchestrator-specific documentation
 │   │       │
+│   │       ├── tests/                              ← Orchestrator test suite (offline + manual smoke)
+│   │       │   ├── test_review_flow.py             ← Offline CrewAI review-flow unit tests
+│   │       │   ├── test_document_review_flow.py    ← Offline document flow routing/state tests
+│   │       │   ├── test_llm_contracts.py           ← LLM schema/prompt contract tests (offline)
+│   │       │   ├── test_llm_integration_smoke.py   ← Manual-gated live LLM smoke entrypoint
+│   │       │   └── fixtures/                       ← JSON fixtures for contract validation
+│   │       │
 │   │       └── src/
 │   │           └── doc_quality_orchestrator/
 │   │               ├── __init__.py

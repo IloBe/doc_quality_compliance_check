@@ -180,7 +180,7 @@ Lifecycle phase:
 | Skills and workflow integration | `tests/test_skills_api.py`, `tests/test_integration_api_workflow.py` | Service client, QM lead, architect | Extract text, search documents, write findings, cross-route integration |
 | Reports and exported artifacts | `tests/test_report_generator.py`, `tests/test_reports_download_api.py` | QM lead, auditor, risk manager | Generate compliance reports and retrieve downloadable artifacts |
 | Templates and risk templates | `tests/test_template_manager.py`, `tests/test_templates_api.py`, `tests/test_risk_templates_api.py`, `tests/test_risk_templates_defaults_api.py` | Architect, risk manager, QM lead | Load templates, manage risk defaults, export risk content |
-| Research and regulation retrieval | `tests/test_research_api.py`, `tests/test_research_service.py` | Architect, risk manager, compliance analyst | Retrieve regulation support and research-backed guidance |
+| Research and regulation retrieval | `tests/test_research_alerts_api.py`, `tests/test_research_api.py`, `tests/test_research_service.py` | Architect, risk manager, compliance analyst | Compliance alerts, regulation support and research-backed guidance |
 | Browser smoke E2E | `frontend/tests/e2e/smoke.spec.ts` | Browser app user | Login entry flow, recovery entry flow, unauth redirect behavior |
 | Security baseline DAST | `.github/workflows/dast-zap-baseline.yml` | Security / release governance | Runtime scan of deployed target before release decision |
 
@@ -318,6 +318,8 @@ Purpose:
 - keep accidental token spend out of normal local and CI test runs.
 
 Current state:
+- offline unit tests: `services/orchestrator/tests/test_review_flow.py`, `services/orchestrator/tests/test_document_review_flow.py`
+- offline contract tests: `services/orchestrator/tests/test_llm_contracts.py`
 - entrypoint: `services/orchestrator/tests/test_llm_integration_smoke.py`
 - marker: `llm_integration`
 - default behavior: skipped unless explicit approval and budget env vars are set
@@ -342,6 +344,14 @@ $env:LLM_TEST_PROVIDER = "anthropic"
 python -m pytest tests/test_llm_integration_smoke.py -q --cov-fail-under=0
 ```
 
+Offline validation example (no live model calls):
+
+```powershell
+cd services/orchestrator
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+python -m pytest tests/test_review_flow.py tests/test_document_review_flow.py tests/test_llm_contracts.py -q --cov-fail-under=0
+```
+
 Expected outcomes:
 - `1 skipped`: expected today when approval flags are missing, budget is invalid, or the provider remains scaffold-backed
 - `1 passed`: expected only after a real provider implementation exists and returns schema-valid JSON
@@ -364,6 +374,9 @@ Key files:
 - `frontend/tests/e2e/smoke.spec.ts`
 - `.github/workflows/browser-e2e-smoke.yml`
 - `.github/workflows/dast-zap-baseline.yml`
+- `services/orchestrator/tests/test_review_flow.py`
+- `services/orchestrator/tests/test_document_review_flow.py`
+- `services/orchestrator/tests/test_llm_contracts.py`
 - `services/orchestrator/tests/test_llm_integration_smoke.py`
 - `project-context/2.build/qa.md`
 
