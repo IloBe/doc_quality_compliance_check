@@ -1,8 +1,8 @@
 # Setup Documentation — Doc Quality Compliance Check
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.3.0  
-**Date:** 2026-4-3  
+**Version:** 0.3.1  
+**Date:** 2026-4-5  
 **Author persona:** `@project-mgr`  
 **AAMAD phase:** 2.build  
 
@@ -119,11 +119,11 @@ LOG_LEVEL="INFO"          # DEBUG | INFO | WARNING | ERROR
 LOG_FORMAT="console"      # console | json
 
 # File Upload
-MAX_FILE_SIZE_MB=10       # Maximum uploaded file size in megabytes
+MAX_FILE_SIZE_MB=50       # Matches current .env.example; backend code default is 10 when unset
 
 # Anthropic Claude (OPTIONAL - system works without this)
 # ANTHROPIC_API_KEY=sk-ant-api03-...
-# ANTHROPIC_MODEL=claude-3-haiku-20240307
+# ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
 ```
 
 **Important:** `ANTHROPIC_API_KEY` is optional. The system runs fully without it — LLM enrichment is skipped gracefully and the rule-based analysis engine is used for all compliance checks.
@@ -150,9 +150,9 @@ MAX_FILE_SIZE_MB=10       # Maximum uploaded file size in megabytes
 | `AUTH_LOGIN_LOCKOUT_SECONDS` | `600` | No | Temporary login lockout duration |
 | `LOG_LEVEL` | `INFO` | No | Logging verbosity level |
 | `LOG_FORMAT` | `console` | No | `console` for human-readable local logs, `json` for structured output |
-| `MAX_FILE_SIZE_MB` | `10` | No | Maximum file upload size in MB |
+| `MAX_FILE_SIZE_MB` | `10` (code default; `.env.example` currently sets `50`) | No | Maximum file upload size in MB |
 | `ANTHROPIC_API_KEY` | (unset) | No | Anthropic API key for Claude enrichment |
-| `ANTHROPIC_MODEL` | `claude-3-haiku-20240307` | No | Claude model identifier |
+| `ANTHROPIC_MODEL` | `claude-3-5-sonnet-20241022` | No | Claude model identifier |
 
 ---
 
@@ -396,7 +396,7 @@ doc_quality_compliance_check/
 
 **Issue:** Very large documents (close to the 10 MB limit) may cause noticeable latency because analysis is synchronous.
 
-**Workaround:** The current 10 MB limit (`MAX_FILE_SIZE_MB=10`) is sufficient for typical arc42/model-card/SOP inputs; very large files may still require asynchronous processing enhancements in later phases.
+**Workaround:** Effective upload limits are environment-configurable (`MAX_FILE_SIZE_MB`). The code default is 10 MB, while the current `.env.example` baseline sets 50 MB. Very large files may still require asynchronous processing enhancements in later phases.
 
 ---
 

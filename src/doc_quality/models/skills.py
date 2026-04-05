@@ -14,6 +14,7 @@ class SkillDocumentRecord(BaseModel):
     filename: str
     content_type: str
     document_type: DocumentType
+    workflow_status: str = "draft"
     extracted_text: str
     source: Literal["analyze_text", "upload", "skills_extract"]
     created_at: datetime

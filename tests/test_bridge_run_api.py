@@ -56,10 +56,163 @@ def test_bridge_run_eu_ai_act_returns_results_and_persists_audit(client, test_db
     assert payload["human_review_required"] is True
     assert payload["human_review_status"] == "pending"
     assert payload["regulatory_update"]["requires_document_update"] is False
+    assert "checked_frameworks" in payload
+    assert "eu_ai_act" in payload["checked_frameworks"]
+    assert "gdpr" in payload["checked_frameworks"]
+    assert "cra_cyber_resilience_act" in payload["checked_frameworks"]
+    assert "nis2" in payload["checked_frameworks"]
+    assert "iso_9001" in payload["checked_frameworks"]
+    assert "iso_27001" in payload["checked_frameworks"]
+    assert "bsi_grundschutz" in payload["checked_frameworks"]
+    assert "bsi_tr_03185" in payload["checked_frameworks"]
+    assert "mdr_eu_medical_devices" in payload["checked_frameworks"]
+    assert "iso_13485" in payload["checked_frameworks"]
+    assert "iso_14971" in payload["checked_frameworks"]
+    assert "iec_62304" in payload["checked_frameworks"]
+
+    requirement_frameworks = {item.get("framework") for item in payload["requirements"]}
+    assert "eu_ai_act" in requirement_frameworks
+    assert "gdpr" in requirement_frameworks
+    assert "cra_cyber_resilience_act" in requirement_frameworks
+    assert "nis2" in requirement_frameworks
+    assert "iso_9001" in requirement_frameworks
+    assert "iso_27001" in requirement_frameworks
+    assert "bsi_grundschutz" in requirement_frameworks
+    assert "bsi_tr_03185" in requirement_frameworks
+    assert "mdr_eu_medical_devices" in requirement_frameworks
+    assert "iso_13485" in requirement_frameworks
+    assert "iso_14971" in requirement_frameworks
+    assert "iec_62304" in requirement_frameworks
 
     events = test_db_session.query(AuditEventORM).filter(AuditEventORM.subject_id == "DOC-BRIDGE-1").all()
     assert any(e.event_type == "bridge.run.completed" for e in events)
     assert not any(e.event_type == "bridge.run.approved" for e in events)
+
+    updated_doc = (
+        test_db_session.query(SkillDocumentORM)
+        .filter(SkillDocumentORM.document_id == "DOC-BRIDGE-1")
+        .first()
+    )
+    assert updated_doc is not None
+    assert updated_doc.workflow_status == "in_review"
+
+
+def test_bridge_run_excludes_mdr_for_non_medical_domain(client, test_db_session) -> None:
+    doc = SkillDocumentORM(
+        document_id="DOC-BRIDGE-NON-MED",
+        filename="policy.md",
+        content_type="text/markdown",
+        document_type="sop",
+        extracted_text="policy logging governance approval secure lifecycle",
+        source="skills_extract",
+    )
+    test_db_session.add(doc)
+    test_db_session.commit()
+
+    response = client.post(
+        "/api/v1/bridge/run/eu-ai-act",
+        json={
+            "document_id": "DOC-BRIDGE-NON-MED",
+            "domain_info": {
+                "domain": "quality management",
+                "description": "enterprise governance and compliance process",
+                "uses_ai_ml": True,
+                "intended_use": "documentation governance",
+                "target_market": "EU",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "mdr_eu_medical_devices" not in payload["checked_frameworks"]
+    assert "iso_13485" not in payload["checked_frameworks"]
+    assert "iso_14971" not in payload["checked_frameworks"]
+    assert "iec_62304" not in payload["checked_frameworks"]
+    assert "gdpr" in payload["checked_frameworks"]
+    assert "bsi_grundschutz" in payload["checked_frameworks"]
+
+    requirement_frameworks = {item.get("framework") for item in payload["requirements"]}
+    assert "mdr_eu_medical_devices" not in requirement_frameworks
+    assert "iso_13485" not in requirement_frameworks
+    assert "iso_14971" not in requirement_frameworks
+    assert "iec_62304" not in requirement_frameworks
+
+
+def test_bridge_run_includes_finance_directives_for_finance_domain(client, test_db_session) -> None:
+    doc = SkillDocumentORM(
+        document_id="DOC-BRIDGE-FIN-1",
+        filename="finance-policy.md",
+        content_type="text/markdown",
+        document_type="sop",
+        extracted_text="ict risk governance payment authentication investor protection record keeping",
+        source="skills_extract",
+    )
+    test_db_session.add(doc)
+    test_db_session.commit()
+
+    response = client.post(
+        "/api/v1/bridge/run/eu-ai-act",
+        json={
+            "document_id": "DOC-BRIDGE-FIN-1",
+            "domain_info": {
+                "domain": "financial services",
+                "description": "AI support for investment and payment operations",
+                "uses_ai_ml": True,
+                "intended_use": "investment scoring and payment fraud controls",
+                "target_market": "EU",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "dora_digital_operational_resilience_act" in payload["checked_frameworks"]
+    assert "mifid_ii" in payload["checked_frameworks"]
+    assert "psd2" in payload["checked_frameworks"]
+    assert "mdr_eu_medical_devices" not in payload["checked_frameworks"]
+
+    requirement_frameworks = {item.get("framework") for item in payload["requirements"]}
+    assert "dora_digital_operational_resilience_act" in requirement_frameworks
+    assert "mifid_ii" in requirement_frameworks
+    assert "psd2" in requirement_frameworks
+
+
+def test_bridge_run_includes_hipaa_for_us_medical_domain(client, test_db_session) -> None:
+    doc = SkillDocumentORM(
+        document_id="DOC-BRIDGE-US-MED",
+        filename="us-medical-policy.md",
+        content_type="text/markdown",
+        document_type="sop",
+        extracted_text="ephi security rule privacy rule access control audit logging safeguards",
+        source="skills_extract",
+    )
+    test_db_session.add(doc)
+    test_db_session.commit()
+
+    response = client.post(
+        "/api/v1/bridge/run/eu-ai-act",
+        json={
+            "document_id": "DOC-BRIDGE-US-MED",
+            "domain_info": {
+                "domain": "medical devices",
+                "description": "US FDA-regulated medical AI system",
+                "uses_ai_ml": True,
+                "intended_use": "clinical diagnostics",
+                "target_market": "USA",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "hipaa" in payload["checked_frameworks"]
+    assert "mdr_eu_medical_devices" in payload["checked_frameworks"]
+    assert "cra_cyber_resilience_act" in payload["checked_frameworks"]
+    assert "nis2" in payload["checked_frameworks"]
+
+    requirement_frameworks = {item.get("framework") for item in payload["requirements"]}
+    assert "hipaa" in requirement_frameworks
 
 
 def test_bridge_alert_flags_requirement_drift_since_last_approved_run(client, test_db_session) -> None:
@@ -158,6 +311,14 @@ def test_bridge_human_review_approval_is_persisted_and_auditable(client, test_db
     assert stored is not None
     assert stored.decision == "approved"
 
+    updated_doc = (
+        test_db_session.query(SkillDocumentORM)
+        .filter(SkillDocumentORM.document_id == doc_id)
+        .first()
+    )
+    assert updated_doc is not None
+    assert updated_doc.workflow_status == "approved"
+
     events = test_db_session.query(AuditEventORM).filter(AuditEventORM.correlation_id == run_id).all()
     assert any(e.event_type == "bridge.run.approved" and e.actor_type == "user" for e in events)
 
@@ -223,6 +384,19 @@ def test_bridge_human_review_rejection_requires_next_task_and_stores_assignment(
     events = test_db_session.query(AuditEventORM).filter(AuditEventORM.correlation_id == run_id).all()
     assert any(e.event_type == "bridge.run.rejected" for e in events)
     assert any(e.event_type == "bridge.run.next_task.proposed" for e in events)
+
+    updated_doc = (
+        test_db_session.query(SkillDocumentORM)
+        .filter(SkillDocumentORM.document_id == doc_id)
+        .first()
+    )
+    assert updated_doc is not None
+    assert updated_doc.workflow_status == "rework_after_review"
+
+    listed = client.get("/api/v1/documents")
+    assert listed.status_code == 200
+    listed_doc = next(doc for doc in listed.json()["documents"] if doc["document_id"] == doc_id)
+    assert listed_doc["status"] == "rework after review"
 
 
 def test_bridge_human_review_can_be_fetched_after_submission(client, test_db_session) -> None:

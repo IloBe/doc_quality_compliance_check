@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useRouter } from 'next/router';
 import { useMockStore } from '../lib/mockStore';
 import { 
   LuX, 
@@ -9,16 +10,24 @@ import {
   LuClock,
   LuFileText,
   LuExternalLink,
-  LuChevronRight,
   LuTrash2
 } from 'react-icons/lu';
 
-const OperationsDrawer = ({ isOpen, onClose }) => {
+type OperationsDrawerProps = {
+  isOpen: boolean;
+  onClose: () => void;
+};
+
+const OperationsDrawer = ({ isOpen, onClose }: OperationsDrawerProps) => {
+  const router = useRouter();
 
   const exportJobs = useMockStore(state => state.exports);
   const bridgeRuns = useMockStore(state => state.bridgeRuns);
   const isOperationsRunning = useMockStore(state => state.isOperationsRunning);
   const getDocById = useMockStore(state => state.getDocById);
+  const removeExportJob = useMockStore(state => state.removeExportJob);
+  const removeBridgeRun = useMockStore(state => state.removeBridgeRun);
+  const clearCompletedOperations = useMockStore(state => state.clearCompletedOperations);
 
   type ActiveOp =
   | {
@@ -40,24 +49,6 @@ const OperationsDrawer = ({ isOpen, onClose }) => {
     };
 
   type OpStatus = 'running' | 'pending' | 'completed' | 'error';
-
-  const exportStatusToOpStatus = (s: string): OpStatus => {
-    switch (s) {
-      case 'Running': return 'running';
-      case 'Queued': return 'pending';
-      case 'Ready': return 'completed';
-      default: return 'error';
-    }
-  };
-
-  const bridgeStatusToOpStatus = (s: string): OpStatus => {
-    switch (s) {
-      case 'Running': return 'running';
-      case 'Idle': return 'pending';
-      case 'Done': return 'completed';
-      default: return 'error';
-    }
-  };
 
   const activeOperations: ActiveOp[] = [
     ...exportJobs.map((job) => ({
@@ -109,6 +100,31 @@ const OperationsDrawer = ({ isOpen, onClose }) => {
     }
   };
 
+  const openOperationReport = (operation: ActiveOp) => {
+    onClose();
+
+    if (operation.kind === 'export') {
+      void router.push({
+        pathname: '/exports',
+        query: {
+          docId: operation.docId,
+          exportId: operation.id,
+        },
+      });
+      return;
+    }
+
+    void router.push(`/artifact-lab/${encodeURIComponent(operation.id)}`);
+  };
+
+  const removeOperation = (operation: ActiveOp) => {
+    if (operation.kind === 'export') {
+      removeExportJob(operation.id);
+      return;
+    }
+    removeBridgeRun(operation.id);
+  };
+
   return (
     <div 
       className={`fixed inset-y-0 right-0 w-80 bg-white border-l border-neutral-200 shadow-2xl z-40 transform transition-transform duration-300 ease-in-out ${
@@ -148,7 +164,7 @@ const OperationsDrawer = ({ isOpen, onClose }) => {
                 return (
                   <div 
                     key={op.id} 
-                    className={`group relative p-4 rounded-xl border border-neutral-100 shadow-sm transition hov:bg-neutral-50 ${
+                    className={`group relative p-4 rounded-xl border border-neutral-100 shadow-sm transition hover:bg-neutral-50 ${
                       op.status === 'running' ? 'bg-blue-50/30' : 'bg-white'
                     }`}
                   >
@@ -184,13 +200,19 @@ const OperationsDrawer = ({ isOpen, onClose }) => {
                         
                         {op.status === 'completed' && (
                           <div className="mt-3 flex items-center gap-2">
-                             <button className="flex-1 text-[11px] font-bold tracking-tighter text-blue-600 bg-blue-100 hover:bg-blue-200 py-1.5 rounded transition uppercase flex items-center justify-center gap-1">
+                             <button
+                               type="button"
+                               onClick={() => openOperationReport(op)}
+                               className="flex-1 text-[11px] font-bold tracking-tighter text-blue-600 bg-blue-100 hover:bg-blue-200 py-1.5 rounded transition uppercase flex items-center justify-center gap-1"
+                             >
                                 View Report <LuExternalLink className="w-3 h-3" />
                              </button>
                              <button
-                               disabled
-                               title="Remove not implemented"
-                               className="p-1.5 bg-neutral-100 text-neutral-300 rounded cursor-not-allowed">
+                               type="button"
+                               title="Remove from activity list"
+                               onClick={() => removeOperation(op)}
+                               className="p-1.5 bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700 rounded transition"
+                             >
                                 <LuTrash2 className="w-3 h-3" />
                              </button>
                           </div>
@@ -207,7 +229,11 @@ const OperationsDrawer = ({ isOpen, onClose }) => {
         {/* Footer */}
         {activeOperations.some(op => op.status === 'completed') && (
            <div className="p-4 border-t border-neutral-100 bg-neutral-50/50">
-             <button className="w-full py-2.5 bg-white border border-neutral-200 text-neutral-600 text-xs font-bold hover:bg-neutral-100 rounded-lg transition uppercase tracking-widest shadow-sm">
+             <button
+               type="button"
+               onClick={clearCompletedOperations}
+               className="w-full py-2.5 bg-white border border-neutral-200 text-neutral-600 text-xs font-bold hover:bg-neutral-100 rounded-lg transition uppercase tracking-widest shadow-sm"
+             >
                 Clear Finished
              </button>
            </div>

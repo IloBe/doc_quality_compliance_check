@@ -181,7 +181,7 @@ class PostgreSQLInitializer:
         log_info("Verifying schema integrity...")
         required_tables = {
             "hitl_reviews": ["review_id", "document_id", "status"],
-            "skill_documents": ["document_id", "filename"],
+            "skill_documents": ["document_id", "filename", "workflow_status"],
             "skill_findings": ["finding_id", "document_id"],
             "audit_events": ["event_id", "event_type"],
             "user_sessions": ["session_id", "session_token_hash", "user_email"],

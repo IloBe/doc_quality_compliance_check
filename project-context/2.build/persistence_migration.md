@@ -5,6 +5,15 @@
 **Source Artifacts:** SAD.md, PRD.md
 **Target Phase:** P0 (MVP Foundation for Scalability & Resilience)
 
+> Scope note: This file is a historical migration plan baseline. The migration is now largely implemented. For current shipped persistence behavior, use `project-context/2.build/backend.md`, `project-context/2.build/qa.md`, and `migrations/versions/`.
+
+## Current State (2026-4-5)
+
+- PostgreSQL-backed persistence is active for core auth/session/audit/review/governance flows.
+- Alembic migration history exists through `012_document_workflow_status.py`.
+- ORM models are maintained under `src/doc_quality/models/orm.py` (no standalone `models/persistence.py`).
+- Prior in-memory-only persistence constraints are historical and should not be read as current architecture.
+
 ## Problem Statement
 Current HITL reviews and document analysis results are stored in dictionary-based in-memory stores. These are lost on server restart, violating audit traceability requirements.
 
@@ -31,11 +40,11 @@ We will implement direct **PostgreSQL** persistence using **SQLAlchemy** (ORM) a
 | `FixAction` | ForeignKey(ModificationRequest), RemedyDescription, ActorName, ActionDate |
 | `DocumentMetadata` | Hash, Path, Type, AIActRiskLevel, LastAnalysisDate |
 
-## Migration Steps
-1. Add `sqlalchemy` and `psycopg2-binary` to `requirements.txt`.
-2. Update `core/config.py` with `DATABASE_URL`.
-3. Create `models/persistence.py` with SQLAlchemy Base.
-4. Refactor `services/hitl_workflow.py` to use a Session factory.
+## Migration Steps (Historical Baseline)
+1. Add `sqlalchemy` and `psycopg2-binary` to dependencies. ✅
+2. Update `core/config.py` with `DATABASE_URL`. ✅
+3. Create and evolve ORM persistence models (`src/doc_quality/models/orm.py`). ✅
+4. Refactor workflow services/routes to use DB Session factories and migrations. ✅
 
 ## Audit Trail
 - Timestamp: 2026-03-22

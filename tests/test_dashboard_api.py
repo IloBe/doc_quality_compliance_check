@@ -168,6 +168,7 @@ def test_dashboard_summary_response_contract_shape(client) -> None:
         assert set(doc_row.keys()) == {
             "document_id",
             "title",
+            "workflow_status",
             "risk_class",
             "cycle_days",
             "passed_checks",

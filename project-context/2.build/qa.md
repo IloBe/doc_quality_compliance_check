@@ -531,10 +531,17 @@ def test_analyze_text_endpoint(client):
 
 ### 6.5 No AI Model Evaluation Framework
 
-**Current state:** Functional tests cover fallback/provider behavior, but the LLM-enriched paths still lack a formal accuracy and quality evaluation framework. There is no benchmark set, no ground truth annotations, and no quality gate for:
+**Current state:** Functional tests cover fallback/provider behavior, and the orchestrator service now also has an explicit offline-first LLM/CrewAI test split for deterministic verification of prompt rendering, schema validation, guardrails, routing, and validator-stage error handling. The remaining gap is a formal model-quality evaluation framework. There is still no benchmark set, no ground truth annotations, and no release-quality gate for:
 - arc42 section false-negative rate (sections present but not detected)
 - EU AI Act requirement false-positive rate (requirements incorrectly marked as "met")
 - Comparative accuracy: rule-based vs. Claude-enriched
+
+**Implemented LLM/CrewAI test layers (2026-4-5):**
+- **Pure unit tests (offline):** deterministic fake adapters/runners validate routing fallback, schema parsing, skip paths, guardrail composition, and CrewAI compatibility behavior in `services/orchestrator/tests/test_review_flow.py` and `services/orchestrator/tests/test_document_review_flow.py`.
+- **Agent contract tests (offline):** fixture-based validator output schema checks plus prompt rendering / schema-option assertions now run in `services/orchestrator/tests/test_llm_contracts.py` with representative JSON fixtures under `services/orchestrator/tests/fixtures/`.
+- **Online integration tests:** a manual-only smoke-test entrypoint now exists in `services/orchestrator/tests/test_llm_integration_smoke.py`, but it remains skipped by default and also skips while adapters are still scaffold-backed. Any future live-model smoke execution must be explicitly gated behind manual approval flags and token-budget env vars and must not be started automatically because of token-cost controls.
+
+**Operator runbook location:** the short manual smoke-test operator procedure now lives in `TESTING_README.md` and `services/orchestrator/README.md` so QA/release operators have one command path and one expectation model for approval flags, token budget, and expected skip behavior.
 
 **Required actions (Phase 2/3):**
 1. Assemble 50 representative arc42 documents with expert annotations
@@ -584,7 +591,7 @@ Priority route-family gaps are closed. The next concrete QA gaps are:
 | Bridge/auth failure-mode expansion | MEDIUM | 2 | Continue from newly added duplicate-review and session-revocation tests into true concurrency and race-window coverage on high-change workflows |
 | OWASP ZAP baseline | MEDIUM | 2 | Expand from baseline workflow-dispatch scan to scheduled/PR policy with explicit release-blocking thresholds |
 | CI static quality gates | MEDIUM | 2 | Keep `ruff` and `mypy` checks in CI to reduce regression noise around the test suite |
-| AI evaluation benchmark | LOW | 3 | Build annotated benchmark corpus and compare rule-based vs LLM-assisted quality outcomes |
+| AI evaluation benchmark | LOW | 3 | Build annotated benchmark corpus and compare rule-based vs LLM-assisted quality outcomes; keep any live-model smoke tests manually gated and budget-limited |
 | Contract/fuzz testing | LOW | 3 | Add schemathesis or similar contract/fuzz coverage for high-change API surfaces |
 | Regression pack for policy changes | LOW | 3 | Preserve non-regression tests for EU AI Act, governance, and workflow rule changes |
 
@@ -601,6 +608,7 @@ Priority route-family gaps are closed. The next concrete QA gaps are:
 |------|--------|---------|------------------|
 | Bridge/auth failure-mode expansion | ▶ PARTIAL | 2026-4-5 | Added pytest coverage for duplicate bridge review conflicts, 3-reviewer terminal-decision contention, invalid approved+follow-up combinations, idempotent logout, revoked/expired session rejection, recovery reset revoking active sessions, 3-session invalidation across clients, and recovery token single-use |
 | Non-functional security and E2E depth | ▶ PARTIAL | 2026-4-5 | Added baseline OWASP ZAP workflow (`.github/workflows/dast-zap-baseline.yml`) and baseline Playwright browser smoke suite (`frontend/playwright.config.ts`, `frontend/tests/e2e/smoke.spec.ts`, `.github/workflows/browser-e2e-smoke.yml`) |
+| LLM/CrewAI offline test layering | ▶ PARTIAL | 2026-4-5 | Added deterministic unit + contract tests for orchestrator prompt/rendering, validator schema parsing, fake adapter execution, and guardrail wiring in `services/orchestrator/tests/test_review_flow.py`, `services/orchestrator/tests/test_document_review_flow.py`, `services/orchestrator/tests/test_llm_contracts.py`; manual smoke entrypoint added in `services/orchestrator/tests/test_llm_integration_smoke.py`, still intentionally gated and scaffold-blocked by default |
 
 ---
 
@@ -669,13 +677,15 @@ action=qa
 timestamp=2026-4-5
 adapter=AAMAD-vscode
 artifact=project-context/2.build/qa.md
-version=0.3.15
-status=complete-with-drift-gate-partial-bridge-auth-failure-expansion-and-partial-non-functional-security-e2e-baseline
+version=0.3.17
+status=complete-with-drift-gate-partial-bridge-auth-failure-expansion-partial-non-functional-security-e2e-baseline-partial-llm-offline-layering-and-manual-smoke-entrypoint
 tests_passed=172-collected
 tests_failed=0
-current_suite_status=expanded-api-integration-with-route-contract-ordering-limit-authorization-active-85-percent-coverage-gate-route-to-test-drift-enforcement-partial-bridge-auth-failure-mode-coverage-and-baseline-dast-plus-browser-e2e-workflows
+current_suite_status=expanded-api-integration-with-route-contract-ordering-limit-authorization-active-85-percent-coverage-gate-route-to-test-drift-enforcement-partial-bridge-auth-failure-mode-coverage-baseline-dast-browser-e2e-offline-llm-crewai-unit-contract-tests-and-manual-llm-smoke-entrypoint
 drift_gate_status=ACTIVE-57-routes-all-mapped
 route_coverage_audit_tool=src/doc_quality/tools/route_coverage_audit.py
 pytest_collection_hook=tests/conftest.py::pytest_configure
 codeql_alerts=0
+llm_offline_contract_tests=services/orchestrator/tests/test_review_flow.py+test_document_review_flow.py+test_llm_contracts.py
+llm_manual_smoke_entrypoint=services/orchestrator/tests/test_llm_integration_smoke.py
 ```

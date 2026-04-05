@@ -21,6 +21,17 @@ from ...services.skills_service import get_document as get_document_from_db, per
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
+def _workflow_status_to_tag(value: str | None) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized == "in_review":
+        return "In Review"
+    if normalized == "approved":
+        return "Approved"
+    if normalized == "rework_after_review":
+        return "rework after review"
+    return "Draft"
+
+
 class AnalyzeTextRequest(BaseModel):
     content: str
     filename: str
@@ -192,6 +203,7 @@ async def get_document_summary_by_id(
         filename=document.filename,
         document_type=DocumentType(document.document_type),
         overall_score=0.0,
+        status=_workflow_status_to_tag(getattr(document, "workflow_status", None)),
         updated_at=document.updated_at,
         locked_by=lock_state.locked_by,
     )
@@ -217,6 +229,7 @@ async def list_all_documents(
             filename=doc.filename,
             document_type=DocumentType(doc.document_type),
             overall_score=0.0,
+            status=_workflow_status_to_tag(getattr(doc, "workflow_status", None)),
             updated_at=doc.updated_at,
             locked_by=active_locks.get(doc.document_id).locked_by if active_locks.get(doc.document_id) else None,
         )

@@ -212,7 +212,7 @@ const DocBridgePage = () => {
       if (saved.decision === 'approved') {
         updateDocStatus(doc.id, 'Approved');
       } else {
-        updateDocStatus(doc.id, 'In Review');
+        updateDocStatus(doc.id, 'rework after review');
       }
       addLog(`Human HITL review completed: ${saved.decision.toUpperCase()} by ${saved.reviewer_email}.`);
     } catch (error) {
@@ -255,7 +255,7 @@ const DocBridgePage = () => {
           setNextTaskType('rerun_bridge');
           setNextTaskAssignee('');
           setNextTaskInstructions('');
-          addLog(`EU AI Act check complete. Score: ${Math.round((runResult.compliance_score || 0) * 100)}%.`);
+          addLog(`Multi-framework check complete. Score: ${Math.round((runResult.compliance_score || 0) * 100)}%.`);
         }
 
         await sleep(1200);
@@ -363,7 +363,7 @@ const DocBridgePage = () => {
 
       {useBackendBridge && (
         <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-semibold text-blue-700">
-          Backend mode: EU AI Act compliance checks are executed via API and persisted with run evidence.
+          Backend mode: multi-framework compliance checks are executed via API and persisted with run evidence.
         </div>
       )}
 

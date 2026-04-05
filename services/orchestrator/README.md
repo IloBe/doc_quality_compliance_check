@@ -157,3 +157,37 @@ cd services/orchestrator
 uv sync                 # installs crewai + all deps
 uv run pytest           # (add tests/ when expanding)
 ```
+
+### Manual LLM smoke test
+
+Use the manual smoke entrypoint only for explicitly approved live-model checks:
+
+- test file: `tests/test_llm_integration_smoke.py`
+- marker: `llm_integration`
+- default behavior: skip unless approval and budget env vars are set
+
+Operator runbook:
+
+1. Get human approval before any live-model run.
+2. Ensure the chosen adapter is no longer scaffold-backed.
+3. Set an explicit budget and provider.
+4. Run only the smoke-test module.
+
+PowerShell example:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+$env:RUN_LLM_INTEGRATION_TESTS = "1"
+$env:LLM_TEST_HUMAN_APPROVED = "1"
+$env:LLM_TEST_BUDGET_TOKENS = "400"
+$env:LLM_TEST_PROVIDER = "anthropic"
+python -m pytest tests/test_llm_integration_smoke.py -q --cov-fail-under=0
+```
+
+Interpretation:
+
+- `skipped` is the expected safe default today when env gates are missing or the provider is still scaffold-backed
+- `passed` means the provider returned schema-valid JSON for the validator report
+- `failed` means stop and inspect provider wiring, credentials, or response-schema drift before retrying
+
+Do not wire this test into default CI until a real provider exists and cost controls are formally approved.

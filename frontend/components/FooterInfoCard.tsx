@@ -9,21 +9,19 @@ type FooterInfoCardProps = {
   children: React.ReactNode;
 };
 
-const accentClasses: Record<FooterInfoCardAccent, string> = {
-  amber: 'bg-amber-50 border-amber-200 text-amber-900',
-  blue: 'bg-blue-50 border-blue-200 text-blue-900',
-  emerald: 'bg-emerald-50 border-emerald-200 text-emerald-900',
-  indigo: 'bg-indigo-50 border-indigo-200 text-indigo-900',
-};
-
-const FooterInfoCard = ({ title, accent = 'blue', children }: FooterInfoCardProps) => {
+/**
+ * FooterInfoCard
+ *
+ * Single Responsibility: render one consistent bottom-note surface across pages.
+ */
+const FooterInfoCard = ({ title, children }: FooterInfoCardProps) => {
   return (
-    <div className={`rounded-2xl border p-4 text-sm ${accentClasses[accent]}`}>
-      <div className="font-bold flex items-center gap-2 mb-1">
-        <LuInfo className="w-4 h-4" />
+    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+      <div className="mb-1 flex items-center gap-2 font-bold text-emerald-950">
+        <LuInfo className="h-4 w-4 text-emerald-600" />
         {title}
       </div>
-      <div className="leading-6">{children}</div>
+      <div className="leading-6 text-emerald-900">{children}</div>
     </div>
   );
 };

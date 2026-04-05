@@ -64,6 +64,7 @@ const RiskFiltersPanel = ({
             <option value="Draft">Draft</option>
             <option value="In Review">In Review</option>
             <option value="Approved">Approved</option>
+            <option value="rework after review">Rework After Review</option>
           </select>
         </div>
 

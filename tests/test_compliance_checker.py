@@ -54,6 +54,24 @@ def test_applicable_regulations_medical(medical_domain):
     regs = get_applicable_regulations(medical_domain)
     assert ComplianceFramework.EU_AI_ACT in regs
     assert ComplianceFramework.MDR in regs
+    assert ComplianceFramework.GDPR in regs
+    assert ComplianceFramework.ISO_13485 in regs
+    assert ComplianceFramework.ISO_14971 in regs
+    assert ComplianceFramework.IEC_62304 in regs
+
+
+def test_applicable_regulations_finance_includes_finance_directives():
+    finance_domain = ProductDomainInfo(
+        domain="financial services",
+        description="AI support for payments and investment workflows",
+        uses_ai_ml=True,
+    )
+    regs = get_applicable_regulations(finance_domain)
+    assert ComplianceFramework.EU_AI_ACT in regs
+    assert ComplianceFramework.GDPR in regs
+    assert ComplianceFramework.DORA in regs
+    assert ComplianceFramework.MIFID_II in regs
+    assert ComplianceFramework.PSD2 in regs
 
 
 def test_eu_ai_act_check_returns_result(medical_domain):

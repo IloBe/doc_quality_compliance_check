@@ -3,8 +3,8 @@
 <!-- markdownlint-disable MD007 MD009 MD013 MD022 MD031 MD032 MD034 MD036 MD037 -->
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.7.0  
-**Date:** 2026-4-3  
+**Version:** 0.7.1  
+**Date:** 2026-4-5  
 **Author persona:** `@frontend-eng`  
 **AAMAD phase:** 2.build  
 
@@ -96,6 +96,7 @@ frontend/
 │   ├── dashboard.tsx        — Dashboard analytics page
 │   ├── compliance.tsx       — Governance / standards overview
 │   ├── bridge.tsx           — Bridge orchestration overview page
+│   ├── alert-archive.tsx    — Compliance alert archive (persisted/demo-backed)
 │   ├── risk.tsx             — RMF/FMEA governance and actions
 │   ├── exports.tsx          — Export registry
 │   ├── audit-trail.tsx      — Audit events and schedule
@@ -144,6 +145,7 @@ The frontend currently has two route classes:
   - `/dashboard`
   - `/compliance`
   - `/bridge`
+  - `/alert-archive`
   - `/risk`
   - `/exports`
   - `/audit-trail`

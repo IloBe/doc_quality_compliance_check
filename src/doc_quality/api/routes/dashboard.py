@@ -25,6 +25,7 @@ class DashboardCheck(BaseModel):
 class DashboardDocumentRow(BaseModel):
     document_id: str
     title: str
+    workflow_status: str = "Draft"
     risk_class: Literal["High", "Limited", "Minimal"]
     cycle_days: float
     passed_checks: int
@@ -106,6 +107,17 @@ def _derive_standard_and_article(finding: FindingORM) -> tuple[str, str]:
             standard = "GDPR"
 
     return str(standard or "Unmapped"), str(article or "n/a")
+
+
+def _workflow_status_to_tag(value: str | None) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized == "approved":
+        return "Approved"
+    if normalized == "in_review":
+        return "In Review"
+    if normalized == "rework_after_review":
+        return "rework after review"
+    return "Draft"
 
 
 def _derive_pass_fail(finding: FindingORM) -> bool:
@@ -258,6 +270,7 @@ async def dashboard_summary(
             DashboardDocumentRow(
                 document_id=doc.document_id,
                 title=doc.filename,
+                workflow_status=_workflow_status_to_tag(getattr(doc, "workflow_status", None)),
                 risk_class=_derive_risk_class(doc_findings, doc_events),
                 cycle_days=cycle_days,
                 passed_checks=passed,
@@ -269,6 +282,14 @@ async def dashboard_summary(
     open_documents = 0
     closed_documents = 0
     for row in rows:
+        if row.workflow_status == "Approved":
+            closed_documents += 1
+            continue
+
+        if row.workflow_status == "rework after review":
+            open_documents += 1
+            continue
+
         latest_review = None
         doc_reviews = sorted(reviews_by_doc.get(row.document_id, []), key=lambda r: r.created_at)
         if doc_reviews:

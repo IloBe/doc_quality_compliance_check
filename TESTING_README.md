@@ -311,6 +311,48 @@ Current usage model:
 - supply a staging or pre-release URL
 - upload artifacts for triage (`html`, `json`, `md`)
 
+### 7.5 Manual LLM smoke test runbook
+
+Purpose:
+- provide a human-approved, budget-limited operator path for future live-model validation,
+- keep accidental token spend out of normal local and CI test runs.
+
+Current state:
+- entrypoint: `services/orchestrator/tests/test_llm_integration_smoke.py`
+- marker: `llm_integration`
+- default behavior: skipped unless explicit approval and budget env vars are set
+- current repo limitation: the registered orchestrator adapters are still scaffold-backed, so the smoke test will still skip even when manually enabled
+
+Operator steps:
+1. Confirm human approval exists for a live-model smoke run.
+2. Confirm the selected provider is no longer scaffold-backed in the current repo/runtime.
+3. Set a small explicit token budget.
+4. Run only the smoke-test module from `services/orchestrator/`.
+5. Record whether the result was an intentional skip, a schema/contract failure, or a true live-model pass.
+
+PowerShell example:
+
+```powershell
+cd services/orchestrator
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+$env:RUN_LLM_INTEGRATION_TESTS = "1"
+$env:LLM_TEST_HUMAN_APPROVED = "1"
+$env:LLM_TEST_BUDGET_TOKENS = "400"
+$env:LLM_TEST_PROVIDER = "anthropic"
+python -m pytest tests/test_llm_integration_smoke.py -q --cov-fail-under=0
+```
+
+Expected outcomes:
+- `1 skipped`: expected today when approval flags are missing, budget is invalid, or the provider remains scaffold-backed
+- `1 passed`: expected only after a real provider implementation exists and returns schema-valid JSON
+- `1 failed`: investigate provider wiring, credentials, schema drift, or response-contract issues before repeating the run
+
+Operator rules:
+- never run this smoke test automatically in CI by default
+- never omit `LLM_TEST_BUDGET_TOKENS`
+- prefer a single targeted module run over the whole orchestrator suite for live-model checks
+- capture the provider, budget, outcome, and approval context in QA notes when a real online smoke run is performed
+
 ---
 
 ## 8. Current Baseline Assets
@@ -322,6 +364,7 @@ Key files:
 - `frontend/tests/e2e/smoke.spec.ts`
 - `.github/workflows/browser-e2e-smoke.yml`
 - `.github/workflows/dast-zap-baseline.yml`
+- `services/orchestrator/tests/test_llm_integration_smoke.py`
 - `project-context/2.build/qa.md`
 
 ---

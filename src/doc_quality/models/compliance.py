@@ -7,10 +7,22 @@ from pydantic import BaseModel, Field
 class ComplianceFramework(str, Enum):
     EU_AI_ACT = "eu_ai_act"
     MDR = "mdr_eu_medical_devices"
+    IVDR = "ivdr_eu_in_vitro_diagnostics"
     GDPR = "gdpr"
+    AGG = "agg_equal_treatment_act"
+    DORA = "dora_digital_operational_resilience_act"
+    MIFID_II = "mifid_ii"
+    PSD2 = "psd2"
+    NIS2 = "nis2"
+    CRA = "cra_cyber_resilience_act"
+    HIPAA = "hipaa"
     ISO_9001 = "iso_9001"
+    ISO_13485 = "iso_13485"
+    ISO_14971 = "iso_14971"
     ISO_27001 = "iso_27001"
+    IEC_62304 = "iec_62304"
     BSI_GRUNDSCHUTZ = "bsi_grundschutz"
+    BSI_TR_03185 = "bsi_tr_03185"
 
 
 class RiskLevel(str, Enum):

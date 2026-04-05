@@ -22,3 +22,8 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+    "llm_integration: gated live-model smoke tests; run only with explicit human approval and env flags",
+]

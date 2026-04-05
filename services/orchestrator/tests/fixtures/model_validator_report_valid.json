@@ -1,0 +1,10 @@
+{
+  "decision": "pass",
+  "summary": "Final verifier output is internally consistent and evidence-backed.",
+  "issues": [],
+  "checks": [
+    "final_verdict_consistency",
+    "unsupported_language_scan",
+    "evidence_signal_present"
+  ]
+}

@@ -267,7 +267,7 @@ const RiskPage = () => {
             onSelectRecord={setSelectedRecordId}
             onSubmitForReview={(recordId) => transitionStatus(recordId, 'In Review', 'submit_for_review', 'Submitted risk record for review gate')}
             onApprove={(recordId) => transitionStatus(recordId, 'Approved', 'approve', 'Approved risk controls and linked evidence set')}
-            onRequestChanges={(recordId) => transitionStatus(recordId, 'Draft', 'request_changes', 'Changes requested after HITL review')}
+            onRequestChanges={(recordId) => transitionStatus(recordId, 'rework after review', 'request_changes', 'Changes requested after HITL review')}
           />
 
           <div className="rounded-2xl border border-slate-300 bg-slate-100 p-4">

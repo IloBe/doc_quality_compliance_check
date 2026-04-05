@@ -42,6 +42,18 @@ logger = get_logger(__name__)
 
 _SUPPORTED_TEXT_TYPES = {".md", ".txt"}
 
+WORKFLOW_STATUS_DRAFT = "draft"
+WORKFLOW_STATUS_IN_REVIEW = "in_review"
+WORKFLOW_STATUS_APPROVED = "approved"
+WORKFLOW_STATUS_REWORK_AFTER_REVIEW = "rework_after_review"
+
+_VALID_WORKFLOW_STATUSES = {
+    WORKFLOW_STATUS_DRAFT,
+    WORKFLOW_STATUS_IN_REVIEW,
+    WORKFLOW_STATUS_APPROVED,
+    WORKFLOW_STATUS_REWORK_AFTER_REVIEW,
+}
+
 
 def _detect_content_type(filename: str) -> str:
     extension = Path(filename).suffix.lower()
@@ -82,6 +94,7 @@ def _to_document_record(record: SkillDocumentORM) -> SkillDocumentRecord:
         filename=record.filename,
         content_type=record.content_type,
         document_type=DocumentType(record.document_type),
+        workflow_status=(record.workflow_status or WORKFLOW_STATUS_DRAFT),
         extracted_text=record.extracted_text,
         source=record.source,
         created_at=record.created_at,
@@ -111,6 +124,7 @@ def persist_document(
             filename=sanitized_filename,
             content_type=content_type,
             document_type=document_type.value,
+            workflow_status=WORKFLOW_STATUS_DRAFT,
             extracted_text=sanitized_text,
             source=source,
         )
@@ -126,6 +140,23 @@ def persist_document(
     db.refresh(existing)
     logger.info("skill_document_persisted", document_id=existing.document_id, source=source)
     return _to_document_record(existing)
+
+
+def set_document_workflow_status(db: Session, document_id: str, workflow_status: str) -> SkillDocumentRecord:
+    """Update persisted workflow status for a document."""
+    normalized = sanitize_text(workflow_status).strip().lower()
+    if normalized not in _VALID_WORKFLOW_STATUSES:
+        raise ValueError(f"Unsupported workflow status: {workflow_status}")
+
+    record = db.query(SkillDocumentORM).filter(SkillDocumentORM.document_id == document_id).first()
+    if record is None:
+        raise ValueError(f"Document not found: {document_id}")
+
+    record.workflow_status = normalized
+    db.flush()
+    db.refresh(record)
+    logger.info("skill_document_workflow_status_updated", document_id=document_id, workflow_status=normalized)
+    return _to_document_record(record)
 
 
 def get_document(db: Session, document_id: str) -> SkillDocumentRecord | None:

@@ -18,9 +18,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Literal
 
-from ..core.logging_config import get_logger
+import structlog
 
-logger = get_logger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass

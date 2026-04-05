@@ -1,21 +1,50 @@
 import React from 'react';
 import Link from 'next/link';
-import { LuCircleAlert, LuCircleCheck, LuExternalLink } from 'react-icons/lu';
-import { ComplianceAlert, toneClasses } from '../../lib/complianceStandards';
+import { LuCircleAlert, LuCircleCheck, LuExternalLink, LuTriangleAlert } from 'react-icons/lu';
+import InfoIconButton from '../InfoIconButton';
+import { ComplianceAlert, ComplianceAlertsInfo, toneClasses } from '../../lib/complianceStandards';
 
 type AlertsPanelProps = {
   alerts: ComplianceAlert[];
+  info: ComplianceAlertsInfo;
 };
 
-const AlertsPanel = ({ alerts }: AlertsPanelProps) => {
+const AlertsPanel = ({ alerts, info }: AlertsPanelProps) => {
+  const [showCostInfo, setShowCostInfo] = React.useState(false);
+
   return (
     <div className="bg-white rounded-[2rem] p-6 border border-neutral-100 shadow-md overflow-hidden relative min-h-[200px] flex flex-col justify-between">
       <div className="bg-emerald-50 text-emerald-600 inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase mb-6">
         <LuCircleCheck className="w-3.5 h-3.5" />
-        Real-time Feed Active
+        Perplexity Research Watch Active
       </div>
 
-      <h3 className="text-lg font-black text-neutral-900 mb-4 tracking-tight">Recent Compliance Alerts</h3>
+      <div className="mb-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-lg font-black text-neutral-900 tracking-tight">Recent Compliance Alerts</h3>
+          <InfoIconButton
+            onClick={() => setShowCostInfo((prev) => !prev)}
+            title="Show token and cost configuration note"
+            aria-label="Show token and cost configuration note"
+            size="md"
+          />
+        </div>
+
+        <p className="text-sm font-medium leading-6 text-neutral-600">{info.summary}</p>
+
+        {showCostInfo ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+            <div className="flex items-start gap-3">
+              <LuTriangleAlert className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+              <div>
+                <p className="font-black text-amber-950">{info.costNoteTitle}</p>
+                <p className="mt-1 leading-6 text-amber-900">{info.costNote}</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
       <div className="space-y-4">
         {alerts.map((alert) => {
           const tone = toneClasses(alert.tone);

@@ -14,11 +14,19 @@ from ...models.compliance import ProductDomainInfo
 from ...models.orm import AuditEventORM, BridgeHumanReviewORM, FindingORM
 from ...services.compliance_checker import (
     check_eu_ai_act_compliance,
+    get_bridge_framework_catalog,
     get_eu_ai_act_requirements_catalog,
     get_eu_ai_act_requirements_signature,
     get_eu_ai_act_requirements_version,
+    run_bridge_compliance_checks,
 )
 from ...services.skills_service import get_document
+from ...services.skills_service import (
+    WORKFLOW_STATUS_APPROVED,
+    WORKFLOW_STATUS_IN_REVIEW,
+    WORKFLOW_STATUS_REWORK_AFTER_REVIEW,
+    set_document_workflow_status,
+)
 
 router = APIRouter(prefix="/bridge", tags=["bridge"])
 
@@ -34,6 +42,7 @@ class RequirementResult(BaseModel):
     """Single requirement result returned by bridge run."""
 
     requirement_id: str
+    framework: str = "eu_ai_act"
     title: str
     mandatory: bool
     passed: bool
@@ -70,6 +79,7 @@ class BridgeRunResponse(BaseModel):
     requirements_version: str
     requirements_signature: str
     requirements_catalog: list[dict]
+    checked_frameworks: list[str] = Field(default_factory=list)
     regulatory_update: RegulatoryUpdateStatus
 
 
@@ -236,12 +246,19 @@ async def run_bridge_eu_ai_act(
     db: Session = Depends(get_db),
     _user=Depends(require_roles("qm_lead", "auditor", "riskmanager", "architect")),
 ) -> BridgeRunResponse:
-    """Execute an EU AI Act bridge compliance run for a document and persist audit/finding evidence."""
+    """Execute bridge compliance checks (EU AI Act + mapped standards) and persist audit/finding evidence."""
     document = get_document(db, request.document_id)
     if document is None:
         raise HTTPException(status_code=404, detail=f"Document not found: {request.document_id}")
 
     run_id = str(uuid.uuid4())
+    check_results = run_bridge_compliance_checks(
+        document.extracted_text,
+        request.domain_info,
+        request.document_id,
+    )
+
+    # Keep legacy EU AI Act compatibility fields while aggregating all enabled frameworks.
     compliance_result = check_eu_ai_act_compliance(
         document.extracted_text,
         request.domain_info,
@@ -252,11 +269,21 @@ async def run_bridge_eu_ai_act(
     requirements_version = get_eu_ai_act_requirements_version()
 
     requirements_payload: list[RequirementResult] = []
-    for req in compliance_result.requirements:
+    all_requirements = [req for result in check_results for req in result.requirements]
+    aggregated_mandatory_gaps = [gap for result in check_results for gap in result.mandatory_gaps]
+    aggregated_optional_gaps = [gap for result in check_results for gap in result.optional_gaps]
+    approved = len(aggregated_mandatory_gaps) == 0
+    total_requirements = len(all_requirements)
+    total_met = sum(1 for req in all_requirements if req.met)
+    aggregated_score = round((total_met / total_requirements), 2) if total_requirements else 1.0
+    checked_frameworks = [result.framework.value for result in check_results]
+
+    for req in all_requirements:
         passed = bool(req.met)
         requirements_payload.append(
             RequirementResult(
                 requirement_id=req.requirement_id,
+                framework=req.framework.value,
                 title=req.title,
                 mandatory=req.mandatory,
                 passed=passed,
@@ -274,6 +301,7 @@ async def run_bridge_eu_ai_act(
             severity=severity,
             evidence={
                 "framework": "EU AI Act",
+                "framework_id": req.framework.value,
                 "requirement_id": req.requirement_id,
                 "mandatory": req.mandatory,
                 "passed": passed,
@@ -284,8 +312,6 @@ async def run_bridge_eu_ai_act(
             },
         )
         db.add(finding)
-
-    approved = len(compliance_result.mandatory_gaps) == 0
 
     db.add(
         AuditEventORM(
@@ -303,8 +329,9 @@ async def run_bridge_eu_ai_act(
             correlation_id=run_id,
             payload={
                 "run_id": run_id,
-                "framework": "eu_ai_act",
-                "compliance_score": compliance_result.compliance_score,
+                "framework": "multi_framework",
+                "checked_frameworks": checked_frameworks,
+                "compliance_score": aggregated_score,
                 "approved": approved,
                 "requirements_signature": requirements_signature,
                 "requirements_version": requirements_version,
@@ -328,19 +355,27 @@ async def run_bridge_eu_ai_act(
             correlation_id=run_id,
             payload={
                 "run_id": run_id,
-                "framework": "eu_ai_act",
+                "framework": "multi_framework",
                 "automatic_recommendation": "approved" if approved else "rejected",
                 "requires_human_review": True,
                 "requirements_signature": requirements_signature,
                 "requirements_version": requirements_version,
-                "compliance_score": compliance_result.compliance_score,
+                "compliance_score": aggregated_score,
+                "checked_frameworks": checked_frameworks,
                 "compliance_checks": [
-                    {"topic": req.title, "result": "passed" if req.met else "failed"}
-                    for req in compliance_result.requirements
+                    {
+                        "framework": req.framework.value,
+                        "topic": req.title,
+                        "result": "passed" if req.met else "failed",
+                    }
+                    for req in all_requirements
                 ],
             },
         )
     )
+
+    # A completed bridge run requires mandatory human review; mark document as in-review.
+    set_document_workflow_status(db, request.document_id, WORKFLOW_STATUS_IN_REVIEW)
 
     db.commit()
 
@@ -350,18 +385,31 @@ async def run_bridge_eu_ai_act(
         run_id=run_id,
         document_id=request.document_id,
         framework="eu_ai_act",
-        compliance_score=compliance_result.compliance_score,
-        summary=compliance_result.summary,
+        compliance_score=aggregated_score,
+        summary=(
+            f"Bridge multi-framework check complete. "
+            f"Frameworks: {', '.join(checked_frameworks)}. "
+            f"Mandatory gaps: {len(aggregated_mandatory_gaps)}. Optional gaps: {len(aggregated_optional_gaps)}."
+        ),
         requirements=requirements_payload,
-        mandatory_gaps=compliance_result.mandatory_gaps,
-        optional_gaps=compliance_result.optional_gaps,
+        mandatory_gaps=aggregated_mandatory_gaps,
+        optional_gaps=aggregated_optional_gaps,
         approved=approved,
         automatic_recommendation="approved" if approved else "rejected",
         human_review_required=True,
         human_review_status="pending",
         requirements_version=requirements_version,
         requirements_signature=requirements_signature,
-        requirements_catalog=get_eu_ai_act_requirements_catalog(),
+        requirements_catalog=(
+            [
+                {
+                    "framework": "eu_ai_act",
+                    "requirements": get_eu_ai_act_requirements_catalog(),
+                }
+            ]
+            + get_bridge_framework_catalog(request.domain_info)
+        ),
+        checked_frameworks=checked_frameworks,
         regulatory_update=regulatory_update,
     )
 
@@ -549,6 +597,11 @@ async def submit_bridge_human_review(
                 },
             )
         )
+
+    if decision == "approved":
+        set_document_workflow_status(db, request.document_id, WORKFLOW_STATUS_APPROVED)
+    else:
+        set_document_workflow_status(db, request.document_id, WORKFLOW_STATUS_REWORK_AFTER_REVIEW)
 
     db.commit()
     db.refresh(review)

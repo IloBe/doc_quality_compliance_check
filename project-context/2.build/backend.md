@@ -3,8 +3,8 @@
 <!-- markdownlint-disable MD031 MD032 MD038 MD040 MD056 MD060 -->
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.4.0  
-**Date:** 2026-4-30  
+**Version:** 0.4.1  
+**Date:** 2026-4-5  
 **Author persona:** `@backend-eng`  
 **AAMAD phase:** 2.build  
 
@@ -53,11 +53,13 @@ Agents and CrewAI flows must call these capabilities through backend services or
 - optional `stream(messages, options)` for UX/chat paths
 - capability declaration: `tool_calls`, `json_schema`, `streaming`
 
-Initial adapters:
+Initial adapters (current repo state):
 
-- `AnthropicAdapter` (current primary implementation target)
-- `OpenAICompatibleAdapter` (generic compatible endpoints)
-- `NemotronAdapter` (supported provider target, may initially use stub/dev endpoint or compatible gateway)
+- `AnthropicAdapter` (scaffold-backed provider contract implementation)
+- `OpenAICompatibleAdapter` (scaffold-backed provider contract implementation)
+- `NemotronAdapter` (scaffold-backed provider contract implementation)
+
+**Important current-state note:** The adapter contract and orchestration wiring are implemented and tested, but provider adapters are intentionally scaffold-backed in the current codebase. Manual live-model smoke tests stay gated and skipped by default until real provider calls are enabled.
 
 ### DocumentCheckAgent (`src/doc_quality/agents/doc_check_agent.py`)
 
@@ -100,13 +102,13 @@ Initial adapters:
 | Synthesis | Senior Compliance Instructor for non-technical reviewers | Explain results clearly in structured audit package | Educator style; clarity for non-technical stakeholders |
 | Verifier | Audit Package Critical Reviewer and Risk Analyst | Pass/fail final package on schema, citations, hallucination checks | Final quality gate, fail-fast mindset |
 
-### Provider Adapter Layer (`services/model_adapters/`)
+### Provider Adapter Layer (`services/orchestrator/src/doc_quality_orchestrator/adapters/`)
 
 | Adapter | Purpose |
 |---------|---------|
-| `AnthropicAdapter` | Current provider implementation target |
-| `OpenAICompatibleAdapter` | Common adapter surface for compatible backends |
-| `NemotronAdapter` | Adapter contract for NVIDIA Nemotron-Parse integration target |
+| `AnthropicAdapter` | Provider-contract adapter (currently scaffold-backed) |
+| `OpenAICompatibleAdapter` | Provider-contract adapter (currently scaffold-backed) |
+| `NemotronAdapter` | Provider-contract adapter (currently scaffold-backed) |
 
 ### CrewAI Runtime Controls & Observability (Phase 0, defined in CrewAI DoD)
 
@@ -372,7 +374,7 @@ async def health_check() -> dict:
 | Request body | `ProductDomainInfo` |
 | Response | `list[ComplianceFramework]` — applicable regulatory frameworks detected |
 | Auth | Required (`qm_lead`, `architect`, `riskmanager`, `auditor`) |
-| Frameworks | EU AI Act, MDR, GDPR, ISO 9001, ISO 27001, BSI Grundschutz |
+| Frameworks | Domain-dependent set including EU AI Act, MDR/IVDR, GDPR, AGG, DORA, MiFID II, PSD2, NIS2, CRA, HIPAA, ISO 9001/13485/14971/27001, IEC 62304, BSI Grundschutz, BSI TR-03185 |
 
 **`POST /api/v1/compliance/standard-mapping-requests`**
 

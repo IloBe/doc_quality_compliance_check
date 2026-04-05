@@ -19,6 +19,7 @@ const statusClass: Record<RiskRecordRow['status'], string> = {
   Draft: 'bg-neutral-100 text-neutral-700 border-neutral-200',
   'In Review': 'bg-amber-100 text-amber-800 border-amber-200',
   Approved: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  'rework after review': 'bg-violet-100 text-violet-800 border-violet-200',
 };
 
 const residualClass: Record<RiskRecordRow['residualRisk'], string> = {
@@ -106,7 +107,7 @@ const RiskRecordsTable = ({
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        disabled={!canEdit || row.status !== 'Draft' || isBusy || !row.mutable}
+                        disabled={!canEdit || (row.status !== 'Draft' && row.status !== 'rework after review') || isBusy || !row.mutable}
                         onClick={(e) => {
                           e.stopPropagation();
                           onSubmitForReview(row.id);

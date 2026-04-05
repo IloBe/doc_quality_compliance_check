@@ -15,6 +15,7 @@ const StandardsCoverageTable = ({ summary }: StandardsCoverageTableProps) => {
         <thead>
           <tr className="text-left text-[11px] uppercase tracking-widest text-neutral-400 border-b border-neutral-100">
             <th className="py-2 pr-4">Document</th>
+            <th className="py-2 pr-4">Workflow</th>
             <th className="py-2 pr-4">Risk</th>
             <th className="py-2 pr-4">Cycle</th>
             <th className="py-2 pr-4">Standards / Articles</th>
@@ -27,6 +28,11 @@ const StandardsCoverageTable = ({ summary }: StandardsCoverageTableProps) => {
               <td className="py-3 pr-4">
                 <div className="font-bold text-neutral-800">{row.title}</div>
                 <div className="text-[11px] text-neutral-400">{row.document_id}</div>
+              </td>
+              <td className="py-3 pr-4">
+                <span className="inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide bg-blue-100 text-blue-700">
+                  {row.workflow_status}
+                </span>
               </td>
               <td className="py-3 pr-4">
                 <span

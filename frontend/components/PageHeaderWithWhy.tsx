@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LuInfo } from 'react-icons/lu';
+import InfoIconButton from './InfoIconButton';
 import WhyThisPageMatters from './WhyThisPageMatters';
 
 type PageHeaderWithWhyProps = {
@@ -20,14 +20,11 @@ const PageHeaderWithWhy = ({ eyebrow, title, subtitle, whyDescription, rightCont
           <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2">{eyebrow}</div>
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-black text-neutral-900 tracking-tight">{title}</h1>
-            <button
-              type="button"
+            <InfoIconButton
               onClick={() => setShowWhyThisPageMatters((prev) => !prev)}
-              className="p-1.5 rounded-full text-neutral-400 hover:text-blue-700 hover:bg-blue-50 transition"
               title="Why this page matters"
-            >
-              <LuInfo className="w-4 h-4" />
-            </button>
+              size="md"
+            />
           </div>
           {subtitle ? <p className="text-neutral-500 font-medium mt-1">{subtitle}</p> : null}
         </div>

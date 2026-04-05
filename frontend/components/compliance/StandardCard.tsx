@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import React from 'react';
-import { LuChevronRight, LuCpu, LuExternalLink, LuInfo, LuShieldCheck } from 'react-icons/lu';
+import { LuChevronRight, LuCpu, LuExternalLink, LuShieldCheck } from 'react-icons/lu';
+import InfoIconButton from '../InfoIconButton';
 import { ComplianceStandard, toneClasses } from '../../lib/complianceStandards';
 
 type StandardCardProps = {
@@ -36,15 +37,12 @@ const StandardCard = ({ standard }: StandardCardProps) => {
         <div className="flex items-center gap-1.5 font-bold text-neutral-900 text-xs">
           <LuCpu className="w-4 h-4 text-blue-500" />
           Agent Verified
-          <button
-            type="button"
+          <InfoIconButton
             onClick={() => setShowRoutingInfo((prev) => !prev)}
-            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-400 transition hover:text-neutral-900 hover:bg-neutral-100"
             title="Show routing rule and reason"
             aria-label={`Show routing rule for ${standard.title}`}
-          >
-            <LuInfo className="w-3.5 h-3.5" />
-          </button>
+            size="sm"
+          />
         </div>
         <Link
           href={standard.verificationHref}

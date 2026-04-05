@@ -9,7 +9,13 @@ import {
 } from '../../lib/documentUploadClient';
 import { acquireDocumentLock, releaseDocumentLock } from '../../lib/documentLockClient';
 import { listDocuments } from '../../lib/documentRetrievalClient';
-import { buildDocumentHubQuery, filterDocuments, getDocumentHubFilters } from '../../lib/documentHub';
+import {
+  buildDocumentHubQuery,
+  DOCUMENT_STATUS_FILTERS,
+  DocumentStatusFilter,
+  filterDocuments,
+  getDocumentHubFilters,
+} from '../../lib/documentHub';
 import { Document, useMockStore } from '../../lib/mockStore';
 import FooterInfoCard from '../FooterInfoCard';
 import PageHeaderWithWhy from '../PageHeaderWithWhy';
@@ -36,13 +42,37 @@ const DocumentHubPage = ({ eyebrow = 'Home' }: DocumentHubPageProps) => {
   const [actionError, setActionError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoadingPersistent, setIsLoadingPersistent] = useState(true);
+  const [selectedStatus, setSelectedStatus] = useState<DocumentStatusFilter>('All');
+  const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const statusMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const { queryFilter, projectFilter } = useMemo(() => getDocumentHubFilters(router.query), [router.query]);
+  const { queryFilter, projectFilter, statusFilter } = useMemo(() => getDocumentHubFilters(router.query), [router.query]);
 
   useEffect(() => {
     setLocalFilter(queryFilter);
   }, [queryFilter]);
+
+  useEffect(() => {
+    setSelectedStatus(statusFilter);
+  }, [statusFilter]);
+
+  useEffect(() => {
+    if (!isStatusMenuOpen) {
+      return;
+    }
+
+    const onDocumentMouseDown = (event: MouseEvent) => {
+      if (statusMenuRef.current && !statusMenuRef.current.contains(event.target as Node)) {
+        setIsStatusMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', onDocumentMouseDown);
+    return () => {
+      document.removeEventListener('mousedown', onDocumentMouseDown);
+    };
+  }, [isStatusMenuOpen]);
 
   // Load persisted documents from backend on mount
   useEffect(() => {
@@ -64,12 +94,12 @@ const DocumentHubPage = ({ eyebrow = 'Home' }: DocumentHubPageProps) => {
   }, []);
 
   const filteredDocuments = useMemo(
-    () => filterDocuments(documents, localFilter, projectFilter),
-    [documents, localFilter, projectFilter],
+    () => filterDocuments(documents, localFilter, projectFilter, selectedStatus),
+    [documents, localFilter, projectFilter, selectedStatus],
   );
 
-  const commitSearch = (searchValue: string, currentProjectFilter: string) => {
-    const nextQuery = buildDocumentHubQuery(searchValue, currentProjectFilter);
+  const commitSearch = (searchValue: string, currentProjectFilter: string, currentStatusFilter: DocumentStatusFilter) => {
+    const nextQuery = buildDocumentHubQuery(searchValue, currentProjectFilter, currentStatusFilter);
     router.replace({ pathname: '/', query: nextQuery }, undefined, { shallow: true });
   };
 
@@ -155,13 +185,19 @@ const DocumentHubPage = ({ eyebrow = 'Home' }: DocumentHubPageProps) => {
       addDocument(result.document);
       const degradeNote = result.degradedToDemo ? ' (demo fallback active)' : '';
       setActionInfo(`${result.message}${degradeNote}`);
-      commitSearch(localFilter, projectFilter);
+      commitSearch(localFilter, projectFilter, selectedStatus);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Upload failed. Please retry.');
     } finally {
       setIsUploading(false);
       event.target.value = '';
     }
+  };
+
+  const applyStatusFilter = (nextStatus: DocumentStatusFilter) => {
+    setSelectedStatus(nextStatus);
+    setIsStatusMenuOpen(false);
+    commitSearch(localFilter, projectFilter, nextStatus);
   };
 
   return (
@@ -198,7 +234,7 @@ const DocumentHubPage = ({ eyebrow = 'Home' }: DocumentHubPageProps) => {
         }
       />
 
-      <div className="flex items-center justify-between bg-white/50 backdrop-blur-md p-2 rounded-2xl border border-white shadow-xl shadow-neutral-100/50">
+      <div className="relative z-30 flex items-center justify-between bg-white/50 backdrop-blur-md p-2 rounded-2xl border border-white shadow-xl shadow-neutral-100/50">
         <div className="flex items-center gap-2">
           <div className="relative">
             <LuSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
@@ -209,26 +245,55 @@ const DocumentHubPage = ({ eyebrow = 'Home' }: DocumentHubPageProps) => {
               onChange={(event) => setLocalFilter(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
-                  commitSearch(localFilter, projectFilter);
+                  commitSearch(localFilter, projectFilter, selectedStatus);
                 }
               }}
               className="bg-white border border-neutral-100 pl-10 pr-4 py-2 rounded-xl text-sm w-64 outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-200 transition"
             />
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 text-neutral-500 font-bold text-xs uppercase hover:bg-white rounded-xl transition">
-            <LuFilter className="w-4 h-4" />
-            Status: All
-          </button>
+          <div ref={statusMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setIsStatusMenuOpen((current) => !current)}
+              aria-expanded={isStatusMenuOpen}
+              aria-haspopup="menu"
+              className="flex items-center gap-2 px-4 py-2 text-neutral-500 font-bold text-xs uppercase hover:bg-white rounded-xl transition"
+            >
+              <LuFilter className="w-4 h-4" />
+              Status: {selectedStatus}
+            </button>
+
+            {isStatusMenuOpen && (
+              <div className="absolute left-0 top-full mt-2 z-[70] min-w-[190px] rounded-xl border border-neutral-200 bg-white p-2 shadow-2xl">
+                {DOCUMENT_STATUS_FILTERS.map((option) => {
+                  const active = option === selectedStatus;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => applyStatusFilter(option)}
+                      className={`w-full rounded-lg px-3 py-2 text-left text-xs font-semibold transition ${
+                        active ? 'bg-blue-50 text-blue-700' : 'text-neutral-700 hover:bg-neutral-50'
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
         <div className="text-[10px] font-black text-neutral-300 uppercase tracking-[0.2em] pr-4">
           Total {filteredDocuments.length} Assets
         </div>
       </div>
 
-      {(projectFilter || queryFilter) && (
+      {(projectFilter || queryFilter || selectedStatus !== 'All') && (
         <div className="text-xs text-neutral-500">
           Showing results {projectFilter ? <span>for project <strong>{projectFilter}</strong></span> : <span>across all projects</span>}
           {queryFilter ? <span> and search <strong>"{queryFilter}"</strong></span> : null}.
+          {selectedStatus !== 'All' ? <span> Status filter: <strong>{selectedStatus}</strong>.</span> : null}
         </div>
       )}
 
@@ -246,7 +311,7 @@ const DocumentHubPage = ({ eyebrow = 'Home' }: DocumentHubPageProps) => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="relative z-0 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {filteredDocuments.map((doc) => (
           <DocumentCard
             key={doc.id}

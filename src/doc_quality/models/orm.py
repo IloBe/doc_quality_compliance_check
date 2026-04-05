@@ -48,6 +48,7 @@ class SkillDocumentORM(Base):
     filename = Column(String(255), nullable=False, index=True)
     content_type = Column(String(100), nullable=False)
     document_type = Column(String(50), nullable=False, default="unknown", index=True)
+    workflow_status = Column(String(50), nullable=False, default="draft", index=True)
     extracted_text = Column(Text, nullable=False)
     source = Column(String(50), nullable=False, default="analyze_text")
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
