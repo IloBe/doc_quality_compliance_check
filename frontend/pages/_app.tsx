@@ -1,5 +1,5 @@
-
 import React, { useEffect, useState } from 'react';
+import type { AppProps } from 'next/app';
 import { useRouter } from 'next/router';
 import AppShell from '../components/AppShell';
 import { AuthUser, fetchCurrentUser } from '../lib/authClient';
@@ -10,7 +10,7 @@ const AUTH_BOOTSTRAP_MAX_ATTEMPTS = 4;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function MyApp({ Component, pageProps }) {
+function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
