@@ -7,8 +7,24 @@ import { AuthProvider } from '../lib/authContext';
 import '../styles/globals.css';
 
 const AUTH_BOOTSTRAP_MAX_ATTEMPTS = 4;
+const AUTH_REQUEST_TIMEOUT_MS = 3000;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> =>
+  new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Auth bootstrap timeout')), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 
 function MyApp({ Component, pageProps }) {
   const router = useRouter();
@@ -30,7 +46,7 @@ function MyApp({ Component, pageProps }) {
 
       for (let attempt = 1; attempt <= AUTH_BOOTSTRAP_MAX_ATTEMPTS; attempt += 1) {
         try {
-          const user = await fetchCurrentUser();
+          const user = await withTimeout(fetchCurrentUser(), AUTH_REQUEST_TIMEOUT_MS);
           if (isMounted) {
             setCurrentUser(user);
             setIsCheckingAuth(false);
