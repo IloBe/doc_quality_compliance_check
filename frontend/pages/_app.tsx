@@ -8,6 +8,7 @@ import '../styles/globals.css';
 
 const AUTH_BOOTSTRAP_MAX_ATTEMPTS = 4;
 const AUTH_REQUEST_TIMEOUT_MS = 3000;
+const SKIP_AUTH_BOOTSTRAP = process.env.NEXT_PUBLIC_E2E_SKIP_AUTH === 'true';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -39,7 +40,7 @@ function MyApp({ Component, pageProps }) {
     let isMounted = true;
 
     const checkAuth = async () => {
-      if (isNoShell) {
+      if (isNoShell || SKIP_AUTH_BOOTSTRAP) {
         setIsCheckingAuth(false);
         return;
       }
@@ -74,7 +75,7 @@ function MyApp({ Component, pageProps }) {
     };
   }, [isNoShell, router]);
 
-  if (isNoShell) {
+  if (isNoShell || SKIP_AUTH_BOOTSTRAP) {
     return (
       <AuthProvider currentUser={null}>
         <Component {...pageProps} />
