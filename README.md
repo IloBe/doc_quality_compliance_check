@@ -27,7 +27,10 @@ The **Doc Quality Compliance Checker** addresses this by introducing a structure
 - reduces release risk by surfacing gaps earlier,
 - provides better traceability for approvals and governance decisions.
 
-As an additional feature **data privacy** topics of this MVP software itself are handled as a team of 3 people, working with github repository [compliance-checker](https://github.com/willingc/compliance-checker/tree/main) by Carol Willing. Insights mentioned on that repo documentation are used for software improvement. 
+### Data privacy
+As an additional feature **data privacy** topics of this MVP software itself are handled as a team of 3 people. Requirements and status are handled via github repository [compliance-checker](https://github.com/willingc/compliance-checker/tree/main) by Carol Willing. Insights mentioned on that repo documentation are used for software improvement of this product. Because of short timeframe we can handle only few aspects.
+
+Data privacy is a complex topic in its own, which we are addressing with the inspiration and support of expert [Katharine Jarmul](https://probablyprivate.com/).
 
 ### Primary business value
 
