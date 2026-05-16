@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { 
@@ -20,8 +20,18 @@ import { checkAuthServiceHealth, loginWithPassword } from '../lib/authClient';
 
 const HEALTH_CHECK_ENABLED = process.env.NEXT_PUBLIC_ENABLE_AUTH_HEALTH_CHECK !== 'false';
 
+const isSafeInternalPath = (value: string) => value.startsWith('/') && !value.startsWith('//') && !value.includes('://');
+
+const readQueryValue = (value: string | string[] | undefined): string => {
+   if (Array.isArray(value)) {
+      return value[0] ?? '';
+   }
+   return value ?? '';
+};
+
 const Login = () => {
    const router = useRouter();
+    const submitSequenceRef = useRef(0);
    const [email, setEmail] = useState('mvp-user@example.invalid');
     const [password, setPassword] = useState('CHANGE_ME_BEFORE_USE');
   const [isLoading, setIsLoading] = useState(false);
@@ -31,6 +41,11 @@ const Login = () => {
    const [authServiceVersion, setAuthServiceVersion] = useState<string | null>(null);
    const [lastHealthCheckedAt, setLastHealthCheckedAt] = useState<number | null>(null);
    const [healthCheckedAgoLabel, setHealthCheckedAgoLabel] = useState<string>('—');
+
+   const returnTo = useMemo(() => {
+      const candidate = readQueryValue(router.query.returnTo);
+      return isSafeInternalPath(candidate) ? candidate : '/';
+   }, [router.query.returnTo]);
 
    useEffect(() => {
       if (!HEALTH_CHECK_ENABLED || lastHealthCheckedAt === null) {
@@ -81,17 +96,28 @@ const Login = () => {
       };
    }, []);
 
-   const handleLogin = async (e) => {
+   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const submitId = submitSequenceRef.current + 1;
+    submitSequenceRef.current = submitId;
+
     setIsLoading(true);
       setError(null);
       try {
          await loginWithPassword(email, password, rememberSession);
-         router.replace('/');
+         if (submitSequenceRef.current !== submitId) {
+            return;
+         }
+         void router.replace(returnTo);
       } catch (err) {
+         if (submitSequenceRef.current !== submitId) {
+            return;
+         }
          setError(err instanceof Error ? err.message : 'Login failed');
       } finally {
-         setIsLoading(false);
+         if (submitSequenceRef.current === submitId) {
+            setIsLoading(false);
+         }
       }
   };
 
@@ -157,6 +183,11 @@ const Login = () => {
                <p className="text-neutral-400 text-sm font-medium leading-relaxed">
                   Sign in with your corporate SSO or project email.
                </p>
+               {returnTo !== '/' && (
+                  <p className="text-[11px] text-blue-600 font-semibold">
+                     After sign-in, you will return to the requested page.
+                  </p>
+               )}
                       {HEALTH_CHECK_ENABLED && (
                          <div className={`inline-flex items-center gap-2 mt-2 rounded-full px-3 py-1 text-[11px] font-bold ${
                             authServiceOnline === true

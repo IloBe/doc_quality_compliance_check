@@ -11,7 +11,7 @@ const BridgeSystemStatusCard = () => {
             Dynamic Agent Routing
           </h2>
           <p className="text-neutral-500 font-medium leading-relaxed italic">
-            "Phase 0 Mock: The Bridge system automatically distributes document artifacts to specialized personas based on identified schema headers."
+            &quot;Phase 0 Mock: The Bridge system automatically distributes document artifacts to specialized personas based on identified schema headers.&quot;
           </p>
         </div>
         <div className="bg-emerald-50 border border-emerald-100 px-6 py-4 rounded-3xl">
@@ -50,3 +50,4 @@ const BridgeSystemStatusCard = () => {
 };
 
 export default BridgeSystemStatusCard;
+

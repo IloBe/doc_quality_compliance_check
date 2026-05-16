@@ -15,6 +15,28 @@ Current implementation baseline:
 - **Authentication:** backend-issued HTTP-only session cookies with role-based authorization
 - **Orchestration:** optional standalone CrewAI orchestrator in `services/orchestrator/`
 
+## Frontend architecture note: why `frontend/lib/` is necessary
+
+The browser app uses `frontend/lib/` as a shared service and domain layer between UI pages/components and backend or mock data sources. This keeps feature behavior deterministic and avoids duplicating rules across many screens.
+
+### What `frontend/lib/` provides
+
+- **API/service clients** for backend communication (for example audit trail, dashboard, observability, exports, artifact operations).
+- **View-model logic** for filtering, KPI calculations, formatting, selection fallback rules, and domain mapping.
+- **Cross-cutting infrastructure** such as auth context/RBAC helpers and shared mock store state used in demo and fallback modes.
+- **Shared UI behavior helpers** such as selection style utilities and reusable filtering hooks.
+- **URL query-state synchronization** via shared query utilities to keep deep links and selected list/detail state stable and cleanup stale params.
+
+### Why this separation is important
+
+- **Consistency:** one implementation of business rules is reused across pages instead of copy/paste variants.
+- **Maintainability:** API contract changes are isolated to service files rather than scattered in many components.
+- **Testability:** logic can be unit-tested directly from lib modules without rendering full pages.
+- **Deterministic routing behavior:** shared query sync logic enforces consistent selection/deep-link handling across routed surfaces.
+- **Incremental delivery:** stubs in lib modules allow frontend flows to compile and run while backend integrations are completed.
+
+Without `frontend/lib/`, page and component files would absorb API logic, domain transforms, routing normalization, and reusable UX rules, resulting in higher coupling, duplicated logic, and faster behavioral drift.
+
 ## Business context summary
 
 Software teams in regulated or audit-heavy environments (healthcare, fintech, enterprise SaaS or critical infrastructure) often lose significant time during releases because documentation quality and compliance checks are manual, inconsistent and late in the delivery cycle.

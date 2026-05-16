@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { Document } from '../lib/mockStore';
 import { useMockStore } from '../lib/mockStore';
@@ -36,6 +36,10 @@ import {
   LuX,
 } from 'react-icons/lu';
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+type HandoffTaskType = 'rerun_bridge' | 'manual_follow_up';
+
 const DocBridgePage = () => {
   const router = useRouter();
   const { docId } = router.query;
@@ -52,7 +56,7 @@ const DocBridgePage = () => {
   const [humanReview, setHumanReview] = useState<BridgeHumanReviewResponse | null>(null);
   const [reviewDecision, setReviewDecision] = useState<'approved' | 'rejected'>('approved');
   const [reviewReason, setReviewReason] = useState('');
-  const [nextTaskType, setNextTaskType] = useState<'rerun_bridge' | 'manual_follow_up'>('rerun_bridge');
+  const [nextTaskType, setNextTaskType] = useState<HandoffTaskType>('rerun_bridge');
   const [nextTaskAssignee, setNextTaskAssignee] = useState('');
   const [nextTaskInstructions, setNextTaskInstructions] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
@@ -66,28 +70,36 @@ const DocBridgePage = () => {
 
   useEffect(() => {
     if (docId) {
-      autoRunStarted.current = false;
-      setRunStartedAtLeastOnce(false);
-      setBackendRun(null);
-      setHumanReview(null);
-      setReviewReason('');
-      setReviewError(null);
-      setActiveStep(0);
-      setLogs([]);
+      const timeoutId = setTimeout(() => {
+        autoRunStarted.current = false;
+        setRunStartedAtLeastOnce(false);
+        setBackendRun(null);
+        setHumanReview(null);
+        setReviewDecision('approved');
+        setReviewReason('');
+        setReviewError(null);
+        setNextTaskType('rerun_bridge');
+        setNextTaskAssignee('');
+        setNextTaskInstructions('');
+        setActiveStep(0);
+        setLogs([]);
 
-      const resolved = getDocById(docId as string);
-      if (resolved) {
-        setDoc(resolved);
-        return;
-      }
+        const resolved = getDocById(docId as string);
+        if (resolved) {
+          setDoc(resolved);
+          return;
+        }
 
-      if (useBackendBridge) {
-        setDoc({
-          id: docId as string,
-          title: `Document ${docId as string}`,
-          type: 'Generic',
-        });
-      }
+        if (useBackendBridge) {
+          setDoc({
+            id: docId as string,
+            title: `Document ${docId as string}`,
+            type: 'Generic',
+          });
+        }
+      }, 0);
+
+      return () => clearTimeout(timeoutId);
     }
   }, [docId, getDocById, useBackendBridge]);
 
@@ -139,11 +151,9 @@ const DocBridgePage = () => {
     };
   }, [backendRun?.run_id, useBackendBridge]);
 
-  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  const addLog = (msg: string) => {
+  const addLog = useCallback((msg: string) => {
     setLogs((prev) => [buildLogMessage(msg), ...prev]);
-  };
+  }, []);
 
   const complianceChecks = useMemo(() => deriveComplianceChecks(doc, backendRun), [backendRun, doc]);
   const researchChecks = useMemo(() => deriveResearchChecks(doc), [doc]);
@@ -164,6 +174,46 @@ const DocBridgePage = () => {
     () => deriveAutomaticRecommendation(complianceChecks, researchChecks, backendRun),
     [backendRun, complianceChecks, researchChecks],
   );
+
+  const effectiveNextTaskType = useMemo<HandoffTaskType>(() => {
+    if (reviewDecision !== 'rejected') {
+      return 'rerun_bridge';
+    }
+    return nextTaskType;
+  }, [nextTaskType, reviewDecision]);
+
+  const effectiveNextTaskAssignee = useMemo(() => {
+    if (reviewDecision !== 'rejected' || effectiveNextTaskType !== 'manual_follow_up') {
+      return '';
+    }
+    return nextTaskAssignee.trim();
+  }, [effectiveNextTaskType, nextTaskAssignee, reviewDecision]);
+
+  const effectiveNextTaskInstructions = useMemo(() => {
+    if (reviewDecision !== 'rejected') {
+      return '';
+    }
+    return nextTaskInstructions.trim();
+  }, [nextTaskInstructions, reviewDecision]);
+
+  const onReviewDecisionChange = useCallback((nextDecision: 'approved' | 'rejected') => {
+    setReviewDecision(nextDecision);
+    setReviewError(null);
+    if (nextDecision === 'approved') {
+      setNextTaskType('rerun_bridge');
+      setNextTaskAssignee('');
+      setNextTaskInstructions('');
+    }
+  }, []);
+
+  const onNextTaskTypeChange = useCallback((nextType: HandoffTaskType) => {
+    setNextTaskType(nextType);
+    setReviewError(null);
+    if (nextType !== 'manual_follow_up') {
+      setNextTaskAssignee('');
+    }
+  }, []);
+
   const shouldShowHumanReviewPanel = runStartedAtLeastOnce && !isProcessing && activeStep >= bridgeSteps.length - 1;
   const humanReviewPending = shouldShowHumanReviewPanel && !humanReview;
 
@@ -178,7 +228,7 @@ const DocBridgePage = () => {
       return;
     }
 
-    if (reviewDecision === 'rejected' && nextTaskType === 'manual_follow_up' && !nextTaskAssignee.trim()) {
+    if (reviewDecision === 'rejected' && effectiveNextTaskType === 'manual_follow_up' && !effectiveNextTaskAssignee) {
       setReviewError('Please provide the responsible person for manual follow-up.');
       return;
     }
@@ -192,9 +242,9 @@ const DocBridgePage = () => {
             document_id: doc.id,
             decision: reviewDecision,
             reason: trimmedReason,
-            next_task_type: reviewDecision === 'rejected' ? nextTaskType : undefined,
-            next_task_assignee: reviewDecision === 'rejected' && nextTaskType === 'manual_follow_up' ? nextTaskAssignee.trim() : undefined,
-            next_task_instructions: reviewDecision === 'rejected' ? nextTaskInstructions.trim() || undefined : undefined,
+            next_task_type: reviewDecision === 'rejected' ? effectiveNextTaskType : undefined,
+            next_task_assignee: reviewDecision === 'rejected' && effectiveNextTaskType === 'manual_follow_up' ? effectiveNextTaskAssignee : undefined,
+            next_task_instructions: reviewDecision === 'rejected' ? effectiveNextTaskInstructions || undefined : undefined,
             assignee_notified: reviewDecision === 'rejected',
           })
         : createLocalHumanReviewRecord({
@@ -203,9 +253,9 @@ const DocBridgePage = () => {
             decision: reviewDecision,
             reason: trimmedReason,
             reviewerEmail: currentUserId,
-            nextTaskType,
-            nextTaskAssignee: nextTaskAssignee.trim(),
-            nextTaskInstructions: nextTaskInstructions.trim(),
+            nextTaskType: effectiveNextTaskType,
+            nextTaskAssignee: effectiveNextTaskAssignee,
+            nextTaskInstructions: effectiveNextTaskInstructions,
           });
 
       setHumanReview(saved);
@@ -224,7 +274,7 @@ const DocBridgePage = () => {
     }
   };
 
-  const handleStartRun = async () => {
+  const handleStartRun = useCallback(async () => {
     if (!doc) {
       return;
     }
@@ -281,7 +331,7 @@ const DocBridgePage = () => {
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, [addLog, complianceChecks, doc, researchChecks, useBackendBridge]);
 
   useEffect(() => {
     if (!useBackendBridge || !doc || isProcessing || !canRunBridge || autoRunStarted.current) {
@@ -290,7 +340,7 @@ const DocBridgePage = () => {
 
     autoRunStarted.current = true;
     void handleStartRun();
-  }, [canRunBridge, doc, isProcessing, useBackendBridge]);
+  }, [canRunBridge, doc, handleStartRun, isProcessing, useBackendBridge]);
 
   if (!doc) {
     return <div className="p-20 text-center animate-pulse text-neutral-400">Loading Document...</div>;
@@ -430,7 +480,7 @@ const DocBridgePage = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setReviewDecision('approved')}
+                  onClick={() => onReviewDecisionChange('approved')}
                   className={`px-4 py-2 rounded-xl border text-xs font-black uppercase tracking-widest transition ${
                     reviewDecision === 'approved'
                       ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
@@ -441,7 +491,7 @@ const DocBridgePage = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setReviewDecision('rejected')}
+                  onClick={() => onReviewDecisionChange('rejected')}
                   className={`px-4 py-2 rounded-xl border text-xs font-black uppercase tracking-widest transition ${
                     reviewDecision === 'rejected'
                       ? 'bg-rose-50 border-rose-300 text-rose-700'
@@ -469,7 +519,7 @@ const DocBridgePage = () => {
                     <label className="block text-[10px] font-black uppercase tracking-widest text-neutral-500 mb-2">Next task proposal</label>
                     <select
                       value={nextTaskType}
-                      onChange={(event) => setNextTaskType(event.target.value as 'rerun_bridge' | 'manual_follow_up')}
+                      onChange={(event) => onNextTaskTypeChange(event.target.value as HandoffTaskType)}
                       className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm bg-white"
                     >
                       <option value="rerun_bridge">Another automatic bridge run</option>

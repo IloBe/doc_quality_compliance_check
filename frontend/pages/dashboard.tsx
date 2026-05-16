@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
 import { LuInfo, LuLoader } from 'react-icons/lu';
 import KpiGrid from '../components/dashboard/KpiGrid';
 import RiskDistributionCard from '../components/dashboard/RiskDistributionCard';
@@ -10,54 +11,91 @@ import { buildMockDashboardSummary, getRiskTotal } from '../lib/dashboardSummary
 import { useMockStore } from '../lib/mockStore';
 import { DashboardSummary, DashboardTimeframe, fetchDashboardSummary } from '../lib/dashboardClient';
 
+const DASHBOARD_TIMEFRAMES: DashboardTimeframe[] = ['week', 'month', 'year'];
+
+function getTimeframeFromQuery(value: string | string[] | undefined): DashboardTimeframe {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (candidate && DASHBOARD_TIMEFRAMES.includes(candidate as DashboardTimeframe)) {
+    return candidate as DashboardTimeframe;
+  }
+  return 'month';
+}
+
 const DashboardPage = () => {
+  const router = useRouter();
   const documents = useMockStore((state) => state.documents);
   const exports = useMockStore((state) => state.exports);
   const bridgeRuns = useMockStore((state) => state.bridgeRuns);
-
-  const [timeframe, setTimeframe] = useState<DashboardTimeframe>('month');
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   // Default to demo mode (same mock source as Doc Hub).
   // Set NEXT_PUBLIC_DASHBOARD_SOURCE=backend to use live aggregation endpoint.
   const useBackendData = process.env.NEXT_PUBLIC_DASHBOARD_SOURCE === 'backend';
 
-  useEffect(() => {
-    if (!useBackendData) {
-      setIsLoading(false);
-      setError(null);
-      setSummary(null);
+  const timeframe = useMemo(
+    () => getTimeframeFromQuery(router.query.timeframe),
+    [router.query.timeframe],
+  );
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [isLoading, setIsLoading] = useState(useBackendData);
+  const [error, setError] = useState<string | null>(null);
+
+  const commitTimeframe = useCallback((nextTimeframe: DashboardTimeframe) => {
+    if (!router.isReady) {
       return;
     }
 
-    let mounted = true;
+    const currentTimeframe = getTimeframeFromQuery(router.query.timeframe);
+    if (currentTimeframe === nextTimeframe) {
+      return;
+    }
 
-    const load = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const payload = await fetchDashboardSummary(timeframe);
-        if (mounted) {
-          setSummary(payload);
-        }
-      } catch (err) {
-        if (mounted) {
-          setError(err instanceof Error ? err.message : 'Failed to load dashboard analytics');
-        }
-      } finally {
-        if (mounted) {
-          setIsLoading(false);
-        }
+    const nextQuery: Record<string, string> = {};
+    Object.entries(router.query).forEach(([key, rawValue]) => {
+      if (key === 'timeframe') {
+        return;
       }
-    };
+      const normalized = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+      if (normalized) {
+        nextQuery[key] = normalized;
+      }
+    });
 
-    load();
-    return () => {
-      mounted = false;
-    };
+    if (nextTimeframe !== 'month') {
+      nextQuery.timeframe = nextTimeframe;
+    }
+
+    void router.replace(
+      { pathname: router.pathname, query: nextQuery },
+      undefined,
+      { shallow: true, scroll: false },
+    );
+  }, [router]);
+
+  const load = useCallback(async () => {
+    if (!useBackendData) {
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const payload = await fetchDashboardSummary(timeframe);
+      setSummary(payload);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard analytics');
+    } finally {
+      setIsLoading(false);
+    }
   }, [timeframe, useBackendData]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      void load();
+    }, 0);
+    return () => clearTimeout(timeoutId);
+  }, [load]);
 
   const mockSummary = useMemo<DashboardSummary>(() => {
     return buildMockDashboardSummary(documents, exports, bridgeRuns, timeframe);
@@ -82,7 +120,7 @@ const DashboardPage = () => {
         subtitle="Operational overview for document compliance, risk and audit readiness."
         whyDescription="The Dashboard provides audit-readiness visibility at a glance. It consolidates document status, risk class, and pass/fail control results so stakeholders can prioritize remediation and make release decisions using evidence, not assumptions."
         rightContent={
-          <TimeframeSelector value={timeframe} onChange={setTimeframe} />
+          <TimeframeSelector value={timeframe} onChange={commitTimeframe} />
         }
       />
 

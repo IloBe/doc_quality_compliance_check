@@ -15,10 +15,12 @@ import {
 
 type OperationsDrawerProps = {
   isOpen: boolean;
+  selectedOperationId: string | null;
+  onSelectOperation: (operationId: string | null) => void;
   onClose: () => void;
 };
 
-const OperationsDrawer = ({ isOpen, onClose }: OperationsDrawerProps) => {
+const OperationsDrawer = ({ isOpen, selectedOperationId, onSelectOperation, onClose }: OperationsDrawerProps) => {
   const router = useRouter();
 
   const exportJobs = useMockStore(state => state.exports);
@@ -101,14 +103,14 @@ const OperationsDrawer = ({ isOpen, onClose }: OperationsDrawerProps) => {
   };
 
   const openOperationReport = (operation: ActiveOp) => {
+    onSelectOperation(operation.id);
     onClose();
 
     if (operation.kind === 'export') {
       void router.push({
         pathname: '/exports',
         query: {
-          docId: operation.docId,
-          exportId: operation.id,
+          export: operation.id,
         },
       });
       return;
@@ -164,9 +166,14 @@ const OperationsDrawer = ({ isOpen, onClose }: OperationsDrawerProps) => {
                 return (
                   <div 
                     key={op.id} 
-                    className={`group relative p-4 rounded-xl border border-neutral-100 shadow-sm transition hover:bg-neutral-50 ${
-                      op.status === 'running' ? 'bg-blue-50/30' : 'bg-white'
+                    className={`group relative p-4 rounded-xl border shadow-sm transition ${
+                      selectedOperationId === op.id
+                        ? 'border-blue-200 bg-blue-50/50'
+                        : op.status === 'running'
+                          ? 'border-neutral-100 bg-blue-50/30 hover:bg-blue-50/40'
+                          : 'border-neutral-100 bg-white hover:bg-neutral-50'
                     }`}
+                    onClick={() => onSelectOperation(op.id)}
                   >
                     <div className="flex items-start gap-3">
                       <div className={getStatusColor(op.status)}>

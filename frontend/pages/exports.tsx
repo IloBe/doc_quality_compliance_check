@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/router';
 import { LuFilter } from 'react-icons/lu';
 import { getHeaderControlClass } from '../components/buttonStyles';
 import ExportDownloadDialog from '../components/exportsRegistry/ExportDownloadDialog';
@@ -16,14 +17,28 @@ import {
   buildExportRegistryStats,
   filterExports,
 } from '../lib/exportRegistryViewModel';
+import { syncQueryParam } from '../lib/queryState';
+
+function readQueryValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0] ?? '';
+  }
+  return value ?? '';
+}
+
+function resolveDestination(value: string): DownloadDestination {
+  if (value === 'local' || value === 'remote') {
+    return value;
+  }
+  return null;
+}
 
 const ExportsRegistryPage = () => {
+  const router = useRouter();
   const exports = useMockStore((state) => state.exports);
   const filtersRef = useRef<HTMLDivElement | null>(null);
   const [statusFilter, setStatusFilter] = useState<ExportStatusFilter>('All');
   const [typeFilter, setTypeFilter] = useState<ExportTypeFilter>('All');
-  const [downloadDialogExport, setDownloadDialogExport] = useState<ExportJob | null>(null);
-  const [selectedDestination, setSelectedDestination] = useState<DownloadDestination>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [remoteServerUrl, setRemoteServerUrl] = useState('');
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -35,19 +50,77 @@ const ExportsRegistryPage = () => {
 
   const stats = useMemo(() => buildExportRegistryStats(exports), [exports]);
 
+  const downloadDialogExport = useMemo<ExportJob | null>(() => {
+    const selectedExportId = readQueryValue(router.query.export);
+    if (!selectedExportId) {
+      return null;
+    }
+    return exports.find((item) => item.id === selectedExportId) ?? null;
+  }, [exports, router.query.export]);
+
+  const selectedDestination = useMemo<DownloadDestination>(() => {
+    return resolveDestination(readQueryValue(router.query.destination));
+  }, [router.query.destination]);
+
+  useEffect(() => {
+    syncQueryParam(router, 'export', downloadDialogExport?.id ?? '');
+  }, [downloadDialogExport?.id, router]);
+
+  useEffect(() => {
+    const desiredDestination = downloadDialogExport ? (selectedDestination ?? '') : '';
+    syncQueryParam(router, 'destination', desiredDestination);
+  }, [downloadDialogExport, router, selectedDestination]);
+
+  const commitDownloadSelection = useCallback((nextExportId: string | null, nextDestination: DownloadDestination) => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const currentExportId = readQueryValue(router.query.export);
+    const currentDestination = resolveDestination(readQueryValue(router.query.destination));
+    const desiredExportId = nextExportId ?? '';
+    const desiredDestination = nextDestination ?? null;
+
+    if (currentExportId === desiredExportId && currentDestination === desiredDestination) {
+      return;
+    }
+
+    const nextQuery: Record<string, string> = {};
+    Object.entries(router.query).forEach(([key, rawValue]) => {
+      if (key === 'export' || key === 'destination') {
+        return;
+      }
+      const normalized = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+      if (normalized) {
+        nextQuery[key] = normalized;
+      }
+    });
+
+    if (desiredExportId) {
+      nextQuery.export = desiredExportId;
+    }
+    if (desiredExportId && desiredDestination) {
+      nextQuery.destination = desiredDestination;
+    }
+
+    void router.replace(
+      { pathname: router.pathname, query: nextQuery },
+      undefined,
+      { shallow: true, scroll: false },
+    );
+  }, [router]);
+
   const resetDownloadState = useCallback(() => {
-    setDownloadDialogExport(null);
-    setSelectedDestination(null);
+    commitDownloadSelection(null, null);
     setRemoteServerUrl('');
     setDownloadError(null);
-  }, []);
+  }, [commitDownloadSelection]);
 
   const handleDownloadClick = useCallback((exportJob: ExportJob) => {
-    setDownloadDialogExport(exportJob);
-    setSelectedDestination(null);
+    commitDownloadSelection(exportJob.id, null);
     setRemoteServerUrl('');
     setDownloadError(null);
-  }, []);
+  }, [commitDownloadSelection]);
 
   const handleLocalDownload = useCallback(async () => {
     if (!downloadDialogExport) return;
@@ -123,10 +196,14 @@ const ExportsRegistryPage = () => {
         />
       </div>
 
-      <ExportsRegistryTable exports={filteredExports} onDownload={handleDownloadClick} />
+      <ExportsRegistryTable
+        exports={filteredExports}
+        selectedExportId={downloadDialogExport?.id ?? null}
+        onDownload={handleDownloadClick}
+      />
 
       <FooterInfoCard title="Governance note" accent="blue">
-        This is a read-only exports registry showing all past and present export jobs. Status filters help locate exports by processing state. For per-document export management, visit the specific document's Exports tab.
+        This is a read-only exports registry showing all past and present export jobs. Status filters help locate exports by processing state. For per-document export management, visit the specific document&apos;s Exports tab.
       </FooterInfoCard>
 
       <ExportDownloadDialog
@@ -136,10 +213,10 @@ const ExportsRegistryPage = () => {
         downloadError={downloadError}
         isDownloading={isDownloading}
         onClose={resetDownloadState}
-        onSelectDestination={setSelectedDestination}
+        onSelectDestination={(destination) => commitDownloadSelection(downloadDialogExport?.id ?? null, destination)}
         onRemoteServerUrlChange={setRemoteServerUrl}
         onBack={() => {
-          setSelectedDestination(null);
+          commitDownloadSelection(downloadDialogExport?.id ?? null, null);
           setDownloadError(null);
         }}
         onLocalDownload={handleLocalDownload}
@@ -150,3 +227,4 @@ const ExportsRegistryPage = () => {
 };
 
 export default ExportsRegistryPage;
+

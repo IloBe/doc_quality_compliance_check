@@ -1,4 +1,5 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
 import { LuInfo, LuShieldAlert, LuX } from 'react-icons/lu';
 import FooterInfoCard from '../components/FooterInfoCard';
 import PageHeaderWithWhy from '../components/PageHeaderWithWhy';
@@ -20,8 +21,17 @@ import {
   RiskStatusFilter,
   RiskTypeFilter,
 } from '../lib/riskViewModel';
+import { syncQueryParam } from '../lib/queryState';
+
+function readQueryValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0] ?? '';
+  }
+  return value ?? '';
+}
 
 const RiskPage = () => {
+  const router = useRouter();
   const { currentUser } = useAuth();
   const canEdit = useCan('doc.edit');
   const canApprove = useCan('review.approve');
@@ -47,7 +57,6 @@ const RiskPage = () => {
   const [newProduct, setNewProduct] = useState('');
   const [newRationale, setNewRationale] = useState('');
   const [tableInfoOpen, setTableInfoOpen] = useState(false);
-  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
 
   const rows = useMemo(() => buildSeededRiskRows(documents), [documents]);
   const visibleRows = useMemo(
@@ -62,20 +71,62 @@ const RiskPage = () => {
     return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
   }, [rows]);
 
+  const effectiveSelectedRecordId = useMemo(() => {
+    const selectedRecordId = readQueryValue(router.query.record);
+    if (rows.length === 0) {
+      return null;
+    }
+    if (selectedRecordId && rows.some((item) => item.id === selectedRecordId)) {
+      return selectedRecordId;
+    }
+    return rows[0].id;
+  }, [router.query.record, rows]);
+
+  const commitSelectedRecordId = (nextRecordId: string | null) => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const currentRecordId = readQueryValue(router.query.record);
+    const desiredRecordId = nextRecordId ?? '';
+    if (currentRecordId === desiredRecordId) {
+      return;
+    }
+
+    const nextQuery: Record<string, string> = {};
+    Object.entries(router.query).forEach(([key, rawValue]) => {
+      if (key === 'record') {
+        return;
+      }
+      const normalized = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+      if (normalized) {
+        nextQuery[key] = normalized;
+      }
+    });
+
+    const defaultRecordId = rows[0]?.id ?? '';
+    if (desiredRecordId && desiredRecordId !== defaultRecordId) {
+      nextQuery.record = desiredRecordId;
+    }
+
+    void router.replace(
+      { pathname: router.pathname, query: nextQuery },
+      undefined,
+      { shallow: true, scroll: false },
+    );
+  };
+
   const selectedRecord = useMemo(
-    () => rows.find((item) => item.id === selectedRecordId) ?? null,
-    [rows, selectedRecordId],
+    () => rows.find((item) => item.id === effectiveSelectedRecordId) ?? null,
+    [effectiveSelectedRecordId, rows],
   );
 
   useEffect(() => {
-    if (rows.length === 0) {
-      if (selectedRecordId !== null) setSelectedRecordId(null);
-      return;
-    }
-    if (!selectedRecordId || !rows.some((item) => item.id === selectedRecordId)) {
-      setSelectedRecordId(rows[0].id);
-    }
-  }, [rows, selectedRecordId]);
+    const defaultRecordId = rows[0]?.id ?? '';
+    syncQueryParam(router, 'record', effectiveSelectedRecordId ?? '', {
+      omitWhen: (value) => value === defaultRecordId,
+    });
+  }, [effectiveSelectedRecordId, router, rows]);
 
   useEffect(() => {
     let mounted = true;
@@ -188,7 +239,7 @@ const RiskPage = () => {
 
     await appendAction(id, 'create', newRationale.trim());
 
-    setSelectedRecordId(id);
+    commitSelectedRecordId(id);
     setQuery('');
     setTypeFilter('All');
     setStatusFilter('All');
@@ -260,11 +311,11 @@ const RiskPage = () => {
 
           <RiskRecordsTable
             rows={visibleRows}
-            selectedRecordId={selectedRecordId}
+            selectedRecordId={effectiveSelectedRecordId}
             canEdit={canEdit}
             canApprove={canApprove}
             busyRecordId={busyRecordId}
-            onSelectRecord={setSelectedRecordId}
+            onSelectRecord={commitSelectedRecordId}
             onSubmitForReview={(recordId) => transitionStatus(recordId, 'In Review', 'submit_for_review', 'Submitted risk record for review gate')}
             onApprove={(recordId) => transitionStatus(recordId, 'Approved', 'approve', 'Approved risk controls and linked evidence set')}
             onRequestChanges={(recordId) => transitionStatus(recordId, 'rework after review', 'request_changes', 'Changes requested after HITL review')}

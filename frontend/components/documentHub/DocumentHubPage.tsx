@@ -37,25 +37,17 @@ const DocumentHubPage = ({ eyebrow = 'Home' }: DocumentHubPageProps) => {
   const canEditDocuments = useCan('doc.edit');
   const canRunBridge = useCan('bridge.run');
 
-  const [localFilter, setLocalFilter] = useState('');
   const [actionInfo, setActionInfo] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoadingPersistent, setIsLoadingPersistent] = useState(true);
-  const [selectedStatus, setSelectedStatus] = useState<DocumentStatusFilter>('All');
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const statusMenuRef = useRef<HTMLDivElement | null>(null);
 
   const { queryFilter, projectFilter, statusFilter } = useMemo(() => getDocumentHubFilters(router.query), [router.query]);
 
-  useEffect(() => {
-    setLocalFilter(queryFilter);
-  }, [queryFilter]);
-
-  useEffect(() => {
-    setSelectedStatus(statusFilter);
-  }, [statusFilter]);
+  const selectedStatus = statusFilter;
 
   useEffect(() => {
     if (!isStatusMenuOpen) {
@@ -90,12 +82,12 @@ const DocumentHubPage = ({ eyebrow = 'Home' }: DocumentHubPageProps) => {
       setIsLoadingPersistent(false);
     };
 
-    loadPersistentDocuments();
-  }, []);
+    void loadPersistentDocuments();
+  }, [addDocument, documents]);
 
   const filteredDocuments = useMemo(
-    () => filterDocuments(documents, localFilter, projectFilter, selectedStatus),
-    [documents, localFilter, projectFilter, selectedStatus],
+    () => filterDocuments(documents, queryFilter, projectFilter, selectedStatus),
+    [documents, projectFilter, queryFilter, selectedStatus],
   );
 
   const commitSearch = (searchValue: string, currentProjectFilter: string, currentStatusFilter: DocumentStatusFilter) => {
@@ -185,7 +177,7 @@ const DocumentHubPage = ({ eyebrow = 'Home' }: DocumentHubPageProps) => {
       addDocument(result.document);
       const degradeNote = result.degradedToDemo ? ' (demo fallback active)' : '';
       setActionInfo(`${result.message}${degradeNote}`);
-      commitSearch(localFilter, projectFilter, selectedStatus);
+      commitSearch(queryFilter, projectFilter, selectedStatus);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Upload failed. Please retry.');
     } finally {
@@ -195,9 +187,8 @@ const DocumentHubPage = ({ eyebrow = 'Home' }: DocumentHubPageProps) => {
   };
 
   const applyStatusFilter = (nextStatus: DocumentStatusFilter) => {
-    setSelectedStatus(nextStatus);
     setIsStatusMenuOpen(false);
-    commitSearch(localFilter, projectFilter, nextStatus);
+    commitSearch(queryFilter, projectFilter, nextStatus);
   };
 
   return (
@@ -241,11 +232,11 @@ const DocumentHubPage = ({ eyebrow = 'Home' }: DocumentHubPageProps) => {
             <input
               type="text"
               placeholder="Filter by title..."
-              value={localFilter}
-              onChange={(event) => setLocalFilter(event.target.value)}
+              value={queryFilter}
+              onChange={(event) => commitSearch(event.target.value, projectFilter, selectedStatus)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
-                  commitSearch(localFilter, projectFilter, selectedStatus);
+                  commitSearch(queryFilter, projectFilter, selectedStatus);
                 }
               }}
               className="bg-white border border-neutral-100 pl-10 pr-4 py-2 rounded-xl text-sm w-64 outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-200 transition"
@@ -292,7 +283,7 @@ const DocumentHubPage = ({ eyebrow = 'Home' }: DocumentHubPageProps) => {
       {(projectFilter || queryFilter || selectedStatus !== 'All') && (
         <div className="text-xs text-neutral-500">
           Showing results {projectFilter ? <span>for project <strong>{projectFilter}</strong></span> : <span>across all projects</span>}
-          {queryFilter ? <span> and search <strong>"{queryFilter}"</strong></span> : null}.
+          {queryFilter ? <span> and search <strong>&quot;{queryFilter}&quot;</strong></span> : null}.
           {selectedStatus !== 'All' ? <span> Status filter: <strong>{selectedStatus}</strong>.</span> : null}
         </div>
       )}
@@ -338,3 +329,4 @@ const DocumentHubPage = ({ eyebrow = 'Home' }: DocumentHubPageProps) => {
 };
 
 export default DocumentHubPage;
+

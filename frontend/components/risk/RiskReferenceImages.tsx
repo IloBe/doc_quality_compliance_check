@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 
 const RiskReferenceImages = () => {
   return (
@@ -9,17 +10,21 @@ const RiskReferenceImages = () => {
       </p>
 
       <article className="rounded-xl border border-neutral-200 overflow-hidden bg-neutral-50">
-        <img
+        <Image
           src="/images/risk/table1-riskmanagement-file.jpg"
           alt="Table 1 - Risk Management File structure"
+          width={1200}
+          height={800}
           className="w-full h-auto"
         />
       </article>
 
       <article className="rounded-xl border border-neutral-200 overflow-hidden bg-neutral-50">
-        <img
+        <Image
           src="/images/risk/table2-product-risks-documentation.jpg"
           alt="Table 2 - Documentation of specific product risk handling"
+          width={1200}
+          height={800}
           className="w-full h-auto"
         />
       </article>

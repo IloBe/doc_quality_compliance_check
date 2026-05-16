@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { LuArrowRight, LuLoader, LuRefreshCw } from 'react-icons/lu';
 import AuditorDecisionPanel from '../components/auditorWorkstation/AuditorDecisionPanel';
@@ -26,7 +26,27 @@ import {
   getSelectedCandidate,
   getSelectedDisplayScore,
 } from '../lib/auditorWorkstationViewModel';
+import { syncQueryParam } from '../lib/queryState';
 import { getSelectionButtonClass } from '../lib/selectionStyles';
+
+function readQueryValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0] ?? '';
+  }
+  return value ?? '';
+}
+
+function pickSelectedRunId(
+  candidates: Array<{ runId: string }>,
+  currentRunId: string | null,
+): string | null {
+  if (candidates.length === 0) {
+    return null;
+  }
+  return currentRunId && candidates.some((candidate) => candidate.runId === currentRunId)
+    ? currentRunId
+    : candidates[0].runId;
+}
 
 const AuditorWorkstationPage = () => {
   const router = useRouter();
@@ -40,7 +60,6 @@ const AuditorWorkstationPage = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [events, setEvents] = useState<AuditTrailEvent[]>([]);
   const [reviewsByRunId, setReviewsByRunId] = useState<Record<string, BridgeHumanReviewResponse>>({});
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [showScorePopover, setShowScorePopover] = useState(false);
   const scorePopoverRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState(createInitialDecisionDraft());
@@ -48,7 +67,7 @@ const AuditorWorkstationPage = () => {
   const useBackendData = process.env.NEXT_PUBLIC_AUDIT_TRAIL_SOURCE === 'backend';
   const mockEvents = useMemo<AuditTrailEvent[]>(() => createMockAuditorEvents(), []);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
@@ -59,11 +78,12 @@ const AuditorWorkstationPage = () => {
 
       setEvents(sourceEvents);
 
-      const candidates = buildCandidates(sourceEvents, {});
+      const baseCandidates = buildCandidates(sourceEvents, {});
+      let reviewMap: Record<string, BridgeHumanReviewResponse> = {};
 
       if (useBackendData) {
         const resolvedReviews = await Promise.all(
-          candidates.map(async (candidate) => {
+          baseCandidates.map(async (candidate) => {
             try {
               const review = await fetchBridgeHumanReview(candidate.runId);
               return [candidate.runId, review] as const;
@@ -80,31 +100,39 @@ const AuditorWorkstationPage = () => {
           accumulator[row[0]] = row[1];
           return accumulator;
         }, {});
-        setReviewsByRunId(indexed);
+        reviewMap = indexed;
       } else {
-        setReviewsByRunId({});
+        reviewMap = {};
       }
 
-      setSelectedRunId((current) => {
-        if (candidates.length === 0) {
-          return null;
-        }
-        return current && candidates.some((candidate) => candidate.runId === current) ? current : candidates[0].runId;
+      setReviewsByRunId(reviewMap);
+
+      const candidates = buildCandidates(sourceEvents, reviewMap);
+      if (!candidates.length) {
+        setShowScorePopover(false);
+        return;
+      }
+
+      const queryRunId = readQueryValue(router.query.runId);
+      const effectiveRunId = pickSelectedRunId(candidates, queryRunId || null);
+      const defaultRunId = candidates[0]?.runId ?? '';
+      syncQueryParam(router, 'runId', effectiveRunId ?? '', {
+        omitWhen: (value) => value === defaultRunId,
       });
+      setShowScorePopover(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load auditor workstation data');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [mockEvents, router, useBackendData, windowHours]);
 
   useEffect(() => {
-    void load();
-  }, [windowHours, useBackendData]);
-
-  useEffect(() => {
-    setShowScorePopover(false);
-  }, [selectedRunId]);
+    const timeoutId = setTimeout(() => {
+      void load();
+    }, 0);
+    return () => clearTimeout(timeoutId);
+  }, [load]);
 
   useEffect(() => {
     if (!showScorePopover) {
@@ -122,6 +150,18 @@ const AuditorWorkstationPage = () => {
   }, [showScorePopover]);
 
   const candidates = useMemo(() => buildCandidates(events, reviewsByRunId), [events, reviewsByRunId]);
+  const selectedRunId = useMemo(() => {
+    const queryRunId = readQueryValue(router.query.runId);
+    return pickSelectedRunId(candidates, queryRunId || null);
+  }, [candidates, router.query.runId]);
+
+  useEffect(() => {
+    const defaultRunId = candidates[0]?.runId ?? '';
+    syncQueryParam(router, 'runId', selectedRunId ?? '', {
+      omitWhen: (value) => value === defaultRunId,
+    });
+  }, [candidates, router, selectedRunId]);
+
   const pending = useMemo(() => candidates.filter((item) => !item.review), [candidates]);
   const reviewed = useMemo(() => candidates.filter((item) => item.review), [candidates]);
   const kpis = useMemo(() => buildAuditorQueueKpis(pending, reviewed), [pending, reviewed]);
@@ -129,8 +169,43 @@ const AuditorWorkstationPage = () => {
   const openFollowUps = useMemo(() => buildOpenFollowUps(reviewed), [reviewed]);
   const selectedDisplayScore = useMemo(() => getSelectedDisplayScore(selected), [selected]);
 
+  const commitSelectedRunId = useCallback((nextRunId: string | null) => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const currentRunId = readQueryValue(router.query.runId);
+    const desiredRunId = nextRunId ?? '';
+    if (currentRunId === desiredRunId) {
+      return;
+    }
+
+    const nextQuery: Record<string, string> = {};
+    Object.entries(router.query).forEach(([key, rawValue]) => {
+      if (key === 'runId') {
+        return;
+      }
+      const normalized = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+      if (normalized) {
+        nextQuery[key] = normalized;
+      }
+    });
+
+    const defaultRunId = candidates[0]?.runId ?? '';
+    if (desiredRunId && desiredRunId !== defaultRunId) {
+      nextQuery.runId = desiredRunId;
+    }
+
+    void router.replace(
+      { pathname: router.pathname, query: nextQuery },
+      undefined,
+      { shallow: true, scroll: false },
+    );
+  }, [candidates, router]);
+
   const handleSelectRun = (runId: string, recommendation: 'approved' | 'rejected') => {
-    setSelectedRunId(runId);
+    commitSelectedRunId(runId);
+    setShowScorePopover(false);
     setDraft((current) => ({ ...current, decision: recommendation }));
   };
 
@@ -180,6 +255,10 @@ const AuditorWorkstationPage = () => {
           });
 
       setReviewsByRunId((current) => ({ ...current, [selected.runId]: saved }));
+      const nextPending = pending.find((item) => item.runId !== selected.runId);
+      if (nextPending) {
+        commitSelectedRunId(nextPending.runId);
+      }
       setDraft(createInitialDecisionDraft());
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Failed to submit decision');

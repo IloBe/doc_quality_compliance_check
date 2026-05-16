@@ -1,3 +1,4 @@
+import Link from 'next/link';
 
 import React from 'react';
 import { useMockStore } from '../lib/mockStore';
@@ -25,7 +26,7 @@ import {
 import { useRouter } from 'next/router';
 
 const NavItem = ({ href, icon: Icon, label, active }) => (
-  <a
+  <Link
     href={href}
     className={`flex items-center gap-3 px-4 py-1 text-sm rounded transition-colors ${
       active 
@@ -35,11 +36,11 @@ const NavItem = ({ href, icon: Icon, label, active }) => (
   >
     <Icon className={`w-5 h-5 ${active ? 'text-blue-700' : 'text-neutral-500'}`} />
     <span>{label}</span>
-  </a>
+  </Link>
 );
 
 const SubNavItem = ({ href, icon: Icon, label, active }) => (
-  <a
+  <Link
     href={href}
     className={`ml-9 mt-1 flex items-center gap-2 px-3 py-1.5 text-xs rounded transition-colors ${
       active
@@ -49,7 +50,7 @@ const SubNavItem = ({ href, icon: Icon, label, active }) => (
   >
     <Icon className={`w-3.5 h-3.5 ${active ? 'text-blue-700' : 'text-neutral-400'}`} />
     <span>{label}</span>
-  </a>
+  </Link>
 );
 
 const SectionLabel = ({ label }) => (
@@ -67,10 +68,10 @@ const Sidebar = ({ className }) => {
   return (
     <aside className={`${className} flex flex-col pt-6 pb-4 overflow-y-auto`}>
       <div className="px-6 mb-8">
-        <a href="/" className="flex items-center gap-2 text-blue-700 font-bold text-xl uppercase tracking-tighter hover:text-blue-800 transition-colors">
+        <Link href="/" className="flex items-center gap-2 text-blue-700 font-bold text-xl uppercase tracking-tighter hover:text-blue-800 transition-colors">
           <LuLibrary className="w-8 h-8" />
           <span>DocQuality</span>
-        </a>
+        </Link>
         <div className="mt-1 text-[10px] text-neutral-400 uppercase tracking-widest">
           Compliance & QA Lab
         </div>
@@ -152,3 +153,4 @@ const Sidebar = ({ className }) => {
 };
 
 export default Sidebar;
+

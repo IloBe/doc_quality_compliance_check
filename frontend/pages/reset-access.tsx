@@ -1,13 +1,22 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { resetPasswordWithToken, verifyRecoveryToken } from '../lib/authClient';
 
+function readQueryValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0] ?? '';
+  }
+  return value ?? '';
+}
+
 const ResetAccessPage = () => {
   const router = useRouter();
+  const verifySequenceRef = useRef(0);
+  const resetSequenceRef = useRef(0);
+
   const token = useMemo(() => {
-    const value = router.query.token;
-    return typeof value === 'string' ? value : '';
+    return readQueryValue(router.query.token);
   }, [router.query.token]);
 
   const [newPassword, setNewPassword] = useState('');
@@ -19,40 +28,60 @@ const ResetAccessPage = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let mounted = true;
+    const verifyRequestId = verifySequenceRef.current + 1;
+    verifySequenceRef.current = verifyRequestId;
+
+    const tokenSnapshot = token;
 
     const verify = async () => {
-      if (!token) {
-        if (mounted) {
-          setIsValidToken(false);
+      if (!tokenSnapshot) {
+        if (verifySequenceRef.current === verifyRequestId) {
           setIsChecking(false);
         }
         return;
       }
 
       try {
-        const result = await verifyRecoveryToken(token);
-        if (mounted) {
+        const result = await verifyRecoveryToken(tokenSnapshot);
+        if (verifySequenceRef.current === verifyRequestId && token === tokenSnapshot) {
           setIsValidToken(result.valid);
           setIsChecking(false);
         }
       } catch {
-        if (mounted) {
+        if (verifySequenceRef.current === verifyRequestId && token === tokenSnapshot) {
           setIsValidToken(false);
           setIsChecking(false);
         }
       }
     };
 
-    verify();
+    const timeoutId = setTimeout(() => {
+      setIsChecking(true);
+      setIsValidToken(false);
+      setError(null);
+      setMessage(null);
+      setNewPassword('');
+      setConfirmPassword('');
+      void verify();
+    }, 0);
 
     return () => {
-      mounted = false;
+      clearTimeout(timeoutId);
+      verifySequenceRef.current += 1;
     };
   }, [token]);
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isChecking || !isValidToken || !token) {
+      setError('Recovery token is invalid or expired.');
+      return;
+    }
+
+    const resetRequestId = resetSequenceRef.current + 1;
+    resetSequenceRef.current = resetRequestId;
+    const tokenSnapshot = token;
+
     setError(null);
     setMessage(null);
 
@@ -68,12 +97,20 @@ const ResetAccessPage = () => {
 
     setIsSubmitting(true);
     try {
-      const result = await resetPasswordWithToken(token, newPassword);
+      const result = await resetPasswordWithToken(tokenSnapshot, newPassword);
+      if (resetSequenceRef.current !== resetRequestId || tokenSnapshot !== token) {
+        return;
+      }
       setMessage(result.message);
     } catch (err) {
+      if (resetSequenceRef.current !== resetRequestId || tokenSnapshot !== token) {
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Password reset failed');
     } finally {
-      setIsSubmitting(false);
+      if (resetSequenceRef.current === resetRequestId) {
+        setIsSubmitting(false);
+      }
     }
   };
 
