@@ -43,7 +43,16 @@ const Topbar = ({ className, onOpsClick, onExitClick, onFocusModeChange, current
     return ['All Projects', ...Array.from(set.values())];
   }, [documents, bridgeRuns]);
 
-  const [activeProject, setActiveProject] = useState('All Projects');
+  const [activeProject, setActiveProject] = useState(() => {
+    if (typeof window === 'undefined') {
+      return 'All Projects';
+    }
+    return window.localStorage.getItem(ACTIVE_PROJECT_KEY) || 'All Projects';
+  });
+
+  const scopedActiveProject = useMemo(() => {
+    return projectOptions.includes(activeProject) ? activeProject : 'All Projects';
+  }, [activeProject, projectOptions]);
 
   const helpContent = useMemo(() => {
     const path = router.pathname;
@@ -384,13 +393,13 @@ const Topbar = ({ className, onOpsClick, onExitClick, onFocusModeChange, current
     }
 
     return documents
-      .filter((doc) => activeProject === 'All Projects' || doc.product === activeProject)
+      .filter((doc) => scopedActiveProject === 'All Projects' || doc.product === scopedActiveProject)
       .filter((doc) => {
         const haystack = `${doc.id} ${doc.title} ${doc.type} ${doc.product}`.toLowerCase();
         return haystack.includes(normalized);
       })
       .slice(0, 6);
-  }, [activeProject, documents, query]);
+  }, [documents, query, scopedActiveProject]);
 
   const alerts = useMemo(() => {
     const runningExports = exports.filter((x) => x.status === 'Running').length;
@@ -412,13 +421,6 @@ const Topbar = ({ className, onOpsClick, onExitClick, onFocusModeChange, current
       },
     ];
   }, [bridgeRuns, exports]);
-
-  useEffect(() => {
-    const fromStorage = typeof window !== 'undefined' ? window.localStorage.getItem(ACTIVE_PROJECT_KEY) : null;
-    if (fromStorage && projectOptions.includes(fromStorage)) {
-      setActiveProject(fromStorage);
-    }
-  }, [projectOptions]);
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -461,8 +463,8 @@ const Topbar = ({ className, onOpsClick, onExitClick, onFocusModeChange, current
     }
 
     const nextQuery: Record<string, string> = { q: trimmed };
-    if (activeProject !== 'All Projects') {
-      nextQuery.project = activeProject;
+    if (scopedActiveProject !== 'All Projects') {
+      nextQuery.project = scopedActiveProject;
     }
     router.push({ pathname: '/', query: nextQuery });
     setIsSearchOpen(false);
@@ -501,7 +503,7 @@ const Topbar = ({ className, onOpsClick, onExitClick, onFocusModeChange, current
             className="flex items-center gap-2 cursor-pointer group"
           >
             <span className="font-semibold text-neutral-700 bg-neutral-100 px-2 py-0.5 rounded text-sm group-hover:bg-neutral-200 transition">
-              {activeProject}
+              {scopedActiveProject}
             </span>
             <LuChevronDown className="w-4 h-4 text-neutral-400 group-hover:text-neutral-600" />
           </button>
@@ -509,7 +511,7 @@ const Topbar = ({ className, onOpsClick, onExitClick, onFocusModeChange, current
           {isProjectOpen && (
             <div className="absolute top-14 left-8 mt-2 w-56 bg-white border border-neutral-200 rounded-xl shadow-xl p-2 z-50">
               {projectOptions.map((option) => {
-                const selected = option === activeProject;
+                const selected = option === scopedActiveProject;
                 return (
                   <button
                     key={option}

@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { GetStaticProps } from 'next';
+import { useRouter } from 'next/router';
 import { marked } from 'marked';
 import { LuList } from 'react-icons/lu';
 import { getHeaderInfoChipClass } from '../components/buttonStyles';
@@ -9,7 +10,15 @@ import FooterInfoCard from '../components/FooterInfoCard';
 import PageHeaderWithWhy from '../components/PageHeaderWithWhy';
 import SopContentPanel from '../components/sops/SopContentPanel';
 import SopListPanel from '../components/sops/SopListPanel';
+import { syncQueryParam } from '../lib/queryState';
 import { parseSopDocumentId, parseSopTitle, resolveActiveSop, SopItem } from '../lib/sopsViewModel';
+
+function readQueryValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0] ?? '';
+  }
+  return value ?? '';
+}
 
 type SopPageProps = {
   sops: SopItem[];
@@ -44,9 +53,57 @@ export const getStaticProps: GetStaticProps<SopPageProps> = async () => {
 };
 
 const SopsPage = ({ sops }: SopPageProps) => {
-  const [activeSopId, setActiveSopId] = useState<string>(sops[0]?.id || '');
+  const router = useRouter();
+
+  const activeSopId = useMemo(() => {
+    const querySop = readQueryValue(router.query.sop);
+    if (querySop && sops.some((item) => item.id === querySop)) {
+      return querySop;
+    }
+    return sops[0]?.id || '';
+  }, [router.query.sop, sops]);
+
+  const commitActiveSopId = useCallback((nextSopId: string) => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const currentSopId = readQueryValue(router.query.sop);
+    if (currentSopId === nextSopId) {
+      return;
+    }
+
+    const nextQuery: Record<string, string> = {};
+    Object.entries(router.query).forEach(([key, rawValue]) => {
+      if (key === 'sop') {
+        return;
+      }
+      const normalized = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+      if (normalized) {
+        nextQuery[key] = normalized;
+      }
+    });
+
+    const defaultSopId = sops[0]?.id || '';
+    if (nextSopId && nextSopId !== defaultSopId) {
+      nextQuery.sop = nextSopId;
+    }
+
+    void router.replace(
+      { pathname: router.pathname, query: nextQuery },
+      undefined,
+      { shallow: true, scroll: false },
+    );
+  }, [router, sops]);
 
   const activeSop = useMemo(() => resolveActiveSop(sops, activeSopId), [activeSopId, sops]);
+
+  useEffect(() => {
+    const defaultSopId = sops[0]?.id || '';
+    syncQueryParam(router, 'sop', activeSop?.id ?? '', {
+      omitWhen: (value) => value === defaultSopId,
+    });
+  }, [activeSop?.id, router, sops]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500">
@@ -64,7 +121,7 @@ const SopsPage = ({ sops }: SopPageProps) => {
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <SopListPanel sops={sops} activeSopId={activeSop?.id || ''} onSelect={setActiveSopId} />
+        <SopListPanel sops={sops} activeSopId={activeSop?.id || ''} onSelect={commitActiveSopId} />
         <SopContentPanel sop={activeSop} />
       </div>
 

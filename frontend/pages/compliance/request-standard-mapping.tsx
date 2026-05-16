@@ -28,12 +28,6 @@ const RequestStandardMappingPage = () => {
   const [isLoadingRecords, setIsLoadingRecords] = useState(true);
 
   useEffect(() => {
-    if (currentUser?.email) {
-      setRequesterEmail(currentUser.email);
-    }
-  }, [currentUser?.email]);
-
-  useEffect(() => {
     let active = true;
     const run = async () => {
       setIsLoadingRecords(true);

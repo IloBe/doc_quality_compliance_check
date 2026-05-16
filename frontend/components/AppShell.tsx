@@ -1,5 +1,6 @@
 
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
 import { useMockStore } from '../lib/mockStore';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
@@ -7,13 +8,90 @@ import OperationsDrawer from './OperationsDrawer';
 import BlockingModal from './BlockingModal';
 import { logoutSession } from '../lib/authClient';
 
+function readQueryValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0] ?? '';
+  }
+  return value ?? '';
+}
+
+function resolveModalType(value: string): 'exit' | null {
+  return value === 'exit' ? 'exit' : null;
+}
+
 const AppShell = ({ children, currentUser }) => {
-  const [isOpsOpen, setIsOpsOpen] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState('exit');
+  const router = useRouter();
   const [isFocusMode, setIsFocusMode] = useState(false);
   
   const isOperationsRunning = useMockStore(state => state.isOperationsRunning);
+
+  const isOpsOpen = useMemo(
+    () => readQueryValue(router.query.ops) === '1',
+    [router.query.ops],
+  );
+
+  const modalType = useMemo(
+    () => resolveModalType(readQueryValue(router.query.modal)),
+    [router.query.modal],
+  );
+
+  const selectedOperationId = useMemo(
+    () => readQueryValue(router.query.op) || null,
+    [router.query.op],
+  );
+
+  const commitShellUiState = useCallback((next: {
+    opsOpen?: boolean;
+    modalType?: 'exit' | null;
+    selectedOperationId?: string | null;
+  }) => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const currentOpsOpen = readQueryValue(router.query.ops) === '1';
+    const currentModalType = resolveModalType(readQueryValue(router.query.modal));
+    const currentOperationId = readQueryValue(router.query.op) || null;
+
+    const desiredOpsOpen = next.opsOpen ?? currentOpsOpen;
+    const desiredModalType = next.modalType !== undefined ? next.modalType : currentModalType;
+    const desiredOperationId = next.selectedOperationId !== undefined ? next.selectedOperationId : currentOperationId;
+
+    if (
+      currentOpsOpen === desiredOpsOpen
+      && currentModalType === desiredModalType
+      && currentOperationId === desiredOperationId
+    ) {
+      return;
+    }
+
+    const nextQuery: Record<string, string> = {};
+    Object.entries(router.query).forEach(([key, rawValue]) => {
+      if (key === 'ops' || key === 'modal' || key === 'op') {
+        return;
+      }
+      const normalized = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+      if (normalized) {
+        nextQuery[key] = normalized;
+      }
+    });
+
+    if (desiredOpsOpen) {
+      nextQuery.ops = '1';
+    }
+    if (desiredModalType) {
+      nextQuery.modal = desiredModalType;
+    }
+    if (desiredOpsOpen && desiredOperationId) {
+      nextQuery.op = desiredOperationId;
+    }
+
+    void router.replace(
+      { pathname: router.pathname, query: nextQuery },
+      undefined,
+      { shallow: true, scroll: false },
+    );
+  }, [router]);
 
   const performLogout = async () => {
     try {
@@ -25,8 +103,7 @@ const AppShell = ({ children, currentUser }) => {
 
   const handleExitClick = () => {
     if (isOperationsRunning) {
-      setModalType('exit');
-      setIsModalOpen(true);
+      commitShellUiState({ modalType: 'exit' });
     } else {
       performLogout();
     }
@@ -45,7 +122,7 @@ const AppShell = ({ children, currentUser }) => {
         {/* Topbar - Persistent navigation and profile */}
         <Topbar 
           className="h-16 px-8 border-b border-neutral-200 bg-white" 
-          onOpsClick={() => setIsOpsOpen(!isOpsOpen)}
+          onOpsClick={() => commitShellUiState({ opsOpen: !isOpsOpen })}
           onExitClick={handleExitClick}
           onFocusModeChange={setIsFocusMode}
           currentUser={currentUser}
@@ -64,16 +141,18 @@ const AppShell = ({ children, currentUser }) => {
       {/* Operations Sidebar Drawer */}
       <OperationsDrawer 
         isOpen={isOpsOpen} 
-        onClose={() => setIsOpsOpen(false)} 
+        selectedOperationId={selectedOperationId}
+        onSelectOperation={(operationId) => commitShellUiState({ opsOpen: true, selectedOperationId: operationId })}
+        onClose={() => commitShellUiState({ opsOpen: false, selectedOperationId: null })} 
       />
 
       {/* Mandatory Blocking Modal */}
       <BlockingModal 
-        isOpen={isModalOpen}
+        isOpen={Boolean(modalType)}
         type={modalType}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => commitShellUiState({ modalType: null })}
         onConfirm={() => {
-          setIsModalOpen(false);
+          commitShellUiState({ modalType: null });
           performLogout();
         }}
       />

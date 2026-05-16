@@ -1,31 +1,95 @@
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { requestPasswordRecovery } from '../lib/authClient';
 
+const DEFAULT_RECOVERY_EMAIL = 'demo@quality-station.ai';
+
+function readQueryValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0] ?? '';
+  }
+  return value ?? '';
+}
+
 const ForgotAccessPage = () => {
-  const [email, setEmail] = useState('demo@quality-station.ai');
+  const router = useRouter();
+  const requestSequenceRef = useRef(0);
+
+  const email = useMemo(() => {
+    const queryEmail = readQueryValue(router.query.email).trim();
+    return queryEmail || DEFAULT_RECOVERY_EMAIL;
+  }, [router.query.email]);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [debugLink, setDebugLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const commitEmail = useCallback((nextEmail: string) => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const nextValue = nextEmail.trim();
+    const currentValue = readQueryValue(router.query.email).trim();
+    const normalizedCurrent = currentValue || DEFAULT_RECOVERY_EMAIL;
+    const normalizedNext = nextValue || DEFAULT_RECOVERY_EMAIL;
+    if (normalizedCurrent === normalizedNext) {
+      return;
+    }
+
+    const nextQuery: Record<string, string> = {};
+    Object.entries(router.query).forEach(([key, rawValue]) => {
+      if (key === 'email') {
+        return;
+      }
+      const normalized = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+      if (normalized) {
+        nextQuery[key] = normalized;
+      }
+    });
+
+    if (normalizedNext !== DEFAULT_RECOVERY_EMAIL) {
+      nextQuery.email = normalizedNext;
+    }
+
+    void router.replace(
+      { pathname: router.pathname, query: nextQuery },
+      undefined,
+      { shallow: true, scroll: false },
+    );
+  }, [router]);
+
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const requestId = requestSequenceRef.current + 1;
+    requestSequenceRef.current = requestId;
+    const submittedEmail = email.trim();
+
     setIsSubmitting(true);
     setError(null);
     setMessage(null);
     setDebugLink(null);
 
     try {
-      const response = await requestPasswordRecovery(email);
+      const response = await requestPasswordRecovery(submittedEmail);
+      if (requestSequenceRef.current !== requestId) {
+        return;
+      }
       setMessage(response.message);
       if (response.reset_url) {
         setDebugLink(response.reset_url);
       }
     } catch (err) {
+      if (requestSequenceRef.current !== requestId) {
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Recovery request failed');
     } finally {
-      setIsSubmitting(false);
+      if (requestSequenceRef.current === requestId) {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -47,7 +111,7 @@ const ForgotAccessPage = () => {
               type="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => commitEmail(e.target.value)}
               className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm font-semibold outline-none focus:bg-white focus:border-blue-400"
             />
           </div>

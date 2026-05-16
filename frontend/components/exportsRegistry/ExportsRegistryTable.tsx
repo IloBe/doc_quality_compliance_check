@@ -12,10 +12,11 @@ import {
 
 type ExportsRegistryTableProps = {
   exports: ExportJob[];
+  selectedExportId?: string | null;
   onDownload: (exportJob: ExportJob) => void;
 };
 
-const ExportsRegistryTable = ({ exports, onDownload }: ExportsRegistryTableProps) => {
+const ExportsRegistryTable = ({ exports, selectedExportId, onDownload }: ExportsRegistryTableProps) => {
   return (
     <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
@@ -36,7 +37,12 @@ const ExportsRegistryTable = ({ exports, onDownload }: ExportsRegistryTableProps
           <tbody>
             {exports.length > 0 ? (
               exports.map((item) => (
-                <tr key={item.id} className="border-b border-neutral-50 hover:bg-neutral-50 transition">
+                <tr
+                  key={item.id}
+                  className={`border-b border-neutral-50 transition ${
+                    selectedExportId === item.id ? 'bg-blue-50/60' : 'hover:bg-neutral-50'
+                  }`}
+                >
                   <td className="py-4 px-5">
                     <div className="flex items-center gap-2">
                       <div className={getExportStatusDotClass(item.status)} />

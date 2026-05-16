@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from src.doc_quality.api.main import app
 from src.doc_quality.core.database import Base, SessionLocal, get_db
+from src.doc_quality.core.rate_limit import api_global_limiter, auth_login_throttle
 from src.doc_quality.models.orm import ReviewRecordORM
 from src.doc_quality.tools.route_coverage_audit import RouteAudit
 
@@ -16,9 +17,22 @@ os.environ.setdefault("SECRET_KEY", "test-api-key")
 # The sentinel fallbacks below are intentionally invalid to prevent accidental login with defaults.  # noqa: S105
 os.environ.setdefault("AUTH_MVP_EMAIL", "mvp-user@example.invalid")  # nosec B105
 os.environ.setdefault("AUTH_MVP_PASSWORD", "CHANGE_ME_BEFORE_USE")  # nosec B105
+# Keep global API limiter off for deterministic pytest runs.
+# Dedicated rate-limit tests enable it explicitly via monkeypatch.
+os.environ.setdefault("GLOBAL_RATE_LIMIT_ENABLED", "false")
 
 # Use in-memory SQLite for testing
 TEST_SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limit_state() -> None:
+    """Isolate in-memory limiter state between tests to avoid bleed-over."""
+    api_global_limiter.clear()
+    auth_login_throttle.clear_all()
+    yield
+    api_global_limiter.clear()
+    auth_login_throttle.clear_all()
 
 
 def pytest_configure(config):
@@ -49,8 +63,12 @@ def test_db_engine():
         connect_args={"check_same_thread": False},
     )
     Base.metadata.create_all(bind=engine)
-    yield engine
-    Base.metadata.drop_all(bind=engine)
+    try:
+        yield engine
+    finally:
+        Base.metadata.drop_all(bind=engine)
+        # Ensure pooled sqlite connections are closed before gc runs.
+        engine.dispose()
 
 
 @pytest.fixture(scope="function")

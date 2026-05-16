@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { LuArchive, LuInfo, LuLoader, LuRefreshCw, LuShieldCheck } from 'react-icons/lu';
 import AlertArchiveList from '../components/compliance/AlertArchiveList';
@@ -28,12 +28,23 @@ function _isValidSeverity(value: string): value is ComplianceAlertSeverity {
   return SEVERITY_FILTERS.includes(value as ComplianceAlertSeverity);
 }
 
+function _getFilterStateFromQuery(query: Record<string, string | string[] | undefined>) {
+  const frameworkFromQuery = _readQueryValue(query.framework);
+  const severityFromQuery = _readQueryValue(query.severity);
+  return {
+    framework: _isValidFramework(frameworkFromQuery) ? frameworkFromQuery : 'All',
+    severity: _isValidSeverity(severityFromQuery) ? severityFromQuery : 'All',
+    startDate: _readQueryValue(query.startDate),
+    endDate: _readQueryValue(query.endDate),
+  };
+}
+
 const AlertArchivePage = () => {
   const router = useRouter();
-  const [selectedFramework, setSelectedFramework] = useState<(typeof FRAMEWORK_FILTERS)[number]>('All');
-  const [selectedSeverity, setSelectedSeverity] = useState<ComplianceAlertSeverity>('All');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const { framework: selectedFramework, severity: selectedSeverity, startDate, endDate } = useMemo(
+    () => _getFilterStateFromQuery(router.query),
+    [router.query],
+  );
   const [alerts, setAlerts] = useState(complianceAlertArchive);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,36 +61,17 @@ const AlertArchivePage = () => {
     };
   }, [endDate, selectedFramework, selectedSeverity, startDate]);
 
-  useEffect(() => {
+  const commitFilters = useCallback((patch: Partial<ComplianceAlertFilters>) => {
     if (!router.isReady) {
       return;
     }
 
-    const frameworkFromQuery = _readQueryValue(router.query.framework);
-    const severityFromQuery = _readQueryValue(router.query.severity);
-    const startDateFromQuery = _readQueryValue(router.query.startDate);
-    const endDateFromQuery = _readQueryValue(router.query.endDate);
-
-    if (frameworkFromQuery && _isValidFramework(frameworkFromQuery)) {
-      setSelectedFramework(frameworkFromQuery);
-    }
-    if (severityFromQuery && _isValidSeverity(severityFromQuery)) {
-      setSelectedSeverity(severityFromQuery);
-    }
-    if (startDateFromQuery) {
-      setStartDate(startDateFromQuery);
-    }
-    if (endDateFromQuery) {
-      setEndDate(endDateFromQuery);
-    }
-    // Initialize from URL only once; subsequent URL updates are driven by state changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router.isReady]);
-
-  useEffect(() => {
-    if (!router.isReady) {
-      return;
-    }
+    const nextFilters: ComplianceAlertFilters = {
+      framework: patch.framework ?? selectedFramework,
+      severity: patch.severity ?? selectedSeverity,
+      startDate: patch.startDate ?? startDate,
+      endDate: patch.endDate ?? endDate,
+    };
 
     const nextQuery: Record<string, string> = {};
     Object.entries(router.query).forEach(([key, rawValue]) => {
@@ -92,17 +84,17 @@ const AlertArchivePage = () => {
       }
     });
 
-    if (activeFilters.framework !== 'All') {
-      nextQuery.framework = activeFilters.framework;
+    if (nextFilters.framework !== 'All') {
+      nextQuery.framework = nextFilters.framework;
     }
-    if (activeFilters.severity !== 'All') {
-      nextQuery.severity = activeFilters.severity;
+    if (nextFilters.severity !== 'All') {
+      nextQuery.severity = nextFilters.severity;
     }
-    if (activeFilters.startDate) {
-      nextQuery.startDate = activeFilters.startDate;
+    if (nextFilters.startDate) {
+      nextQuery.startDate = nextFilters.startDate;
     }
-    if (activeFilters.endDate) {
-      nextQuery.endDate = activeFilters.endDate;
+    if (nextFilters.endDate) {
+      nextQuery.endDate = nextFilters.endDate;
     }
 
     const currentFramework = _readQueryValue(router.query.framework);
@@ -132,9 +124,9 @@ const AlertArchivePage = () => {
       undefined,
       { shallow: true, scroll: false },
     );
-  }, [activeFilters, router]);
+  }, [endDate, router, selectedFramework, selectedSeverity, startDate]);
 
-  const loadAlerts = async (filters: ComplianceAlertFilters) => {
+  const loadAlerts = useCallback(async (filters: ComplianceAlertFilters) => {
     if (!useBackendData) {
       return;
     }
@@ -155,11 +147,14 @@ const AlertArchivePage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [useBackendData]);
 
   useEffect(() => {
-    loadAlerts(activeFilters);
-  }, [activeFilters]);
+    const timeoutId = setTimeout(() => {
+      void loadAlerts(activeFilters);
+    }, 0);
+    return () => clearTimeout(timeoutId);
+  }, [activeFilters, loadAlerts]);
 
   const visibleAlerts = useMemo(() => {
     if (useBackendData) {
@@ -174,10 +169,12 @@ const AlertArchivePage = () => {
   }, [visibleAlerts]);
 
   const clearAllFilters = () => {
-    setSelectedFramework('All');
-    setSelectedSeverity('All');
-    setStartDate('');
-    setEndDate('');
+    commitFilters({
+      framework: 'All',
+      severity: 'All',
+      startDate: '',
+      endDate: '',
+    });
   };
 
   return (
@@ -250,7 +247,7 @@ const AlertArchivePage = () => {
               <input
                 type="date"
                 value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
+                onChange={(event) => commitFilters({ startDate: event.target.value })}
                 className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 outline-none transition focus:border-blue-400"
               />
             </label>
@@ -259,7 +256,7 @@ const AlertArchivePage = () => {
               <input
                 type="date"
                 value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
+                onChange={(event) => commitFilters({ endDate: event.target.value })}
                 className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 outline-none transition focus:border-blue-400"
               />
             </label>
@@ -269,7 +266,7 @@ const AlertArchivePage = () => {
               <button
                 key={framework}
                 type="button"
-                onClick={() => setSelectedFramework(framework)}
+                onClick={() => commitFilters({ framework })}
                 className={[
                   'rounded-full px-4 py-2 text-xs font-black uppercase tracking-wide transition',
                   getSelectionButtonClass({
@@ -288,7 +285,7 @@ const AlertArchivePage = () => {
               <button
                 key={severity}
                 type="button"
-                onClick={() => setSelectedSeverity(severity)}
+                onClick={() => commitFilters({ severity })}
                 className={[
                   'rounded-full px-4 py-2 text-xs font-black uppercase tracking-wide transition',
                   getSelectionButtonClass({

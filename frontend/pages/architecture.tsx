@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { GetStaticProps } from 'next';
+import { useRouter } from 'next/router';
 import { marked } from 'marked';
 import { LuList } from 'react-icons/lu';
 import Arc42TemplateContentPanel from '../components/architecture/Arc42TemplateContentPanel';
@@ -15,6 +16,14 @@ import {
   parseArc42Title,
   resolveActiveArc42Template,
 } from '../lib/architectureViewModel';
+import { syncQueryParam } from '../lib/queryState';
+
+function readQueryValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0] ?? '';
+  }
+  return value ?? '';
+}
 
 type ArchitecturePageProps = {
   templates: Arc42Item[];
@@ -31,13 +40,15 @@ export const getStaticProps: GetStaticProps<ArchitecturePageProps> = async () =>
     const fullPath = path.join(templateDir, fileName);
     const markdown = fs.readFileSync(fullPath, 'utf8');
     const fallbackTitle = fileName.replace(/\.md$/i, '').replace(/_/g, ' ');
+    const version = parseArc42Field(markdown, 'Version');
+    const status = parseArc42Field(markdown, 'Status');
 
     return {
       id: fileName,
       fileName,
       title: parseArc42Title(markdown, fallbackTitle),
-      version: parseArc42Field(markdown, 'Version'),
-      status: parseArc42Field(markdown, 'Status'),
+      ...(version ? { version } : {}),
+      ...(status ? { status } : {}),
       html: marked.parse(markdown) as string,
     };
   });
@@ -50,12 +61,60 @@ export const getStaticProps: GetStaticProps<ArchitecturePageProps> = async () =>
 };
 
 const ArchitecturePage = ({ templates }: ArchitecturePageProps) => {
-  const [activeTemplateId, setActiveTemplateId] = useState<string>(templates[0]?.id || '');
+  const router = useRouter();
+
+  const activeTemplateId = useMemo(() => {
+    const queryTemplate = readQueryValue(router.query.template);
+    if (queryTemplate && templates.some((item) => item.id === queryTemplate)) {
+      return queryTemplate;
+    }
+    return templates[0]?.id || '';
+  }, [router.query.template, templates]);
+
+  const commitActiveTemplateId = useCallback((nextTemplateId: string) => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const currentTemplateId = readQueryValue(router.query.template);
+    if (currentTemplateId === nextTemplateId) {
+      return;
+    }
+
+    const nextQuery: Record<string, string> = {};
+    Object.entries(router.query).forEach(([key, rawValue]) => {
+      if (key === 'template') {
+        return;
+      }
+      const normalized = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+      if (normalized) {
+        nextQuery[key] = normalized;
+      }
+    });
+
+    const defaultTemplateId = templates[0]?.id || '';
+    if (nextTemplateId && nextTemplateId !== defaultTemplateId) {
+      nextQuery.template = nextTemplateId;
+    }
+
+    void router.replace(
+      { pathname: router.pathname, query: nextQuery },
+      undefined,
+      { shallow: true, scroll: false },
+    );
+  }, [router, templates]);
 
   const activeTemplate = useMemo(
     () => resolveActiveArc42Template(templates, activeTemplateId),
     [activeTemplateId, templates],
   );
+
+  useEffect(() => {
+    const defaultTemplateId = templates[0]?.id || '';
+    syncQueryParam(router, 'template', activeTemplate?.id ?? '', {
+      omitWhen: (value) => value === defaultTemplateId,
+    });
+  }, [activeTemplate?.id, router, templates]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500">
@@ -78,7 +137,7 @@ const ArchitecturePage = ({ templates }: ArchitecturePageProps) => {
         <Arc42TemplateListPanel
           templates={templates}
           activeTemplateId={activeTemplate?.id || ''}
-          onSelect={setActiveTemplateId}
+          onSelect={commitActiveTemplateId}
         />
         <Arc42TemplateContentPanel template={activeTemplate} />
       </div>

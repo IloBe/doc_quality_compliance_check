@@ -10,6 +10,15 @@ const AUTH_BOOTSTRAP_MAX_ATTEMPTS = 4;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const isSafeInternalPath = (value: string) => value.startsWith('/') && !value.startsWith('//') && !value.includes('://');
+
+const getReturnToPath = (path: string) => {
+  if (isSafeInternalPath(path)) {
+    return path;
+  }
+  return '/';
+};
+
 function MyApp({ Component, pageProps }) {
   const router = useRouter();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -45,7 +54,9 @@ function MyApp({ Component, pageProps }) {
           if (isMounted) {
             setCurrentUser(null);
             setIsCheckingAuth(false);
-            router.replace('/login');
+            const returnTo = getReturnToPath(router.asPath || '/');
+            const query = returnTo === '/' ? {} : { returnTo };
+            void router.replace({ pathname: '/login', query }, undefined, { shallow: true });
           }
         }
       }

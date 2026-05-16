@@ -11,7 +11,9 @@
  *   - Export as CSV (client-side download)
  *   - Push to remote storage / server (optional URL)
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import Image from 'next/image';
+import { useRouter } from 'next/router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   LuBrain,
   LuCircleCheck,
@@ -41,6 +43,7 @@ import {
   RiskTemplate,
   updateRiskTemplate,
 } from '../../lib/riskTemplateClient';
+import { syncQueryParam } from '../../lib/queryState';
 
 // ---------------------------------------------------------------------------
 // Default seed data — mirrors content from the two reference images
@@ -466,6 +469,23 @@ interface Props {
 
 type Tab = 'RMF' | 'FMEA';
 
+function readQueryValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0] ?? '';
+  }
+  return value ?? '';
+}
+
+function resolveRiskTab(value: string, fallback?: 'RMF' | 'FMEA'): Tab {
+  if (value === 'RMF' || value === 'FMEA') {
+    return value;
+  }
+  if (fallback === 'RMF' || fallback === 'FMEA') {
+    return fallback;
+  }
+  return 'RMF';
+}
+
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
@@ -478,15 +498,57 @@ const RiskTemplateEditor: React.FC<Props> = ({
   selectedRecordTitle,
   selectedRecordProduct,
 }) => {
-  const [activeTab, setActiveTab] = useState<Tab>('RMF');
+  const router = useRouter();
+
+  const activeTab = useMemo<Tab>(
+    () => resolveRiskTab(readQueryValue(router.query.riskTab), selectedRecordType),
+    [router.query.riskTab, selectedRecordType],
+  );
+
+  useEffect(() => {
+    const defaultTab = resolveRiskTab('', selectedRecordType);
+    syncQueryParam(router, 'riskTab', activeTab, {
+      omitWhen: (value) => value === defaultTab,
+    });
+  }, [activeTab, router, selectedRecordType]);
+
+  const commitActiveTab = useCallback((nextTab: Tab) => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const currentTab = resolveRiskTab(readQueryValue(router.query.riskTab), selectedRecordType);
+    if (currentTab === nextTab) {
+      return;
+    }
+
+    const nextQuery: Record<string, string> = {};
+    Object.entries(router.query).forEach(([key, rawValue]) => {
+      if (key === 'riskTab') {
+        return;
+      }
+      const normalized = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+      if (normalized) {
+        nextQuery[key] = normalized;
+      }
+    });
+
+    if (nextTab !== resolveRiskTab('', selectedRecordType)) {
+      nextQuery.riskTab = nextTab;
+    }
+
+    void router.replace(
+      { pathname: router.pathname, query: nextQuery },
+      undefined,
+      { shallow: true, scroll: false },
+    );
+  }, [router, selectedRecordType]);
 
   // Template state
-  const [rmfRows, setRmfRows] = useState<RmfRow[]>([]);
-  const [fmeaRows, setFmeaRows] = useState<FmeaRow[]>([]);
+  const [rmfRows, setRmfRows] = useState<RmfRow[]>(() => buildDefaultRmfRows());
+  const [fmeaRows, setFmeaRows] = useState<FmeaRow[]>(() => buildDefaultFmeaRows());
   const [rmfTemplateId, setRmfTemplateId] = useState<string | null>(null);
   const [fmeaTemplateId, setFmeaTemplateId] = useState<string | null>(null);
-  const [linkedRmfRowKey, setLinkedRmfRowKey] = useState<string | null>(null);
-  const [linkedFmeaRowKey, setLinkedFmeaRowKey] = useState<string | null>(null);
   const [defaultRmfRows, setDefaultRmfRows] = useState<Record<string, unknown>[]>([]);
   const [defaultFmeaRows, setDefaultFmeaRows] = useState<Record<string, unknown>[]>([]);
 
@@ -509,11 +571,19 @@ const RiskTemplateEditor: React.FC<Props> = ({
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [infoDialog, setInfoDialog] = useState<'table1' | 'table2' | null>(null);
 
-  // Load defaults on mount
-  useEffect(() => {
-    setRmfRows(buildDefaultRmfRows());
-    setFmeaRows(buildDefaultFmeaRows());
-  }, []);
+  const linkedRmfRowKey = useMemo(() => {
+    if (selectedRecordType !== 'RMF') {
+      return null;
+    }
+    return pickLinkedRmfRowKey(rmfRows, selectedRecordTitle);
+  }, [rmfRows, selectedRecordTitle, selectedRecordType]);
+
+  const linkedFmeaRowKey = useMemo(() => {
+    if (selectedRecordType !== 'FMEA') {
+      return null;
+    }
+    return pickLinkedFmeaRowKey(fmeaRows, selectedRecordTitle);
+  }, [fmeaRows, selectedRecordTitle, selectedRecordType]);
 
   useEffect(() => {
     let cancelled = false;
@@ -570,9 +640,7 @@ const RiskTemplateEditor: React.FC<Props> = ({
 
       const targetTab: Tab = selectedRecordType;
       const targetProduct = selectedRecordProduct || product;
-      setActiveTab(targetTab);
-      if (targetTab !== 'RMF') setLinkedRmfRowKey(null);
-      if (targetTab !== 'FMEA') setLinkedFmeaRowKey(null);
+      commitActiveTab(targetTab);
 
       const listResult = await listRiskTemplates({
         template_type: targetTab,
@@ -600,12 +668,10 @@ const RiskTemplateEditor: React.FC<Props> = ({
         const mapped = dictToRmfRows(rowDicts);
         setRmfTemplateId(full.data.template_id);
         setRmfRows(mapped);
-        setLinkedRmfRowKey(pickLinkedRmfRowKey(mapped, selectedRecordTitle));
       } else {
         const mapped = dictToFmeaRows(rowDicts);
         setFmeaTemplateId(full.data.template_id);
         setFmeaRows(mapped);
-        setLinkedFmeaRowKey(pickLinkedFmeaRowKey(mapped, selectedRecordTitle));
       }
 
       setIsDemoMode(Boolean(full.degradedToDemo));
@@ -622,39 +688,7 @@ const RiskTemplateEditor: React.FC<Props> = ({
     return () => {
       cancelled = true;
     };
-  }, [selectedRecordType, selectedRecordTitle, selectedRecordProduct, product]);
-
-  useEffect(() => {
-    if (selectedRecordType !== 'RMF' || !selectedRecordTitle) {
-      if (linkedRmfRowKey !== null) setLinkedRmfRowKey(null);
-      return;
-    }
-    if (rmfRows.length === 0) {
-      if (linkedRmfRowKey !== null) setLinkedRmfRowKey(null);
-      return;
-    }
-
-    const nextKey = pickLinkedRmfRowKey(rmfRows, selectedRecordTitle);
-    if (nextKey !== linkedRmfRowKey) {
-      setLinkedRmfRowKey(nextKey);
-    }
-  }, [rmfRows, selectedRecordType, selectedRecordTitle, linkedRmfRowKey]);
-
-  useEffect(() => {
-    if (selectedRecordType !== 'FMEA' || !selectedRecordTitle) {
-      if (linkedFmeaRowKey !== null) setLinkedFmeaRowKey(null);
-      return;
-    }
-    if (fmeaRows.length === 0) {
-      if (linkedFmeaRowKey !== null) setLinkedFmeaRowKey(null);
-      return;
-    }
-
-    const nextKey = pickLinkedFmeaRowKey(fmeaRows, selectedRecordTitle);
-    if (nextKey !== linkedFmeaRowKey) {
-      setLinkedFmeaRowKey(nextKey);
-    }
-  }, [fmeaRows, selectedRecordType, selectedRecordTitle, linkedFmeaRowKey]);
+  }, [commitActiveTab, product, selectedRecordProduct, selectedRecordTitle, selectedRecordType]);
 
   // Helper: build RiskTemplate shape for download
   const buildRiskTemplateForDownload = useCallback(
@@ -771,7 +805,6 @@ const RiskTemplateEditor: React.FC<Props> = ({
         const mapped = dictToRmfRows(sourceRows);
         setDefaultRmfRows(sourceRows);
         setRmfRows(mapped);
-        setLinkedRmfRowKey(pickLinkedRmfRowKey(mapped, selectedRecordTitle));
         setRmfTemplateId(null);
         setIsDemoMode(Boolean(liveDefault.degradedToDemo));
         setInfoMessage(liveRows
@@ -787,7 +820,6 @@ const RiskTemplateEditor: React.FC<Props> = ({
       }
       const mapped = buildBlankFmeaRows(rowCount);
       setFmeaRows(mapped);
-      setLinkedFmeaRowKey(pickLinkedFmeaRowKey(mapped, selectedRecordTitle));
       setFmeaTemplateId(null);
       setIsDemoMode(Boolean(liveDefault.degradedToDemo));
       setInfoMessage(liveRows
@@ -798,13 +830,11 @@ const RiskTemplateEditor: React.FC<Props> = ({
         const sourceRows = defaultRmfRows.length > 0 ? defaultRmfRows : rmfRowsToDict(buildDefaultRmfRows());
         const mapped = dictToRmfRows(sourceRows);
         setRmfRows(mapped);
-        setLinkedRmfRowKey(pickLinkedRmfRowKey(mapped, selectedRecordTitle));
         setRmfTemplateId(null);
       } else {
         const rowCount = defaultFmeaRows.length > 0 ? defaultFmeaRows.length : buildDefaultFmeaRows().length;
         const mapped = buildBlankFmeaRows(rowCount);
         setFmeaRows(mapped);
-        setLinkedFmeaRowKey(pickLinkedFmeaRowKey(mapped, selectedRecordTitle));
         setFmeaTemplateId(null);
       }
       setErrorMessage(`Live default fetch unavailable: ${err instanceof Error ? err.message : String(err)}`);
@@ -812,7 +842,7 @@ const RiskTemplateEditor: React.FC<Props> = ({
     } finally {
       setLoadDefaultLoading(false);
     }
-  }, [activeTab, defaultFmeaRows, defaultRmfRows, product, selectedRecordTitle]);
+  }, [activeTab, defaultFmeaRows, defaultRmfRows, product]);
 
   // ---------------------------------------------------------------------------
   // Remote push
@@ -1090,7 +1120,7 @@ const RiskTemplateEditor: React.FC<Props> = ({
       {/* Tabs */}
       <div className="flex border-b border-neutral-200 bg-white">
         {(['RMF', 'FMEA'] as Tab[]).map((t) => (
-          <button key={t} type="button" className={tabClass(t)} onClick={() => setActiveTab(t)}>
+          <button key={t} type="button" className={tabClass(t)} onClick={() => commitActiveTab(t)}>
             {t === 'RMF' ? '📋 RMF — Risk Management File' : '🔬 FMEA — Product Risk Analysis'}
           </button>
         ))}
@@ -1121,7 +1151,7 @@ const RiskTemplateEditor: React.FC<Props> = ({
               rows={rmfRows}
               canEdit={canEdit}
               aiHighlightKey={aiHighlightKey}
-              linkedHighlightKey={linkedRmfRowKey}
+              linkedHighlightKey={selectedRecordType === 'RMF' ? linkedRmfRowKey : null}
               onChange={setRmfRows}
             />
           ) : (
@@ -1129,7 +1159,7 @@ const RiskTemplateEditor: React.FC<Props> = ({
               rows={fmeaRows}
               canEdit={canEdit}
               aiHighlightKey={aiHighlightKey}
-              linkedHighlightKey={linkedFmeaRowKey}
+              linkedHighlightKey={selectedRecordType === 'FMEA' ? linkedFmeaRowKey : null}
               onChange={setFmeaRows}
             />
           )}
@@ -1138,9 +1168,11 @@ const RiskTemplateEditor: React.FC<Props> = ({
         {/* Reference image thumbnails */}
         <div className="mt-4 grid grid-cols-2 gap-3">
           <figure className="rounded-xl overflow-hidden border border-neutral-200">
-            <img
+            <Image
               src="/images/risk/table1-riskmanagement-file.jpg"
               alt="Reference: Table 1 — Risk Management File"
+              width={1200}
+              height={800}
               className="w-full h-auto opacity-60 hover:opacity-100 transition cursor-zoom-in"
               title="Reference image: Table 1 — Risk Management File"
             />
@@ -1158,9 +1190,11 @@ const RiskTemplateEditor: React.FC<Props> = ({
             </figcaption>
           </figure>
           <figure className="rounded-xl overflow-hidden border border-neutral-200">
-            <img
+            <Image
               src="/images/risk/table2-product-risks-documentation.jpg"
               alt="Reference: Table 2 — Product Risks Documentation"
+              width={1200}
+              height={800}
               className="w-full h-auto opacity-60 hover:opacity-100 transition cursor-zoom-in"
               title="Reference image: Table 2 — Product Risks Documentation"
             />

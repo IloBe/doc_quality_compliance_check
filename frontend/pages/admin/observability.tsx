@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { LuLoader } from 'react-icons/lu';
 import ObservabilityAspectTable from '../../components/admin/observability/ObservabilityAspectTable';
 import ObservabilityControls from '../../components/admin/observability/ObservabilityControls';
@@ -29,35 +29,32 @@ import {
 } from '../../lib/observabilityClient';
 
 const AdminObservabilityPage = () => {
+  // Default to demo mode — the same pattern as Dashboard.
+  // Set NEXT_PUBLIC_OBSERVABILITY_SOURCE=backend to use live DB telemetry.
+  const useBackendData = process.env.NEXT_PUBLIC_OBSERVABILITY_SOURCE === 'backend';
+
   const [windowHours, setWindowHours] = useState(24);
   const [summary, setSummary] = useState<QualitySummary | null>(null);
   const [metrics, setMetrics] = useState<MetricsSnapshot | null>(null);
   const [promptPairs, setPromptPairs] = useState<LlmPromptOutputPair[]>([]);
   const [workflowBreakdown, setWorkflowBreakdown] = useState<WorkflowComponentBreakdown | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(useBackendData);
   const [error, setError] = useState<string | null>(null);
-
-  // Default to demo mode — the same pattern as Dashboard.
-  // Set NEXT_PUBLIC_OBSERVABILITY_SOURCE=backend to use live DB telemetry.
-  const useBackendData = process.env.NEXT_PUBLIC_OBSERVABILITY_SOURCE === 'backend';
 
   const mockSummary = useMemo<QualitySummary>(() => createMockQualitySummary(windowHours), [windowHours]);
   const mockMetrics = useMemo<MetricsSnapshot>(() => createMockMetrics(windowHours), [windowHours]);
   const mockWorkflowBreakdown = useMemo<WorkflowComponentBreakdown>(() => createMockWorkflowBreakdown(windowHours), [windowHours]);
   const mockPromptPairs = useMemo<LlmPromptOutputPair[]>(() => createMockPromptPairs(), []);
 
-  const load = async () => {
-    setIsLoading(true);
-    setError(null);
-
+  const load = useCallback(async () => {
     if (!useBackendData) {
-      setSummary(mockSummary);
-      setMetrics(mockMetrics);
-      setPromptPairs(mockPromptPairs);
-      setWorkflowBreakdown(mockWorkflowBreakdown);
+      setError(null);
       setIsLoading(false);
       return;
     }
+
+    setIsLoading(true);
+    setError(null);
 
     try {
       const [summaryPayload, metricsPayload, pairsPayload, workflowPayload] = await Promise.all([
@@ -84,16 +81,27 @@ const AdminObservabilityPage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [useBackendData, windowHours]);
 
   useEffect(() => {
-    load();
-  }, [windowHours]);
+    const timeoutId = setTimeout(() => {
+      void load();
+    }, 0);
+    return () => clearTimeout(timeoutId);
+  }, [load]);
 
-  const scorePct = useMemo(() => getObservabilityScorePct(summary), [summary]);
+  const effectiveSummary = useMemo(() => (useBackendData ? summary : mockSummary), [mockSummary, summary, useBackendData]);
+  const effectiveMetrics = useMemo(() => (useBackendData ? metrics : mockMetrics), [metrics, mockMetrics, useBackendData]);
+  const effectivePromptPairs = useMemo(() => (useBackendData ? promptPairs : mockPromptPairs), [mockPromptPairs, promptPairs, useBackendData]);
+  const effectiveWorkflowBreakdown = useMemo(
+    () => (useBackendData ? workflowBreakdown : mockWorkflowBreakdown),
+    [mockWorkflowBreakdown, useBackendData, workflowBreakdown],
+  );
+
+  const scorePct = useMemo(() => getObservabilityScorePct(effectiveSummary), [effectiveSummary]);
 
   const exportPromptPairsCsv = () => {
-    const csv = buildPromptPairsCsv(promptPairs);
+    const csv = buildPromptPairsCsv(effectivePromptPairs);
     const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -118,7 +126,7 @@ const AdminObservabilityPage = () => {
             windows={OBSERVABILITY_WINDOWS}
             windowHours={windowHours}
             onWindowChange={setWindowHours}
-            onRefresh={load}
+            onRefresh={() => void load()}
           />
         }
       />
@@ -142,18 +150,18 @@ const AdminObservabilityPage = () => {
         <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5 text-sm text-rose-700">{error}</div>
       )}
 
-      {!isLoading && !error && summary && (
+      {!isLoading && !error && effectiveSummary && (
         <>
-          <ObservabilityKpiGrid summary={summary} scorePct={scorePct} />
+          <ObservabilityKpiGrid summary={effectiveSummary} scorePct={scorePct} />
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-            <ObservabilityAspectTable summary={summary} />
-            <ObservabilitySidePanels metrics={metrics} summary={summary} />
+            <ObservabilityAspectTable summary={effectiveSummary} />
+            <ObservabilitySidePanels metrics={effectiveMetrics} summary={effectiveSummary} />
           </div>
 
-          <ObservabilityWorkflowTable workflowBreakdown={workflowBreakdown} />
+          <ObservabilityWorkflowTable workflowBreakdown={effectiveWorkflowBreakdown} />
 
-          <ObservabilityPromptPairsPanel promptPairs={promptPairs} onExportCsv={exportPromptPairsCsv} />
+          <ObservabilityPromptPairsPanel promptPairs={effectivePromptPairs} onExportCsv={exportPromptPairsCsv} />
 
           <FooterInfoCard title="Future topic" accent="indigo">
             A product-user chatbot can be added next to query documentation and workflow evidence via prompting, using the same observability stack for prompt/output traceability.

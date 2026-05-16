@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
 import { LuLoader } from 'react-icons/lu';
 import StakeholderProfileEditor from '../../components/admin/stakeholders/StakeholderProfileEditor';
 import StakeholderProfilesList from '../../components/admin/stakeholders/StakeholderProfilesList';
@@ -21,11 +22,29 @@ import {
   saveStakeholderProfile,
   StakeholderEmployeeAssignment,
 } from '../../lib/stakeholderClient';
+import { syncQueryParam } from '../../lib/queryState';
+
+function readQueryValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0] ?? '';
+  }
+  return value ?? '';
+}
+
+function resolveSelectedRoleId(profiles: StakeholderProfileUi[], desiredRoleId: string): string {
+  if (!profiles.length) {
+    return '';
+  }
+  if (desiredRoleId && profiles.some((profile) => profile.id === desiredRoleId)) {
+    return desiredRoleId;
+  }
+  return profiles[0].id;
+}
 
 const AdminStakeholdersPage = () => {
+  const router = useRouter();
   const { currentUser } = useAuth();
   const [profiles, setProfiles] = useState<StakeholderProfileUi[]>(INITIAL_STAKEHOLDER_PROFILES);
-  const [selectedRole, setSelectedRole] = useState<string>(INITIAL_STAKEHOLDER_PROFILES[0].id);
   const [saveMessage, setSaveMessage] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -35,6 +54,43 @@ const AdminStakeholdersPage = () => {
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkEmployeeInput, setBulkEmployeeInput] = useState('');
   const [isAssignmentBusy, setIsAssignmentBusy] = useState(false);
+
+  const selectedRole = useMemo(() => {
+    const queryRole = readQueryValue(router.query.role);
+    return resolveSelectedRoleId(profiles, queryRole);
+  }, [profiles, router.query.role]);
+
+  const commitSelectedRole = useCallback((nextRoleId: string) => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const currentRole = readQueryValue(router.query.role);
+    if (currentRole === nextRoleId) {
+      return;
+    }
+
+    const nextQuery: Record<string, string> = {};
+    Object.entries(router.query).forEach(([key, rawValue]) => {
+      if (key === 'role') {
+        return;
+      }
+      const normalized = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+      if (normalized) {
+        nextQuery[key] = normalized;
+      }
+    });
+
+    if (profiles.length && nextRoleId !== profiles[0].id) {
+      nextQuery.role = nextRoleId;
+    }
+
+    void router.replace(
+      { pathname: router.pathname, query: nextQuery },
+      undefined,
+      { shallow: true, scroll: false },
+    );
+  }, [profiles, router]);
 
   useEffect(() => {
     const loadProfiles = async () => {
@@ -48,9 +104,6 @@ const AdminStakeholdersPage = () => {
         }
         const mapped = items.map(toStakeholderProfileUi);
         setProfiles(mapped);
-        if (!mapped.some((p) => p.id === selectedRole)) {
-          setSelectedRole(mapped[0].id);
-        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load stakeholder profiles.');
         setProfiles(INITIAL_STAKEHOLDER_PROFILES);
@@ -67,6 +120,13 @@ const AdminStakeholdersPage = () => {
     [profiles, selectedRole],
   );
 
+  useEffect(() => {
+    const defaultRoleId = profiles[0]?.id ?? '';
+    syncQueryParam(router, 'role', selectedRole, {
+      omitWhen: (value) => value === defaultRoleId,
+    });
+  }, [profiles, router, selectedRole]);
+
   const selectedAssignments = assignmentByProfile[selectedRole] || [];
 
   useEffect(() => {
@@ -74,20 +134,36 @@ const AdminStakeholdersPage = () => {
       return;
     }
 
+    if (assignmentByProfile[selectedRole]) {
+      return;
+    }
+
+    const selectedRoleSnapshot = selectedRole;
+    let active = true;
+
     const loadAssignments = async () => {
       try {
-        const rows = await fetchStakeholderAssignments(selectedRole);
+        const rows = await fetchStakeholderAssignments(selectedRoleSnapshot);
+        if (!active) {
+          return;
+        }
         setAssignmentByProfile((prev) => ({
           ...prev,
-          [selectedRole]: rows,
+          [selectedRoleSnapshot]: rows,
         }));
       } catch (err) {
+        if (!active) {
+          return;
+        }
         setError(err instanceof Error ? err.message : 'Failed to load assigned employees.');
       }
     };
 
     loadAssignments();
-  }, [selectedRole]);
+    return () => {
+      active = false;
+    };
+  }, [assignmentByProfile, selectedRole]);
 
   const togglePermission = (permission: string) => {
     setProfiles((prev) =>
@@ -272,7 +348,7 @@ const AdminStakeholdersPage = () => {
         <StakeholderProfilesList
           profiles={profiles}
           selectedRole={selectedRole}
-          onSelectRole={setSelectedRole}
+          onSelectRole={commitSelectedRole}
         />
 
         {selectedProfile ? (

@@ -271,6 +271,66 @@ Run a specific test:
 python -m pytest tests/test_bridge_run_api.py::test_bridge_human_review_three_reviewers_only_first_decision_wins -v
 ```
 
+### 7.1a Recommended local setup for Python 3.13 (`py313_venv`) with `uv`
+
+When running tests on MS Windows with Python 3.13, prefer a project-local `uv` environment to keep dependencies aligned with `pyproject.toml` and `uv.lock`.
+
+From `doc_quality_compliance_check/`:
+
+```powershell
+uv venv --python 3.13 py313_venv
+.\py313_venv\Scripts\Activate.ps1
+uv sync --extra dev --frozen --active
+uv run pytest -q
+```
+
+Notes:
+- `--extra dev` is required for test dependencies (`pytest`, `pytest-cov`, etc.).
+- `--frozen` ensures installs match `uv.lock` exactly.
+- when using `py313_venv` (instead of default `.venv`), add `--active` to `uv run` commands.
+- `uv run --active pytest` avoids interpreter/path drift and is preferred over plain `python -m pytest`.
+
+### 7.1b Troubleshooting: `python -m pytest` fails after creating `py313_venv`
+
+Common cause:
+- pytest is executed from a different interpreter/environment than `py313_venv`.
+
+Quick checks:
+
+```powershell
+python -c "import sys; print(sys.executable)"
+uv run --active python -c "import sys; print(sys.executable)"
+```
+
+If you see this warning:
+
+```text
+warning: `VIRTUAL_ENV=py313_venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+```
+
+Warning:
+- if pytest prints SQLite `ResourceWarning` messages on this setup, use the current test fixtures as the baseline and run `uv run --active pytest -q -W default` to verify the leak is fixed.
+
+use `--active` explicitly:
+
+```powershell
+uv sync --extra dev --frozen --active
+uv run --active pytest -q
+```
+
+If the paths differ, run tests through `uv`:
+
+```powershell
+uv sync --extra dev --frozen --active
+uv run --active pytest -q
+```
+
+If you still prefer `python -m pytest`, ensure the shell is activated with:
+
+```powershell
+.\py313_venv\Scripts\Activate.ps1
+```
+
 ### 7.2 Coverage and route drift gates
 
 Both are active by default through `pyproject.toml` and `tests/conftest.py`.
@@ -287,19 +347,113 @@ python src/doc_quality/tools/route_coverage_audit.py
 
 ### 7.3 Browser smoke E2E
 
-From `frontend/`:
+`npm run test:e2e` only starts the Next.js frontend dev server via `playwright.config.ts webServer`. The backend is **not required** for the current smoke suite — `frontend/lib/authClient.ts` is a mocked stub that returns a default user client-side, so no real API calls are made during these tests.
+
+> When `authClient.ts` is replaced with a real backend-calling implementation, the backend will become required again and section 7.3 must be updated accordingly.
+
+**Single terminal — Playwright E2E** (from `doc_quality_compliance_check/`):
+
+Preconditions:
+- Node.js must be in PATH (`node --version` should return v18 or later).
+- Chromium browser must be installed (run `npm run test:e2e:install` once from `frontend/`).
+- No activated Python venv is required.
+
+> **Important**: all `npm` commands must run from the `frontend/` subdirectory, not the project root. The project root has no `package.json` and `npm install` will fail there.
 
 ```powershell
+cd frontend
 npm install
 npm run test:e2e:install
 npm run test:e2e
 ```
 
-Sanity-check test discovery:
+Playwright starts the Next.js dev server automatically, then runs the three smoke assertions against it.
+
+Sanity-check test discovery (optional, no backend needed):
 
 ```powershell
 npx playwright test --list
 ```
+
+### 7.3a Manual browser app test run (MS Windows + Edge)
+
+Use this runbook when QA or stakeholders need to manually test the app in a real browser session (outside Playwright automation).
+
+Open three PowerShell terminals.
+
+1. **Database terminal** (from `doc_quality_compliance_check/`):
+
+```powershell
+docker compose up -d; docker compose ps
+.\.venv\Scripts\python.exe init_postgres.py
+```
+
+Expected `docker compose ps` result includes a healthy Postgres container, with information about created name, image status ports and service.
+
+If PowerShell reports `docker` is not recognized, do the following:
+
+1. Install Docker Desktop for Windows (or start it if already installed).
+2. Open a **new** PowerShell window after installation/start.
+3. Verify Docker CLI is available:
+
+```powershell
+docker --version
+docker compose version
+```
+
+4. Re-run:
+
+```powershell
+docker compose up -d
+```
+
+Fallback when Docker is unavailable:
+- install/run local PostgreSQL 16 service on `localhost:5432`
+- keep `DATABASE_URL` aligned with local Postgres
+- run `\.venv\Scripts\python.exe init_postgres.py` after DB is reachable
+
+2. **Backend terminal** (from `doc_quality_compliance_check/`):
+
+```powershell
+.\scripts\start_backend.ps1 -Reload
+```
+
+3. **Frontend terminal** (from `doc_quality_compliance_check/frontend/`):
+
+```powershell
+npm install
+npm run dev
+```
+
+Open in Microsoft Edge via terminal command:
+
+```powershell
+start msedge http://localhost:3000/login
+```
+
+or use directly in browser:
+
+```text
+http://localhost:3000/login
+```
+
+Health checks:
+- frontend proxy health: `http://localhost:3000/health`
+- backend direct health: `http://127.0.0.1:8000/health`
+
+Important local auth note:
+- keep `frontend/.env.local` with `NEXT_PUBLIC_API_ORIGIN=` (empty) for same-origin cookie auth via Next.js proxy.
+
+#### Short QA smoke checklist (Edge, 8 actions)
+
+1. Open `http://localhost:3000/login` and confirm login page renders correctly.
+2. Sign in using configured test credentials (`AUTH_MVP_EMAIL` / `AUTH_MVP_PASSWORD`) and confirm redirect into authenticated app shell.
+3. From sidebar, open **Dashboard** and verify KPI cards render without API error banners.
+4. Open **Document Hub** and verify list/filter UI responds (search box, status filter, and list updates).
+5. Open **Risk** page and verify list/detail selection works and action buttons are visible according to role.
+6. Open **Audit Trail** page and verify timeline loads and selecting a row updates details panel.
+7. Open **Exports Registry** and verify filter controls and download dialog open/close behavior.
+8. Trigger logout (top bar exit), then confirm unauthenticated access redirects back to `/login`.
 
 ### 7.4 DAST baseline
 

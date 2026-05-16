@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
+import { useRouter } from 'next/router';
 import FooterInfoCard from '../components/FooterInfoCard';
 import PageHeaderWithWhy from '../components/PageHeaderWithWhy';
 import TimeframeSelector from '../components/dashboard/TimeframeSelector';
@@ -10,12 +11,58 @@ import {
   getHealthBadgeClass,
 } from '../lib/auditorVaultViewModel';
 
+const VAULT_TIMEFRAMES: DashboardTimeframe[] = ['week', 'month', 'year'];
+
+function getTimeframeFromQuery(value: string | string[] | undefined): DashboardTimeframe {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (candidate && VAULT_TIMEFRAMES.includes(candidate as DashboardTimeframe)) {
+    return candidate as DashboardTimeframe;
+  }
+  return 'month';
+}
+
 const AuditorVaultPage = () => {
+  const router = useRouter();
   const documents = useMockStore((state) => state.documents);
   const exports = useMockStore((state) => state.exports);
   const bridgeRuns = useMockStore((state) => state.bridgeRuns);
 
-  const [timeframe, setTimeframe] = useState<DashboardTimeframe>('month');
+  const timeframe = useMemo(
+    () => getTimeframeFromQuery(router.query.timeframe),
+    [router.query.timeframe],
+  );
+
+  const commitTimeframe = useCallback((nextTimeframe: DashboardTimeframe) => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const currentTimeframe = getTimeframeFromQuery(router.query.timeframe);
+    if (currentTimeframe === nextTimeframe) {
+      return;
+    }
+
+    const nextQuery: Record<string, string> = {};
+    Object.entries(router.query).forEach(([key, rawValue]) => {
+      if (key === 'timeframe') {
+        return;
+      }
+      const normalized = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+      if (normalized) {
+        nextQuery[key] = normalized;
+      }
+    });
+
+    if (nextTimeframe !== 'month') {
+      nextQuery.timeframe = nextTimeframe;
+    }
+
+    void router.replace(
+      { pathname: router.pathname, query: nextQuery },
+      undefined,
+      { shallow: true, scroll: false },
+    );
+  }, [router]);
 
   const rows = useMemo(
     () => buildVaultEvidenceRows(documents, exports, bridgeRuns, timeframe),
@@ -31,7 +78,7 @@ const AuditorVaultPage = () => {
         title="Auditor Vault"
         subtitle="Central evidence inventory for audit readiness, recency monitoring, and traceable retrieval."
         whyDescription="Auditor Vault is the controlled evidence shelf across documents, exports, and bridge runs. It reduces audit preparation time by giving one consistent place to verify artifact freshness, approval state, and traceability context before formal reviews."
-        rightContent={<TimeframeSelector value={timeframe} onChange={setTimeframe} />}
+        rightContent={<TimeframeSelector value={timeframe} onChange={commitTimeframe} />}
       />
 
       <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 text-xs text-blue-700 font-semibold">

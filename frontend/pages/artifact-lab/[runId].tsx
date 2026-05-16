@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   LuBookOpen,
   LuBot,
@@ -31,7 +31,25 @@ import {
   resolveWorkflowDocumentForArtifact,
 } from '../../lib/artifactLabViewModel';
 import { useMockStore } from '../../lib/mockStore';
+import { syncQueryParam } from '../../lib/queryState';
 import { getSelectionStyles } from '../../lib/selectionStyles';
+
+function readQueryValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0] ?? '';
+  }
+  return value ?? '';
+}
+
+function resolveArtifactId(drafts: ArtifactDraft[], desiredArtifactId: string): string {
+  if (!drafts.length) {
+    return '';
+  }
+  if (desiredArtifactId && drafts.some((item) => item.id === desiredArtifactId)) {
+    return desiredArtifactId;
+  }
+  return drafts[0].id;
+}
 
 const ArtifactLabRunPage = () => {
   const router = useRouter();
@@ -41,7 +59,6 @@ const ArtifactLabRunPage = () => {
   const documents = useMockStore((state) => state.documents);
   const enqueueExport = useMockStore((state) => state.enqueueExport);
 
-  const [selectedArtifactId, setSelectedArtifactId] = useState('art-arc42');
   const [isSaving, setIsSaving] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingMd, setIsExportingMd] = useState(false);
@@ -73,7 +90,53 @@ const ArtifactLabRunPage = () => {
 
   const [artifactDrafts, setArtifactDrafts] = useState<ArtifactDraft[]>(() => buildInitialArtifactDrafts());
 
+  const selectedArtifactId = useMemo(
+    () => resolveArtifactId(artifactDrafts, readQueryValue(router.query.artifact)),
+    [artifactDrafts, router.query.artifact],
+  );
+
+  const commitSelectedArtifactId = useCallback((nextArtifactId: string) => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const currentArtifactId = readQueryValue(router.query.artifact);
+    if (currentArtifactId === nextArtifactId) {
+      return;
+    }
+
+    const nextQuery: Record<string, string> = {};
+    Object.entries(router.query).forEach(([key, rawValue]) => {
+      if (key === 'artifact') {
+        return;
+      }
+      const normalized = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+      if (normalized) {
+        nextQuery[key] = normalized;
+      }
+    });
+
+    const defaultArtifactId = artifactDrafts[0]?.id ?? '';
+    if (nextArtifactId && nextArtifactId !== defaultArtifactId) {
+      nextQuery.artifact = nextArtifactId;
+    }
+
+    void router.replace(
+      { pathname: router.pathname, query: nextQuery },
+      undefined,
+      { shallow: true, scroll: false },
+    );
+  }, [artifactDrafts, router]);
+
   const selectedArtifact = artifactDrafts.find((x) => x.id === selectedArtifactId) || artifactDrafts[0];
+
+  useEffect(() => {
+    const defaultArtifactId = artifactDrafts[0]?.id ?? '';
+    syncQueryParam(router, 'artifact', selectedArtifactId, {
+      omitWhen: (value) => value === defaultArtifactId,
+    });
+  }, [artifactDrafts, router, selectedArtifactId]);
+
   const workflowDoc = useMemo(
     () => resolveWorkflowDocumentForArtifact(selectedArtifact.kind, runDocs, primaryDoc),
     [primaryDoc, runDocs, selectedArtifact.kind],
@@ -326,7 +389,7 @@ const ArtifactLabRunPage = () => {
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setSelectedArtifactId(item.id)}
+                  onClick={() => commitSelectedArtifactId(item.id)}
                   className={`w-full text-left rounded-xl border p-3 transition ${selectionStyles.rowClass}`}
                 >
                   <div className={`text-xs font-black uppercase tracking-wider mb-1 ${selectionStyles.secondaryTextClass}`}>{item.kind}</div>
