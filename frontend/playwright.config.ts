@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 const port = Number(process.env.E2E_PORT || 3000);
 const baseURL = process.env.E2E_BASE_URL || `http://127.0.0.1:${port}`;
+const mockApiOrigin = process.env.E2E_MOCK_API_ORIGIN || 'http://127.0.0.1:4010';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -24,6 +25,12 @@ export default defineConfig({
     url: `${baseURL}/login`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      ...process.env,
+      NEXT_PUBLIC_API_ORIGIN: mockApiOrigin,
+      NEXT_PUBLIC_HEALTH_ORIGIN: mockApiOrigin,
+      NEXT_PUBLIC_ENABLE_AUTH_HEALTH_CHECK: 'false',
+    },
   },
   projects: [
     {

@@ -45,7 +45,7 @@ The repository already contains:
 - 18 orchestrator service tests (privacy, adapters, validator stages, contracts)
 - 35+ core service/unit tests (document analysis, compliance, research, templates)
 - 8+ workflow integration tests (UAT, HITL, bridge, human review)
-- 3 browser smoke tests (login, recovery, redirect)
+- 4 browser smoke tests (login, recovery, document hub render, bridge orchestration empty-state)
 - 1+ manual LLM integration smoke test (requires approval flags)
 
 **Primary enforcement signals:**
@@ -141,7 +141,8 @@ Purpose:
 Current baseline:
 - login page renders
 - forgot-access page renders
-- unauthenticated root access redirects to login
+- authenticated root render shows document hub
+- bridge orchestration render shows open-run controls and no-document guidance
 
 Typical owners:
 - frontend engineer
@@ -189,7 +190,7 @@ Lifecycle phase:
 | Reports and exported artifacts | `tests/test_report_generator.py`, `tests/test_reports_download_api.py` | QM lead, auditor, risk manager | Generate compliance reports and retrieve downloadable artifacts |
 | Templates and risk templates | `tests/test_template_manager.py`, `tests/test_templates_api.py`, `tests/test_risk_templates_api.py`, `tests/test_risk_templates_defaults_api.py` | Architect, risk manager, QM lead | Load templates, manage risk defaults, export risk content |
 | Research and regulation retrieval | `tests/test_research_alerts_api.py`, `tests/test_research_api.py`, `tests/test_research_service.py` | Architect, risk manager, compliance analyst | Compliance alerts, regulation support and research-backed guidance |
-| Browser smoke E2E | `frontend/tests/e2e/smoke.spec.ts` | Browser app user | Login entry flow, recovery entry flow, unauth redirect behavior |
+| Browser smoke E2E | `frontend/tests/e2e/smoke.spec.ts` | Browser app user | Login entry flow, recovery entry flow, authenticated document hub render, bridge orchestration empty-state guidance |
 | Security baseline DAST | `.github/workflows/dast-zap-baseline.yml` | Security / release governance | Runtime scan of deployed target before release decision |
 
 ---
@@ -524,12 +525,13 @@ python -m pytest --cov=src --cov-report=html && open htmlcov/index.html
 
 ### 7.4 Browser E2E / Regression Smoke Tests
 
-Playwright test suite validates login flow, recovery flow, and unauthenticated redirects.
+Playwright smoke suite validates critical browser routes with a dedicated mock API origin, so backend uptime is not required for smoke execution.
 
 **Preconditions:**
 - Node.js v18+ must be in PATH (`node --version`)
 - No activated Python venv required (Node separate from Python)
 - First-time setup requires browser install (`npm run test:e2e:install`)
+- Optional: set `E2E_MOCK_API_ORIGIN` to override the default smoke mock origin (`http://127.0.0.1:4010`)
 
 **All platforms — E2E smoke tests:**
 
@@ -553,7 +555,7 @@ npm run test:e2e
 
 **Expected output:**
 ```
-3 passed (15–30 sec)
+4 passed (10–30 sec)
 ```
 
 ---

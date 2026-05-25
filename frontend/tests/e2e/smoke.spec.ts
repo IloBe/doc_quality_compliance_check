@@ -1,10 +1,58 @@
 import { expect, test } from '@playwright/test';
 
+async function installSmokeMockApiRoutes(page: import('@playwright/test').Page): Promise<void> {
+  await page.route('**/api/v1/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({}),
+    });
+  });
+
+  await page.route('**/health', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok' }),
+    });
+  });
+
+  await page.route('**/api/v1/admin/model-policy/active', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        model_id: 'llama3.1:8b',
+        provider: 'ollama',
+        params: { temperature: 0.2, top_p: 0.9, top_k: 40 },
+      }),
+    });
+  });
+
+  await page.route('**/api/v1/bridge/runtime/topology', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        checked_at: new Date().toISOString(),
+        orchestrator_name: 'bridge-workflow-orchestrator',
+        orchestrator_mode: 'containerized-sandbox',
+        topology_source: 'metadata',
+        explicitly_proven: true,
+        isolated_deployments: true,
+        all_agents_healthy: true,
+        agents: [],
+        issues: [],
+      }),
+    });
+  });
+}
+
 async function mockAuthenticatedSession(
   page: import('@playwright/test').Page,
   documents: Array<Record<string, unknown>> = [],
 ): Promise<void> {
-  await page.route('**/api/v1/auth/me', async (route) => {
+  await page.route('**/api/v1/auth/me**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -16,7 +64,7 @@ async function mockAuthenticatedSession(
     });
   });
 
-  await page.route('**/api/v1/documents', async (route) => {
+  await page.route('**/api/v1/documents**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -26,6 +74,10 @@ async function mockAuthenticatedSession(
 }
 
 test.describe('Critical browser smoke', () => {
+  test.beforeEach(async ({ page }) => {
+    await installSmokeMockApiRoutes(page);
+  });
+
   test('login page renders and shows authentication affordances', async ({ page }) => {
     await page.goto('/login');
 
