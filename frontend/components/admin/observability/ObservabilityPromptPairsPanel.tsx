@@ -1,6 +1,7 @@
 import React from 'react';
 import { LuDownload } from 'react-icons/lu';
 import { LlmPromptOutputPair } from '../../../lib/observabilityClient';
+import { formatDateTime } from '../../../lib/dateTime';
 
 type ObservabilityPromptPairsPanelProps = {
   promptPairs: LlmPromptOutputPair[];
@@ -32,7 +33,7 @@ const ObservabilityPromptPairsPanel = ({ promptPairs, onExportCsv }: Observabili
                 <span className="font-semibold text-neutral-700">{item.source_component}</span>
                 <span>Provider: {item.provider || 'n/a'}</span>
                 <span>Model: {item.model_used || 'n/a'}</span>
-                <span>{new Date(item.event_time).toLocaleString()}</span>
+                <span>{formatDateTime(item.event_time, 'n/a')}</span>
               </div>
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                 <div>

@@ -1,12 +1,11 @@
 import React from 'react';
-import { LuCircleAlert, LuCircleCheck} from 'react-icons/lu';
+import { LuCircleCheck } from 'react-icons/lu';
 import StandardCard from './StandardCard';
-import { ComplianceStandard, categoryMetadata } from '../../lib/complianceStandards';
+import { ComplianceStandard } from '../../lib/complianceStandards';
 
 type StandardsGroupProps = {
   title: string;
   description?: string;
-  isAlwaysOn: boolean;
   standards: ComplianceStandard[];
 };
 
@@ -20,14 +19,11 @@ type StandardsGroupProps = {
  * Props:
  *   - title: Section heading
  *   - description: Optional explanatory text for the category
- *   - isAlwaysOn: Visual/behavioral indicator for Always-On vs Conditional
  *   - standards: Array of ComplianceStandard items to display
  */
-const StandardsGroup = ({ title, description, isAlwaysOn, standards }: StandardsGroupProps) => {
-  const headerBg = isAlwaysOn ? 'bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-200' : 'bg-gradient-to-r from-orange-50 to-rose-50 border-orange-200';
-  const headerIcon = isAlwaysOn ? 
-    <LuCircleCheck className="w-5 h-5 text-emerald-600" /> :
-    <LuCircleAlert className="w-5 h-5 text-amber-600" />;
+const StandardsGroup = ({ title, description, standards }: StandardsGroupProps) => {
+  const headerBg = 'bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-200';
+  const headerIcon = <LuCircleCheck className="w-5 h-5 text-emerald-600" />;
 
   return (
     <div className="space-y-6">

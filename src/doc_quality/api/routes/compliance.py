@@ -17,12 +17,24 @@ from ...models.compliance import (
     StandardMappingRequestCreate,
     StandardMappingRequestListResponse,
     StandardMappingRequestRecord,
+    StandardMappingRequestSummaryRecord,
 )
 from ...models.orm import AuditEventORM
+from ...services.model_policy_service import resolve_active_model
 from ...services.compliance_checker import (
     check_eu_ai_act_compliance,
     get_applicable_regulations,
 )
+
+_JUSTIFICATION_PREVIEW_CHARS = 280
+
+
+def _justification_preview(text: str, max_chars: int = _JUSTIFICATION_PREVIEW_CHARS) -> str:
+    compact = " ".join(text.split())
+    if len(compact) <= max_chars:
+        return compact
+    return f"{compact[:max_chars].rstrip()}..."
+
 
 router = APIRouter(prefix="/compliance", tags=["compliance"])
 
@@ -36,11 +48,14 @@ class ComplianceCheckRequest(BaseModel):
 @router.post("/check/eu-ai-act", response_model=ComplianceCheckResult)
 async def check_eu_ai_act(
     request: ComplianceCheckRequest,
+    db: Session = Depends(get_db),
     _user=Depends(require_roles("qm_lead", "architect", "riskmanager", "auditor")),
 ) -> ComplianceCheckResult:
     """Check a document against EU AI Act requirements."""
     content = sanitize_text(request.document_content)
-    return check_eu_ai_act_compliance(content, request.domain_info, request.document_id)
+    result = check_eu_ai_act_compliance(content, request.domain_info, request.document_id)
+    result.active_model = resolve_active_model(db)
+    return result
 
 
 @router.post("/applicable-regulations", response_model=list[ComplianceFramework])
@@ -68,6 +83,7 @@ async def create_standard_mapping_request(
     clean_requester_email = sanitize_text(request.requester_email).lower()
     clean_tenant_id = sanitize_text(request.tenant_id)
     clean_project_id = sanitize_text(request.project_id) if request.project_id else None
+    active_model = resolve_active_model(db)
 
     event = AuditEventORM(
         event_id=f"evt-{uuid.uuid4().hex[:24]}",
@@ -90,6 +106,7 @@ async def create_standard_mapping_request(
             "requester_email": clean_requester_email,
             "tenant_id": clean_tenant_id,
             "project_id": clean_project_id,
+            "ai_runtime": active_model.model_dump(mode="json"),
         },
     )
 
@@ -125,17 +142,19 @@ async def list_standard_mapping_requests(
         .all()
     )
 
-    items: list[StandardMappingRequestRecord] = []
+    items: list[StandardMappingRequestSummaryRecord] = []
     for row in rows:
         payload = row.payload or {}
+        justification = str(payload.get("business_justification") or "")
         items.append(
-            StandardMappingRequestRecord(
+            StandardMappingRequestSummaryRecord(
                 request_id=row.subject_id,
                 status=str(payload.get("status") or "submitted"),
                 submitted_at=row.event_time.isoformat(),
                 standard_name=str(payload.get("standard_name") or ""),
                 sop_reference=str(payload.get("sop_reference") or ""),
-                business_justification=str(payload.get("business_justification") or ""),
+                justification_preview=_justification_preview(justification),
+                justification_chars=len(justification),
                 requester_email=str(payload.get("requester_email") or row.actor_id),
                 tenant_id=str(payload.get("tenant_id") or row.tenant_id),
                 project_id=(str(payload.get("project_id")) if payload.get("project_id") else None),

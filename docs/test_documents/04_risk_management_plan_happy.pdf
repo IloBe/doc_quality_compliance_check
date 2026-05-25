@@ -1,0 +1,222 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 2 /Kids [4 0 R 6 0 R] >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 2503 >>
+stream
+BT
+/F1 10 Tf
+50 760 Td
+12 TL
+(# Risk Management Plan: SmartShift Planner) Tj
+T*
+() Tj
+T*
+(## Test intent) Tj
+T*
+() Tj
+T*
+(- Path: happy path) Tj
+T*
+(- Intended workflow outcome: the app should treat this as a product-specific risk management) Tj
+T*
+(plan with strong governance and reviewable controls.) Tj
+T*
+() Tj
+T*
+(## 1. Purpose and Scope of Risk Management Activities) Tj
+T*
+() Tj
+T*
+(This plan defines the product-specific risk management activities for SmartShift Planner) Tj
+T*
+(across design, development, verification, release, operation, and post-release monitoring.) Tj
+T*
+() Tj
+T*
+(Scope includes:) Tj
+T*
+(- software failure, cybersecurity, privacy, and AI/ML risks) Tj
+T*
+(- supplier and integration risks for identity and Microsoft Graph calendar sync) Tj
+T*
+(- production and post-production feedback relevant to harm prevention and compliance) Tj
+T*
+() Tj
+T*
+(## 2. Product Description) Tj
+T*
+() Tj
+T*
+(SmartShift Planner is a multi-tenant web application that creates and publishes work) Tj
+T*
+(schedules. It uses AI-assisted ranking to propose schedules and a human approval step before) Tj
+T*
+(publishing to employee calendars.) Tj
+T*
+() Tj
+T*
+(## 3. Responsibilities and Authorities) Tj
+T*
+() Tj
+T*
+(- Risk Manager: maintains the risk file and chairs formal reviews.) Tj
+T*
+(- Engineering Lead: ensures technical mitigations are implemented and verified.) Tj
+T*
+(- Security Engineer: owns threat modeling, vulnerability treatment, and hardening evidence.) Tj
+T*
+(- Privacy Officer: confirms lawful processing, minimization, retention, and breach) Tj
+T*
+(readiness.) Tj
+T*
+(- Product Owner: confirms acceptable residual business risk and intended use alignment.) Tj
+T*
+(- Quality Manager: verifies completeness of evidence and CAPA closure.) Tj
+T*
+() Tj
+T*
+(Authority to block release is explicitly granted to the Risk Manager, Security Engineer, and) Tj
+T*
+(Privacy Officer when unacceptable residual risk remains.) Tj
+T*
+() Tj
+T*
+(## 4. Methods and Procedures) Tj
+T*
+() Tj
+T*
+(- preliminary hazard analysis for major workflow changes) Tj
+T*
+(- FMEA for component and process-level failure analysis) Tj
+T*
+(- misuse and abuse case analysis for adversarial and insider scenarios) Tj
+T*
+(- security threat modeling for interfaces, secrets, identity, and tenant boundaries) Tj
+T*
+(- privacy impact checks for new data uses and exports) Tj
+T*
+() Tj
+T*
+(## 5. Risk Acceptance Criteria) Tj
+T*
+() Tj
+T*
+(- No untreated critical security or privacy risk may be accepted for release.) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 1771 >>
+stream
+BT
+/F1 10 Tf
+50 760 Td
+12 TL
+(- High-severity risks require documented mitigation, verification, and named residual risk) Tj
+T*
+(ownership.) Tj
+T*
+(- Residual risk acceptance must be reviewed by cross-functional stakeholders and linked to) Tj
+T*
+(evidence.) Tj
+T*
+(- Benefit-risk rationale must be documented for any exceptional acceptance decision.) Tj
+T*
+() Tj
+T*
+(## 6. Verification of Risk Control Measures) Tj
+T*
+() Tj
+T*
+(- test evidence for security, privacy, functional, and resilience controls) Tj
+T*
+(- confirmation that human oversight, rollback, and monitoring are effective) Tj
+T*
+(- verification records stored with the release evidence package) Tj
+T*
+() Tj
+T*
+(## 7. Production and Post-Production Activities) Tj
+T*
+() Tj
+T*
+(- monitor incidents, override rates, complaints, and unusual calendar sync behavior) Tj
+T*
+(- reassess risks after significant model, data, architecture, or supplier changes) Tj
+T*
+(- trigger CAPA for repeated control failure or audit nonconformance) Tj
+T*
+() Tj
+T*
+(## 8. Tools and Records) Tj
+T*
+() Tj
+T*
+(- governed risk register) Tj
+T*
+(- controlled FMEA workbook) Tj
+T*
+(- issue tracker with remediation linkage) Tj
+T*
+(- test evidence repository) Tj
+T*
+(- security scanning and structured logging tooling) Tj
+T*
+() Tj
+T*
+(## 9. Review and Approval Cadence) Tj
+T*
+() Tj
+T*
+(- monthly operational risk review) Tj
+T*
+(- release-based formal risk review) Tj
+T*
+(- immediate review after high-severity incident, major change, or regulatory trigger) Tj
+T*
+() Tj
+T*
+(## 10. Expected Review Outcome) Tj
+T*
+() Tj
+T*
+(Expected app/user result:) Tj
+T*
+(- suitable for approval or controlled in-review workflow) Tj
+T*
+(- should support low residual findings focused on future improvements rather than missing) Tj
+T*
+(fundamentals) Tj
+ET
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000127 00000 n 
+0000000197 00000 n 
+0000000323 00000 n 
+0000002878 00000 n 
+0000003004 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+4827
+%%EOF

@@ -1,0 +1,35 @@
+NEGATIVE TEMPLATE FIXTURE: FMEA Worksheet
+
+Fixture metadata:
+- Path: failure path
+- Template style: negative-template v1
+- Intent: intentionally non-compliant FMEA for rejection-path testing
+
+1) Purpose (intentionally wrong)
+Capture rough risk comments without requiring formal analysis.
+
+2) Scope (intentionally wrong)
+Only obvious functional errors are included; privacy and security are mostly ignored.
+
+3) Governance gaps
+- No required owner for high-risk actions.
+- No due dates or verification ownership.
+- No escalation threshold discipline.
+
+4) Unsafe instructions
+- Severity, occurrence, and detection may be guessed informally.
+- RPN may be skipped if the team is experienced.
+- Shared admin credential usage can be accepted by trust.
+
+5) Missing required controls
+- No required columns for mitigation and verification evidence.
+- No residual risk re-evaluation requirement.
+- No management review rule for high-severity findings.
+
+6) Incorrect claims (intentionally included)
+- High-severity privacy failures can be accepted without treatment if unlikely.
+- Cybersecurity failures do not belong in FMEA.
+
+Expected review outcome:
+- reject or rework
+- findings for undefined scoring model, missing ownership, missing verification evidence, and unsafe acceptance rationale

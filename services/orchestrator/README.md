@@ -62,8 +62,8 @@ curl http://localhost:8010/health
 | `BACKEND_BASE_URL` | `http://localhost:8000/api/v1` | Backend Skills API base URL |
 | `ANTHROPIC_API_KEY` | *(required for Anthropic provider)* | Anthropic provider key |
 | `ANTHROPIC_MODEL` | `claude-3-5-sonnet-20241022` | Anthropic model name |
-| `NEMOTRON_BASE_URL` | `` | Nemotron-compatible endpoint |
-| `NEMOTRON_API_KEY` | `` | Nemotron API key |
+| `NEMOTRON_BASE_URL` | `` | On-prem Nemotron OpenAI-compatible gateway endpoint |
+| `NEMOTRON_API_KEY` | `` | On-prem Nemotron gateway API key |
 | `CREWAI_WORKFLOW_ENABLED` | `true` | **Kill switch** — set `false` to force all traffic to `single_agent_wrapper` without redeploy |
 | `MAX_STEPS` | `20` | Maximum steps per run |
 | `MAX_RETRIES_PER_STEP` | `3` | Max retries per agent step |
@@ -71,7 +71,15 @@ curl http://localhost:8010/health
 | `STEP_TIMEOUT_SECONDS` | `60` | Per-step timeout in seconds |
 | `GLOBAL_RUN_TIMEOUT_SECONDS` | `300` | Entire-run timeout (enforced via `asyncio.wait_for`) |
 
-Place overrides in `services/orchestrator/.env` (gitignored).
+Place overrides in `services/orchestrator/.env` (gitignored). A ready-to-copy template is available at `services/orchestrator/.env.example`.
+
+Example on-prem wiring:
+
+```dotenv
+NEMOTRON_BASE_URL=https://nemotron-gateway.internal.example/v1
+NEMOTRON_API_KEY=replace-with-your-real-gateway-token
+NEMOTRON_MODEL=nemotron-parse
+```
 
 ---
 
@@ -169,7 +177,7 @@ Use the manual smoke entrypoint only for explicitly approved live-model checks:
 Operator runbook:
 
 1. Get human approval before any live-model run.
-2. Ensure the chosen adapter is no longer scaffold-backed.
+2. Ensure the chosen adapter is the on-prem Nemotron gateway path and that its base URL is configured.
 3. Set an explicit budget and provider.
 4. Run only the smoke-test module.
 
@@ -186,7 +194,7 @@ python -m pytest tests/test_llm_integration_smoke.py -q --cov-fail-under=0
 
 Interpretation:
 
-- `skipped` is the expected safe default today when env gates are missing or the provider is still scaffold-backed
+- `skipped` is the expected safe default today when env gates are missing, the on-prem gateway is not configured, or the chosen fallback provider is still scaffold-backed
 - `passed` means the provider returned schema-valid JSON for the validator report
 - `failed` means stop and inspect provider wiring, credentials, or response-schema drift before retrying
 

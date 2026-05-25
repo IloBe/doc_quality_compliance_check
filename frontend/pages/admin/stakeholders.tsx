@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { LuLoader } from 'react-icons/lu';
+import AdminBootstrapDiagnosticBadge from '../../components/admin/AdminBootstrapDiagnosticBadge';
 import StakeholderProfileEditor from '../../components/admin/stakeholders/StakeholderProfileEditor';
 import StakeholderProfilesList from '../../components/admin/stakeholders/StakeholderProfilesList';
 import StakeholderSessionCard from '../../components/admin/stakeholders/StakeholderSessionCard';
+import ModelPolicyEditorSection from '../../components/admin/model_policy/ModelPolicyEditorSection';
 import PageHeaderWithWhy from '../../components/PageHeaderWithWhy';
 import {
   INITIAL_STAKEHOLDER_PROFILES,
@@ -44,6 +46,7 @@ function resolveSelectedRoleId(profiles: StakeholderProfileUi[], desiredRoleId: 
 const AdminStakeholdersPage = () => {
   const router = useRouter();
   const { currentUser } = useAuth();
+  const [activeTab, setActiveTab] = useState<'roles' | 'model-policy'>('roles');
   const [profiles, setProfiles] = useState<StakeholderProfileUi[]>(INITIAL_STAKEHOLDER_PROFILES);
   const [saveMessage, setSaveMessage] = useState<string>('');
   const [error, setError] = useState<string>('');
@@ -200,11 +203,15 @@ const AdminStakeholdersPage = () => {
       setError('');
       setSaveMessage('');
       try {
+        const normalizedPermissions = selectedProfile.permissions
+          .map((permission) => (typeof permission === 'string' ? permission : permission.key))
+          .filter((permission): permission is string => permission.trim().length > 0);
+
         const saved = await saveStakeholderProfile(selectedProfile.id, {
           title: selectedProfile.title,
           description: selectedProfile.description,
-          permissions: selectedProfile.permissions,
-          is_active: selectedProfile.isActive,
+          permissions: normalizedPermissions,
+          is_active: Boolean(selectedProfile.isActive),
         });
         const savedUi = toStakeholderProfileUi(saved);
         setProfiles((prev) => prev.map((profile) => (profile.id === savedUi.id ? savedUi : profile)));
@@ -329,55 +336,90 @@ const AdminStakeholdersPage = () => {
         title="Stakeholder Profiles & Authorization Rights"
         subtitle="Configure role templates used for controlled access in compliance workflows."
         whyDescription="Clear role profiles reduce accidental over-permissioning and improve auditability. This view centralizes role-template governance before changes are rolled out to production RBAC policy."
+        rightContent={<AdminBootstrapDiagnosticBadge />}
       />
 
-      {isLoading && (
-        <div className="bg-white border border-neutral-200 rounded-2xl p-6 flex items-center gap-3 text-neutral-600">
-          <LuLoader className="w-5 h-5 animate-spin" />
-          Loading stakeholder profiles...
-        </div>
-      )}
-
-      {!isLoading && error && (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-sm text-rose-800">{error}</div>
-      )}
-
-      {!isLoading && (
-      <>
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <StakeholderProfilesList
-          profiles={profiles}
-          selectedRole={selectedRole}
-          onSelectRole={commitSelectedRole}
-        />
-
-        {selectedProfile ? (
-          <StakeholderProfileEditor
-            selectedProfile={selectedProfile}
-            permissionCatalog={STAKEHOLDER_PERMISSION_CATALOG}
-            selectedAssignments={selectedAssignments}
-            employeeNameInput={employeeNameInput}
-            bulkMode={bulkMode}
-            bulkEmployeeInput={bulkEmployeeInput}
-            isSaving={isSaving}
-            isAssignmentBusy={isAssignmentBusy}
-            saveMessage={saveMessage}
-            onSaveTemplate={handleSaveTemplate}
-            onUpdateProfile={updateSelectedProfile}
-            onTogglePermission={togglePermission}
-            onEmployeeNameInputChange={setEmployeeNameInput}
-            onBulkModeToggle={() => setBulkMode((prev) => !prev)}
-            onBulkEmployeeInputChange={setBulkEmployeeInput}
-            onAddEmployee={handleAddEmployee}
-            onBulkAddEmployees={handleBulkAddEmployees}
-            onRemoveEmployee={handleRemoveEmployee}
-          />
-        ) : null}
+      {/* Tab Navigation */}
+      <div className="flex gap-3 border-b border-neutral-200">
+        <button
+          type="button"
+          onClick={() => setActiveTab('roles')}
+          className={`px-4 py-3 font-semibold text-sm border-b-2 transition ${
+            activeTab === 'roles'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-neutral-600 hover:text-neutral-900'
+          }`}
+        >
+          Role Profiles
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('model-policy')}
+          className={`px-4 py-3 font-semibold text-sm border-b-2 transition ${
+            activeTab === 'model-policy'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-neutral-600 hover:text-neutral-900'
+          }`}
+        >
+          Model Policy
+        </button>
       </div>
 
-      <StakeholderSessionCard email={currentUser?.email || null} roles={currentUser?.roles || []} />
-      </>
+      {/* Role Profiles Tab */}
+      {activeTab === 'roles' && (
+        <>
+          {isLoading && (
+            <div className="bg-white border border-neutral-200 rounded-2xl p-6 flex items-center gap-3 text-neutral-600">
+              <LuLoader className="w-5 h-5 animate-spin" />
+              Loading stakeholder profiles...
+            </div>
+          )}
+
+          {!isLoading && error && (
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-sm text-rose-800">{error}</div>
+          )}
+
+          {!isLoading && (
+            <>
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+                <StakeholderProfilesList
+                  profiles={profiles}
+                  selectedRole={selectedRole}
+                  onSelectRole={commitSelectedRole}
+                />
+
+                {selectedProfile ? (
+                  <StakeholderProfileEditor
+                    selectedProfile={selectedProfile}
+                    permissionCatalog={STAKEHOLDER_PERMISSION_CATALOG}
+                    selectedAssignments={selectedAssignments}
+                    employeeNameInput={employeeNameInput}
+                    bulkMode={bulkMode}
+                    bulkEmployeeInput={bulkEmployeeInput}
+                    isSaving={isSaving}
+                    isAssignmentBusy={isAssignmentBusy}
+                    saveMessage={saveMessage}
+                    onSaveTemplate={handleSaveTemplate}
+                    onUpdateProfile={updateSelectedProfile}
+                    onTogglePermission={togglePermission}
+                    onEmployeeNameInputChange={setEmployeeNameInput}
+                    onBulkModeToggle={() => setBulkMode((prev) => !prev)}
+                    onBulkEmployeeInputChange={setBulkEmployeeInput}
+                    onAddEmployee={handleAddEmployee}
+                    onBulkAddEmployees={handleBulkAddEmployees}
+                    onRemoveEmployee={handleRemoveEmployee}
+                  />
+                ) : null}
+              </div>
+
+              <StakeholderSessionCard email={currentUser?.email || null} roles={currentUser?.roles || []} />
+            </>
+          )}
+        </>
       )}
+
+      {/* Model Policy Tab */}
+      {activeTab === 'model-policy' && <ModelPolicyEditorSection />}
     </div>
   );
 };

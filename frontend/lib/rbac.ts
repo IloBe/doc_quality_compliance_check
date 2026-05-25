@@ -5,7 +5,7 @@ const ROLE_PERMISSIONS: Record<RoleName, ReadonlySet<string>> = {
   qm_lead: new Set(['bridge.run', 'review.approve', 'doc.edit']),
   architect: new Set(['bridge.run', 'review.approve', 'doc.edit']),
   riskmanager: new Set(['bridge.run', 'review.approve', 'doc.edit']),
-  auditor: new Set(['bridge.run', 'review.approve']),
+  auditor: new Set(['bridge.run', 'review.approve', 'doc.edit']),
   developer: new Set(['doc.edit']),
   admin: new Set(['bridge.run', 'review.approve', 'doc.edit']),
 };

@@ -1,5 +1,8 @@
 """Pytest configuration and shared fixtures."""
 import os
+import sys
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -20,9 +23,16 @@ os.environ.setdefault("AUTH_MVP_PASSWORD", "CHANGE_ME_BEFORE_USE")  # nosec B105
 # Keep global API limiter off for deterministic pytest runs.
 # Dedicated rate-limit tests enable it explicitly via monkeypatch.
 os.environ.setdefault("GLOBAL_RATE_LIMIT_ENABLED", "false")
+os.environ.setdefault("BRIDGE_RUNTIME_TOPOLOGY_SOURCE", "metadata")
+os.environ.setdefault("BRIDGE_RUNTIME_TOPOLOGY_ALLOW_METADATA_FALLBACK", "true")
 
 # Use in-memory SQLite for testing
 TEST_SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+
+
+_ORCHESTRATOR_SRC = Path(__file__).resolve().parents[1] / "services" / "orchestrator" / "src"
+if str(_ORCHESTRATOR_SRC) not in sys.path:
+    sys.path.insert(0, str(_ORCHESTRATOR_SRC))
 
 
 @pytest.fixture(autouse=True)

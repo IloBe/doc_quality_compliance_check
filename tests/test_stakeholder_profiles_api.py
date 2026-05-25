@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from src.doc_quality.api.main import app
 from src.doc_quality.core.database import get_db
+from src.doc_quality.models.orm import StakeholderProfileORM
 
 
 def _create_authenticated_client_with_roles(test_db_session, monkeypatch, roles: str) -> TestClient:
@@ -37,6 +38,43 @@ def test_stakeholder_profiles_seed_and_list(client) -> None:
     ids = {item["profile_id"] for item in payload["items"]}
     assert "qm_lead" in ids
     assert "service" in ids
+
+
+def test_stakeholder_profiles_reconcile_missing_default_roles(test_db_session, monkeypatch) -> None:
+    test_db_session.add_all(
+        [
+            StakeholderProfileORM(
+                profile_id="app_admin",
+                title="App Admin",
+                description="Legacy admin profile",
+                permissions=["model.policy.write"],
+                is_active=True,
+                created_by="system",
+                updated_by="system",
+            ),
+            StakeholderProfileORM(
+                profile_id="qm_lead",
+                title="QM Lead",
+                description="Legacy qm lead profile",
+                permissions=["review.approve"],
+                is_active=True,
+                created_by="system",
+                updated_by="system",
+            ),
+        ]
+    )
+    test_db_session.commit()
+
+    test_client = _create_authenticated_client_with_roles(test_db_session, monkeypatch, "app_admin")
+    try:
+        response = test_client.get("/api/v1/admin/stakeholder-profiles")
+        assert response.status_code == 200
+        payload = response.json()
+
+        ids = {item["profile_id"] for item in payload["items"]}
+        assert ids == {"app_admin", "architect", "auditor", "qm_lead", "riskmanager", "service"}
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_stakeholder_profile_upsert_persists(client) -> None:

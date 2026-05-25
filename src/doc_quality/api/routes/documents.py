@@ -13,7 +13,6 @@ from ...core.database import get_db
 from ...core.session_auth import require_roles
 from ...core.security import sanitize_text, validate_file_size, validate_filename
 from ...models.document import DocumentAnalysisResult, DocumentStatus, DocumentType
-from ...models.orm import DocumentLockORM
 from ...services.document_analyzer import analyze_document
 from ...services.document_lock_service import acquire_lock, get_lock_state, release_lock
 from ...services.skills_service import get_document as get_document_from_db, persist_document, search_documents
@@ -102,7 +101,7 @@ async def analyze_document_text(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     result = analyze_document(content, filename, request.doc_type)
-    persist_document(
+    persisted = persist_document(
         db,
         filename=filename,
         content_type="text/plain",
@@ -111,6 +110,7 @@ async def analyze_document_text(
         source="analyze_text",
         document_id=result.document_id,
     )
+    result.document_id = persisted.document_id
     return result
 
 
@@ -154,7 +154,7 @@ async def upload_document(
 
     content = sanitize_text(content)
     result = analyze_document(content, filename)
-    persist_document(
+    persisted = persist_document(
         db,
         filename=filename,
         content_type=file.content_type or "application/octet-stream",
@@ -163,6 +163,7 @@ async def upload_document(
         source="upload",
         document_id=result.document_id,
     )
+    result.document_id = persisted.document_id
     return result
 
 
@@ -220,9 +221,20 @@ async def list_all_documents(
     # Use the skills service to search for documents with a valid bounded limit.
     # SkillsSearchRequest enforces limit <= 100.
     search_result = search_documents(db, SkillsSearchRequest(query="", limit=100))
-    
-    active_locks = {row.document_id: row for row in db.query(DocumentLockORM).all()}
 
+    unique_by_filename: dict[str, object] = {}
+    for doc in search_result.results:
+        key = (doc.filename or doc.document_id).strip().lower()
+        current = unique_by_filename.get(key)
+        if current is None:
+            unique_by_filename[key] = doc
+            continue
+
+        current_updated = getattr(current, "updated_at", None)
+        next_updated = getattr(doc, "updated_at", None)
+        if next_updated and (not current_updated or next_updated >= current_updated):
+            unique_by_filename[key] = doc
+    
     documents = [
         DocumentSummaryResponse(
             document_id=doc.document_id,
@@ -231,9 +243,9 @@ async def list_all_documents(
             overall_score=0.0,
             status=_workflow_status_to_tag(getattr(doc, "workflow_status", None)),
             updated_at=doc.updated_at,
-            locked_by=active_locks.get(doc.document_id).locked_by if active_locks.get(doc.document_id) else None,
+            locked_by=get_lock_state(db, doc.document_id).locked_by,
         )
-        for doc in search_result.results
+        for doc in unique_by_filename.values()
     ]
     
     return DocumentListResponse(documents=documents)

@@ -1,5 +1,30 @@
 import { expect, test } from '@playwright/test';
 
+async function mockAuthenticatedSession(
+  page: import('@playwright/test').Page,
+  documents: Array<Record<string, unknown>> = [],
+): Promise<void> {
+  await page.route('**/api/v1/auth/me', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        email: 'smoke-user@example.invalid',
+        roles: ['qm_lead'],
+        org: 'smoke-org',
+      }),
+    });
+  });
+
+  await page.route('**/api/v1/documents', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ documents }),
+    });
+  });
+}
+
 test.describe('Critical browser smoke', () => {
   test('login page renders and shows authentication affordances', async ({ page }) => {
     await page.goto('/login');
@@ -23,12 +48,24 @@ test.describe('Critical browser smoke', () => {
     await expect(page.getByLabel(/email/i)).toBeVisible();
   });
 
-  // NOTE: authClient.ts is currently a mocked stub that always returns a default user.
-  // Root therefore always renders the Document Hub rather than redirecting to /login.
-  // This test verifies the current actual behavior; update when real auth is wired in.
   test('app root renders document hub', async ({ page }) => {
+    await mockAuthenticatedSession(page, []);
     await page.goto('/');
 
     await expect(page.getByRole('heading', { name: /document hub/i })).toBeVisible();
+  });
+
+  test('bridge orchestration shows renamed action and no-document guidance', async ({ page }) => {
+    await mockAuthenticatedSession(page, []);
+    await page.goto('/bridge');
+
+    await expect(page.getByRole('heading', { name: /workflow orchestration/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /open bridge run/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /select local file/i })).toBeVisible();
+
+    await expect(
+      page.getByText(/no documents available\. select a local document/i),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: /open bridge run/i })).toBeDisabled();
   });
 });

@@ -1,6 +1,6 @@
 {
   "decision": "pass",
-  "summary": "Final verifier output is internally consistent and evidence-backed.",
+  "summary": "Crew output is consistent and supported by evidence.",
   "issues": [],
   "checks": [
     "final_verdict_consistency",

@@ -6,6 +6,7 @@ import ObservabilityKpiGrid from '../../components/admin/observability/Observabi
 import ObservabilityPromptPairsPanel from '../../components/admin/observability/ObservabilityPromptPairsPanel';
 import ObservabilitySidePanels from '../../components/admin/observability/ObservabilitySidePanels';
 import ObservabilityWorkflowTable from '../../components/admin/observability/ObservabilityWorkflowTable';
+import AdminBootstrapDiagnosticBadge from '../../components/admin/AdminBootstrapDiagnosticBadge';
 import FooterInfoCard from '../../components/FooterInfoCard';
 import PageHeaderWithWhy from '../../components/PageHeaderWithWhy';
 import {
@@ -122,12 +123,15 @@ const AdminObservabilityPage = () => {
         subtitle="Tracing and quality telemetry for technical monitoring, validation, and continuous improvement."
         whyDescription="This page visualizes backend quality telemetry so engineers can detect latency regressions, track evaluation quality, monitor hallucination indicators, and correlate failures before they impact regulated production workflows."
         rightContent={
-          <ObservabilityControls
-            windows={OBSERVABILITY_WINDOWS}
-            windowHours={windowHours}
-            onWindowChange={setWindowHours}
-            onRefresh={() => void load()}
-          />
+          <div className="flex flex-col items-end gap-2">
+            <AdminBootstrapDiagnosticBadge />
+            <ObservabilityControls
+              windows={OBSERVABILITY_WINDOWS}
+              windowHours={windowHours}
+              onWindowChange={setWindowHours}
+              onRefresh={() => void load()}
+            />
+          </div>
         }
       />
 

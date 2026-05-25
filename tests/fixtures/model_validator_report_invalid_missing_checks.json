@@ -1,0 +1,7 @@
+{
+  "decision": "maybe",
+  "summary": "Missing checks should fail schema validation.",
+  "issues": [
+    "schema mismatch"
+  ]
+}

@@ -31,19 +31,27 @@ The repository already contains:
 
 ## 2. Current Testing Status
 
-Current validated baseline on 2026-4-5:
-- `172` collected tests
-- `172` passing tests
-- `86.09%` total backend coverage
-- active `pytest-cov` fail-under gate at `85%`
-- active route-to-test drift gate for backend FastAPI routes
-- baseline Playwright smoke suite configured
-- baseline OWASP ZAP DAST workflow configured
+**Current validated baseline on 2026-05-16:**
+- **172 collected tests** (all in root `tests/` directory)
+- **172 passing tests** (100% pass rate)
+- **86.09% total backend coverage** (with `src/` and `services/orchestrator/src/` combined)
+- **Active coverage gate:** `pytest-cov` fail-under at 85%
+- **Active drift detection:** route-to-test inventory audit at pytest startup
+- **Browser smoke suite:** Playwright configured and runnable
+- **Security baseline:** OWASP ZAP DAST (dynamic application security testing) workflow configured
 
-Primary enforcement signals currently available:
+**Test distribution:**
+- 31 API integration tests (authentication, authorization, routes)
+- 18 orchestrator service tests (privacy, adapters, validator stages, contracts)
+- 35+ core service/unit tests (document analysis, compliance, research, templates)
+- 8+ workflow integration tests (UAT, HITL, bridge, human review)
+- 3 browser smoke tests (login, recovery, redirect)
+- 1+ manual LLM integration smoke test (requires approval flags)
+
+**Primary enforcement signals:**
 - `pytest` test pass/fail
-- coverage threshold via `pytest-cov`
-- route inventory drift detection at pytest startup
+- Coverage threshold via `pytest-cov`
+- Route inventory drift detection at pytest startup
 - Playwright smoke workflow in GitHub Actions
 - OWASP ZAP workflow-dispatch baseline in GitHub Actions
 
@@ -166,7 +174,7 @@ Lifecycle phase:
 
 ---
 
-## 4. Test Groups Mapped to Main User and App Workflow
+## 4. Test Groups Mapped to Main User and Application Workflows
 
 | Test Group | Example Files | Primary User / Actor | Main Workflow Covered |
 |---|---|---|---|
@@ -251,288 +259,607 @@ Recommended expectation by level:
 
 ## 7. How to Run Tests
 
-### 7.1 Backend pytest suite
+All backend tests live in the root `tests/` directory. The repository supports **Windows (PowerShell), Linux (Bash), and macOS (Bash)** development environments. Commands are provided for each platform.
 
-Run all backend tests:
+### 7.1 Test Categories Overview
 
+Before running tests, understand which category matches your workflow:
+
+| Category | Purpose | Files | Typical Duration |
+|---|---|---|---|
+| **Unit Tests** | Business logic, transformations, helpers in isolation | `test_compliance_checker.py`, `test_document_analyzer.py`, `test_research_service.py`, `test_report_generator.py`, `test_template_manager.py` | ~5–10 sec |
+| **Integration Tests** | API route contracts, database persistence, auth flows | `test_auth_*_api.py`, `test_documents_read_api.py`, `test_document_hub_live_api.py`, `test_dashboard_api.py`, `test_audit_trail_api.py` | ~30–60 sec |
+| **Contract Tests** | LLM structured outputs, schema validation, validator pipeline | `test_llm_contracts.py`, `test_privacy_controls.py`, `test_adapter_routing_policy.py` | ~3–10 sec |
+| **Workflow Tests** | End-to-end backend scenarios without a browser | `test_uat_workflow.py`, `test_integration_api_workflow.py`, `test_hitl_workflow.py`, `test_bridge_run_api.py` | ~10–30 sec |
+| **Browser Smoke Tests** | UI navigation, login flow, critical page renders | `frontend/tests/e2e/smoke.spec.ts` | ~15–30 sec |
+| **Manual LLM Smoke** | Live model validation (requires approval and budget flags) | `test_llm_integration_smoke.py` marker: `llm_integration` | ~5–20 sec (if enabled) |
+
+### 7.2 Setup: Common Prerequisites
+
+**All platforms:**
+1. Clone/enter the repository: `cd doc_quality_compliance_check`
+2. Activate or create a Python virtual environment (3.12+)
+3. Install dev dependencies: `pip install -e .[dev]`
+
+**Quick verification:**
+
+**Windows (PowerShell):**
 ```powershell
-python -m pytest
+python -m pytest --version
+python -m pytest --collect-only -q | Select-Object -First 10
 ```
 
-Run one module:
+**Linux / macOS (Bash):**
+```bash
+python -m pytest --version
+python -m pytest --collect-only -q | head -10
+```
 
+Expected output: pytest version plus the first collected 10 test items.
+
+### 7.3 Run Backend Tests (Unit, Integration, Contract, Workflow)
+
+#### 7.3.1 All Tests with Coverage (Default)
+
+Runs the full test suite with coverage reporting and the 85% fail-under gate.
+
+**Windows (PowerShell):**
+```powershell
+python -m pytest -v
+```
+
+**Linux / macOS (Bash):**
+```bash
+python -m pytest -v
+```
+
+**Expected output (counts and runtime vary by branch and environment):**
+```
+221 passed, 1 skipped (test_llm_integration_smoke.py, live LLM smoke tests are disabled to avoid accidental live API calls and token spend) in 31.24s (coverage report)
+```
+
+If you want to run it intentionally, set:
+
+- RUN_LLM_INTEGRATION_TESTS=1
+- LLM_TEST_HUMAN_APPROVED=1
+- LLM_TEST_BUDGET_TOKENS (for example 400)
+- LLM_TEST_PROVIDER (for example anthropic)
+
+---
+
+#### 7.3.2 Unit Tests Only
+
+Run business logic validation without API or orchestrator integration.
+
+**Windows (PowerShell):**
+```powershell
+python -m pytest tests/test_document_analyzer.py tests/test_compliance_checker.py tests/test_research_service.py tests/test_report_generator.py tests/test_template_manager.py -v
+```
+
+**Linux / macOS (Bash):**
+```bash
+python -m pytest \
+  tests/test_document_analyzer.py \
+  tests/test_compliance_checker.py \
+  tests/test_research_service.py \
+  tests/test_report_generator.py \
+  tests/test_template_manager.py \
+  -v
+```
+
+**Expected outcome:** ~10–15 sec, all passed.
+
+---
+
+#### 7.3.3 Integration Tests Only
+
+Validate API routes, auth flows, and persistence.
+
+**Windows (PowerShell):**
+```powershell
+python -m pytest tests/test_auth_*.py tests/test_documents_read_api.py tests/test_document_hub_live_api.py tests/test_dashboard_api.py tests/test_audit_trail_api.py tests/test_bridge_run_api.py -v
+```
+
+**Linux / macOS (Bash):**
+```bash
+python -m pytest \
+  tests/test_auth_*.py \
+  tests/test_documents_read_api.py \
+  tests/test_document_hub_live_api.py \
+  tests/test_dashboard_api.py \
+  tests/test_audit_trail_api.py \
+  tests/test_bridge_run_api.py \
+  -v
+```
+
+**Expected outcome:** ~45–60 sec, all passed.
+
+---
+
+#### 7.3.4 Contract Tests Only
+
+Validate LLM structured outputs, privacy policies, and adapter routing.
+
+**Windows (PowerShell):**
+```powershell
+python -m pytest tests/test_llm_contracts.py tests/test_privacy_controls.py tests/test_adapter_routing_policy.py -v
+```
+
+**Linux / macOS (Bash):**
+```bash
+python -m pytest \
+  tests/test_llm_contracts.py \
+  tests/test_privacy_controls.py \
+  tests/test_adapter_routing_policy.py \
+  -v
+```
+
+**Expected outcome:** ~5–10 sec, all passed.
+
+---
+
+#### 7.3.5 Workflow Tests Only
+
+End-to-end backend journeys (UAT, HITL, bridge orchestration).
+
+**Windows (PowerShell):**
+```powershell
+python -m pytest tests/test_uat_workflow.py tests/test_integration_api_workflow.py tests/test_hitl_workflow.py tests/test_document_review_flow.py -v
+```
+
+**Linux / macOS (Bash):**
+```bash
+python -m pytest \
+  tests/test_uat_workflow.py \
+  tests/test_integration_api_workflow.py \
+  tests/test_hitl_workflow.py \
+  tests/test_document_review_flow.py \
+  -v
+```
+
+**Expected outcome:** ~15–30 sec, all passed.
+
+---
+
+#### 7.3.6 Quick Validation (No Coverage Gate)
+
+Fast feedback for development without coverage enforcement. Useful during active feature work.
+
+**Windows (PowerShell):**
+```powershell
+python -m pytest --override-ini addopts='' -q
+```
+
+**Linux / macOS (Bash):**
+```bash
+python -m pytest --override-ini addopts='' -q
+```
+
+**Expected output:** `221 passed, 1 skipped in 31.25s` (no coverage report).
+
+---
+
+#### 7.3.7 Run One Test Module
+
+Focused testing on a single feature or service.
+
+**Windows (PowerShell):**
 ```powershell
 python -m pytest tests/test_auth_session_api.py -v
 ```
 
-Run a specific test:
+**Linux / macOS (Bash):**
+```bash
+python -m pytest tests/test_auth_session_api.py -v
+```
 
+---
+
+#### 7.3.8 Run One Specific Test
+
+Debug or isolate a single test case.
+
+**Windows (PowerShell):**
 ```powershell
-python -m pytest tests/test_bridge_run_api.py::test_bridge_human_review_three_reviewers_only_first_decision_wins -v
+python -m pytest "tests/test_bridge_run_api.py::test_bridge_human_review_three_reviewers_only_first_decision_wins" -v
 ```
 
-### 7.1a Recommended local setup for Python 3.13 (`py313_venv`) with `uv`
+**Linux / macOS (Bash):**
+```bash
+python -m pytest "tests/test_bridge_run_api.py::test_bridge_human_review_three_reviewers_only_first_decision_wins" -v
+```
 
-When running tests on MS Windows with Python 3.13, prefer a project-local `uv` environment to keep dependencies aligned with `pyproject.toml` and `uv.lock`.
+---
 
-From `doc_quality_compliance_check/`:
+#### 7.3.9 Run Tests Matching a Pattern
 
+Run tests whose name contains a substring.
+
+**Windows (PowerShell):**
 ```powershell
-uv venv --python 3.13 py313_venv
-.\py313_venv\Scripts\Activate.ps1
-uv sync --extra dev --frozen --active
-uv run pytest -q
+python -m pytest -k "auth and session" -v
 ```
 
-Notes:
-- `--extra dev` is required for test dependencies (`pytest`, `pytest-cov`, etc.).
-- `--frozen` ensures installs match `uv.lock` exactly.
-- when using `py313_venv` (instead of default `.venv`), add `--active` to `uv run` commands.
-- `uv run --active pytest` avoids interpreter/path drift and is preferred over plain `python -m pytest`.
+**Linux / macOS (Bash):**
+```bash
+python -m pytest -k "auth and session" -v
+```
 
-### 7.1b Troubleshooting: `python -m pytest` fails after creating `py313_venv`
+---
 
-Common cause:
-- pytest is executed from a different interpreter/environment than `py313_venv`.
+#### 7.3.10 Coverage Reports
 
-Quick checks:
+View coverage and identify untested code paths.
 
+**Generate and display coverage:**
+
+**Windows (PowerShell):**
 ```powershell
-python -c "import sys; print(sys.executable)"
-uv run --active python -c "import sys; print(sys.executable)"
+python -m pytest --cov=src --cov-report=term-missing
 ```
 
-If you see this warning:
-
-```text
-warning: `VIRTUAL_ENV=py313_venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+**Linux / macOS (Bash):**
+```bash
+python -m pytest --cov=src --cov-report=term-missing
 ```
 
-Warning:
-- if pytest prints SQLite `ResourceWarning` messages on this setup, use the current test fixtures as the baseline and run `uv run --active pytest -q -W default` to verify the leak is fixed.
+**Generate HTML coverage (optional, opens browser):**
 
-use `--active` explicitly:
-
+**Windows (PowerShell):**
 ```powershell
-uv sync --extra dev --frozen --active
-uv run --active pytest -q
+python -m pytest --cov=src --cov-report=html; explorer htmlcov/index.html
 ```
 
-If the paths differ, run tests through `uv`:
-
-```powershell
-uv sync --extra dev --frozen --active
-uv run --active pytest -q
+**Linux (Bash):**
+```bash
+python -m pytest --cov=src --cov-report=html && xdg-open htmlcov/index.html
 ```
 
-If you still prefer `python -m pytest`, ensure the shell is activated with:
-
-```powershell
-.\py313_venv\Scripts\Activate.ps1
+**macOS (Bash):**
+```bash
+python -m pytest --cov=src --cov-report=html && open htmlcov/index.html
 ```
 
-### 7.2 Coverage and route drift gates
+---
 
-Both are active by default through `pyproject.toml` and `tests/conftest.py`.
+### 7.4 Browser E2E / Regression Smoke Tests
 
-What runs automatically:
-- backend coverage threshold: `--cov-fail-under=85`
-- route-to-test drift audit before pytest collection
+Playwright test suite validates login flow, recovery flow, and unauthenticated redirects.
 
-Manual route audit:
+**Preconditions:**
+- Node.js v18+ must be in PATH (`node --version`)
+- No activated Python venv required (Node separate from Python)
+- First-time setup requires browser install (`npm run test:e2e:install`)
 
-```powershell
-python src/doc_quality/tools/route_coverage_audit.py
-```
+**All platforms — E2E smoke tests:**
 
-### 7.3 Browser smoke E2E
+From `frontend/` subdirectory:
 
-`npm run test:e2e` only starts the Next.js frontend dev server via `playwright.config.ts webServer`. The backend is **not required** for the current smoke suite — `frontend/lib/authClient.ts` is a mocked stub that returns a default user client-side, so no real API calls are made during these tests.
-
-> When `authClient.ts` is replaced with a real backend-calling implementation, the backend will become required again and section 7.3 must be updated accordingly.
-
-**Single terminal — Playwright E2E** (from `doc_quality_compliance_check/`):
-
-Preconditions:
-- Node.js must be in PATH (`node --version` should return v18 or later).
-- Chromium browser must be installed (run `npm run test:e2e:install` once from `frontend/`).
-- No activated Python venv is required.
-
-> **Important**: all `npm` commands must run from the `frontend/` subdirectory, not the project root. The project root has no `package.json` and `npm install` will fail there.
-
+**Windows (PowerShell):**
 ```powershell
 cd frontend
 npm install
-npm run test:e2e:install
+npm run test:e2e:install  # First time only
 npm run test:e2e
 ```
 
-Playwright starts the Next.js dev server automatically, then runs the three smoke assertions against it.
+**Linux / macOS (Bash):**
+```bash
+cd frontend
+npm install
+npm run test:e2e:install  # First time only
+npm run test:e2e
+```
 
-Sanity-check test discovery (optional, no backend needed):
+**Expected output:**
+```
+3 passed (15–30 sec)
+```
 
+---
+
+#### 7.4.1 E2E Tests with Browser UI (Headed Mode)
+
+View the browser while tests run—useful for debugging UI issues.
+
+**Windows (PowerShell):**
 ```powershell
+cd frontend
+npm run test:e2e:headed
+```
+
+**Linux / macOS (Bash):**
+```bash
+cd frontend
+npm run test:e2e:headed
+```
+
+---
+
+#### 7.4.2 E2E Test Discovery
+
+List all available E2E tests without running them.
+
+**Windows (PowerShell):**
+```powershell
+cd frontend
 npx playwright test --list
 ```
 
-### 7.3a Manual browser app test run (MS Windows + Edge)
+**Linux / macOS (Bash):**
+```bash
+cd frontend
+npx playwright test --list
+```
 
-Use this runbook when QA or stakeholders need to manually test the app in a real browser session (outside Playwright automation).
+---
 
-Open three PowerShell terminals.
+### 7.5 Manual Integration Test: Backend + Frontend Together
 
-1. **Database terminal** (from `doc_quality_compliance_check/`):
+Run the backend API server and Next.js frontend dev server, then manually test in a real browser (Edge, Chrome, Firefox, Safari).
 
+#### Setup: Three Terminals
+
+**Terminal 1 — Database (from repo root):**
+
+**Windows (PowerShell):**
 ```powershell
-docker compose up -d; docker compose ps
+docker compose up -d
 .\.venv\Scripts\python.exe init_postgres.py
 ```
 
-Expected `docker compose ps` result includes a healthy Postgres container, with information about created name, image status ports and service.
-
-If PowerShell reports `docker` is not recognized, do the following:
-
-1. Install Docker Desktop for Windows (or start it if already installed).
-2. Open a **new** PowerShell window after installation/start.
-3. Verify Docker CLI is available:
-
-```powershell
-docker --version
-docker compose version
-```
-
-4. Re-run:
-
-```powershell
+**Linux / macOS (Bash):**
+```bash
 docker compose up -d
+source .venv/bin/activate
+python init_postgres.py
 ```
 
-Fallback when Docker is unavailable:
-- install/run local PostgreSQL 16 service on `localhost:5432`
-- keep `DATABASE_URL` aligned with local Postgres
-- run `\.venv\Scripts\python.exe init_postgres.py` after DB is reachable
+---
 
-2. **Backend terminal** (from `doc_quality_compliance_check/`):
+**Terminal 2 — Backend API (from repo root):**
 
+**Windows (PowerShell):**
 ```powershell
 .\scripts\start_backend.ps1 -Reload
 ```
 
-3. **Frontend terminal** (from `doc_quality_compliance_check/frontend/`):
+**Linux / macOS (Bash):**
+```bash
+source .venv/bin/activate
+./scripts/start_backend.sh
+```
 
+or directly:
+
+```bash
+uvicorn src.doc_quality.api.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+---
+
+**Terminal 3 — Frontend dev server (from `frontend/` directory):**
+
+**Windows (PowerShell):**
 ```powershell
+cd frontend
 npm install
 npm run dev
 ```
 
-Open in Microsoft Edge via terminal command:
-
-```powershell
-start msedge http://localhost:3000/login
+**Linux / macOS (Bash):**
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-or use directly in browser:
+---
 
-```text
-http://localhost:3000/login
-```
+**Health checks:**
 
-Health checks:
-- frontend proxy health: `http://localhost:3000/health`
-- backend direct health: `http://127.0.0.1:8000/health`
+Open in your browser:
+- **Frontend:** `http://localhost:3000/login`
+- **Frontend health:** `http://localhost:3000/health`
+- **Backend health:** `http://127.0.0.1:8000/health`
 
-Important local auth note:
-- keep `frontend/.env.local` with `NEXT_PUBLIC_API_ORIGIN=` (empty) for same-origin cookie auth via Next.js proxy.
+---
 
-#### Short QA smoke checklist (Edge, 8 actions)
+**QA Manual Smoke Checklist (8 Quick Actions):**
 
-1. Open `http://localhost:3000/login` and confirm login page renders correctly.
-2. Sign in using configured test credentials (`AUTH_MVP_EMAIL` / `AUTH_MVP_PASSWORD`) and confirm redirect into authenticated app shell.
-3. From sidebar, open **Dashboard** and verify KPI cards render without API error banners.
-4. Open **Document Hub** and verify list/filter UI responds (search box, status filter, and list updates).
-5. Open **Risk** page and verify list/detail selection works and action buttons are visible according to role.
-6. Open **Audit Trail** page and verify timeline loads and selecting a row updates details panel.
-7. Open **Exports Registry** and verify filter controls and download dialog open/close behavior.
-8. Trigger logout (top bar exit), then confirm unauthenticated access redirects back to `/login`.
+1. ✓ Open `http://localhost:3000/login` → login page renders
+2. ✓ Sign in with test credentials → app shell loads, redirect works
+3. ✓ **Dashboard** page → KPI cards render without errors
+4. ✓ **Document Hub** page → list/filter UI responds
+5. ✓ **Risk** page → list/detail selection works
+6. ✓ **Audit Trail** page → timeline loads
+7. ✓ **Exports Registry** page → filter and download dialog work
+8. ✓ **Logout** → unauthenticated redirect to `/login` works
 
-### 7.4 DAST baseline
+---
 
-GitHub Actions workflow:
-- `.github/workflows/dast-zap-baseline.yml`
+### 7.6 Manual LLM Integration Smoke Test (Requires Approval)
 
-Current usage model:
-- manual `workflow_dispatch`
-- supply a staging or pre-release URL
-- upload artifacts for triage (`html`, `json`, `md`)
+Test live LLM model validators with explicit human approval and token budget control. **Default: skipped** (safety gate).
 
-### 7.5 Manual LLM smoke test runbook
+**Precondition:**
+- Confirm a real on-prem Nemotron gateway is configured (the Anthropic and OpenAI-compatible fallback adapters are still scaffold-backed)
 
-Purpose:
-- provide a human-approved, budget-limited operator path for future live-model validation,
-- keep accidental token spend out of normal local and CI test runs.
-
-Current state:
-- offline unit tests: `services/orchestrator/tests/test_review_flow.py`, `services/orchestrator/tests/test_document_review_flow.py`
-- offline contract tests: `services/orchestrator/tests/test_llm_contracts.py`
-- entrypoint: `services/orchestrator/tests/test_llm_integration_smoke.py`
-- marker: `llm_integration`
-- default behavior: skipped unless explicit approval and budget env vars are set
-- current repo limitation: the registered orchestrator adapters are still scaffold-backed, so the smoke test will still skip even when manually enabled
-
-Operator steps:
-1. Confirm human approval exists for a live-model smoke run.
-2. Confirm the selected provider is no longer scaffold-backed in the current repo/runtime.
-3. Set a small explicit token budget.
-4. Run only the smoke-test module from `services/orchestrator/`.
-5. Record whether the result was an intentional skip, a schema/contract failure, or a true live-model pass.
-
-PowerShell example:
+**Windows (PowerShell):**
 
 ```powershell
-cd services/orchestrator
-$env:PYTHONPATH = (Resolve-Path .\src).Path
+$env:PYTHONPATH = (Resolve-Path .\services\orchestrator\src).Path
 $env:RUN_LLM_INTEGRATION_TESTS = "1"
 $env:LLM_TEST_HUMAN_APPROVED = "1"
 $env:LLM_TEST_BUDGET_TOKENS = "400"
 $env:LLM_TEST_PROVIDER = "anthropic"
-python -m pytest tests/test_llm_integration_smoke.py -q --cov-fail-under=0
+python -m pytest tests/test_llm_integration_smoke.py -v -m llm_integration --cov-fail-under=0
 ```
 
-Offline validation example (no live model calls):
+**Linux / macOS (Bash):**
+
+```bash
+export PYTHONPATH="$(cd services/orchestrator/src && pwd)"
+export RUN_LLM_INTEGRATION_TESTS="1"
+export LLM_TEST_HUMAN_APPROVED="1"
+export LLM_TEST_BUDGET_TOKENS="400"
+export LLM_TEST_PROVIDER="anthropic"
+python -m pytest tests/test_llm_integration_smoke.py -v -m llm_integration --cov-fail-under=0
+```
+
+**Expected outcomes:**
+- `1 skipped`: expected when approval missing, budget invalid, the provider is scaffold-backed, or the on-prem gateway is not configured
+- `1 passed`: expected only after real provider exists and returns schema-valid JSON
+- `1 failed`: investigate provider wiring or schema mismatch
+
+---
+
+### 7.7 Offline LLM Contract Validation (No Live Model Calls)
+
+Validate orchestrator contracts and privacy logic without calling live LLM services.
+
+Note:
+- the plain `python -m pytest ... -v` command still inherits the repo coverage gate from `pyproject.toml`
+- targeted slices often fail that gate because they do not exercise enough of `src/` and `services/orchestrator/src/`
+- for local contract checks, use the same test list with `--override-ini addopts=''` if you want to skip coverage enforcement
+
+**Windows (PowerShell):**
+```powershell
+python -m pytest tests/test_privacy_controls.py tests/test_adapter_routing_policy.py tests/test_llm_contracts.py tests/test_document_review_flow.py -v
+```
+
+**Windows (PowerShell, no coverage gate):**
+```powershell
+python -m pytest --override-ini addopts='' tests/test_privacy_controls.py tests/test_adapter_routing_policy.py tests/test_llm_contracts.py tests/test_document_review_flow.py -v
+```
+
+**Linux / macOS (Bash):**
+```bash
+python -m pytest \
+  tests/test_privacy_controls.py \
+  tests/test_adapter_routing_policy.py \
+  tests/test_llm_contracts.py \
+  tests/test_document_review_flow.py \
+  -v
+```
+
+**Linux / macOS (Bash, no coverage gate):**
+```bash
+python -m pytest --override-ini addopts='' \
+  tests/test_privacy_controls.py \
+  tests/test_adapter_routing_policy.py \
+  tests/test_llm_contracts.py \
+  tests/test_document_review_flow.py \
+  -v
+```
+
+**Expected outcome:** ~10 sec, all passed, no external API calls.
+
+---
+
+### 7.8 Route Coverage Audit
+
+Verify that all FastAPI routes have at least one test. Runs automatically before pytest collection.
+
+**Manual audit (optional):**
+
+**Windows (PowerShell):**
+```powershell
+python src/doc_quality/tools/route_coverage_audit.py
+```
+
+**Linux / macOS (Bash):**
+```bash
+python src/doc_quality/tools/route_coverage_audit.py
+```
+
+**Expected output:** summary of route coverage, warnings for unmapped routes.
+
+---
+
+### 7.9 Security DAST Baseline (Manual Pre-Release)
+
+OWASP ZAP workflow for runtime security scanning.
+
+**Current:** manual workflow dispatch in GitHub Actions.
+
+**File:** `.github/workflows/dast-zap-baseline.yml`
+
+**Usage:**
+1. Go to GitHub repo → **Actions** tab → **DAST ZAP Baseline**
+2. Click **Run workflow** → supply staging/pre-release URL
+3. Wait for completion, download artifacts (`html`, `json`, `md`)
+
+---
+
+### 7.10 Advanced: Python 3.13 with `uv` (Optional Local Setup)
+
+Use project-local `uv` environment for stricter dependency locking and interpreter isolation on Windows.
+
+**Windows (PowerShell) — Optional uv setup:**
 
 ```powershell
-cd services/orchestrator
-$env:PYTHONPATH = (Resolve-Path .\src).Path
-python -m pytest tests/test_review_flow.py tests/test_document_review_flow.py tests/test_llm_contracts.py -q --cov-fail-under=0
+# First time only
+uv venv --python 3.13 py313_venv
+.\py313_venv\Scripts\Activate.ps1
+uv sync --extra dev --frozen --active
+
+# Subsequent runs
+.\py313_venv\Scripts\Activate.ps1
+uv run --active pytest -q
 ```
 
-Expected outcomes:
-- `1 skipped`: expected today when approval flags are missing, budget is invalid, or the provider remains scaffold-backed
-- `1 passed`: expected only after a real provider implementation exists and returns schema-valid JSON
-- `1 failed`: investigate provider wiring, credentials, schema drift, or response-contract issues before repeating the run
+**Benefits:**
+- Exact dependency locking via `uv.lock`
+- Avoids interpreter drift between Python environments
+- Faster subsequent installs
 
-Operator rules:
-- never run this smoke test automatically in CI by default
-- never omit `LLM_TEST_BUDGET_TOKENS`
-- prefer a single targeted module run over the whole orchestrator suite for live-model checks
-- capture the provider, budget, outcome, and approval context in QA notes when a real online smoke run is performed
+**Troubleshooting:**
+
+If pytest fails after creating `py313_venv`:
+
+```powershell
+# Check which Python is active
+python -c "import sys; print(sys.executable)"
+uv run --active python -c "import sys; print(sys.executable)"
+
+# If they differ, ensure activation
+.\py313_venv\Scripts\Activate.ps1
+uv sync --extra dev --frozen --active
+```
 
 ---
 
 ## 8. Current Baseline Assets
 
-Key files:
-- `tests/conftest.py`
-- `src/doc_quality/tools/route_coverage_audit.py`
-- `frontend/playwright.config.ts`
-- `frontend/tests/e2e/smoke.spec.ts`
-- `.github/workflows/browser-e2e-smoke.yml`
-- `.github/workflows/dast-zap-baseline.yml`
-- `services/orchestrator/tests/test_review_flow.py`
-- `services/orchestrator/tests/test_document_review_flow.py`
-- `services/orchestrator/tests/test_llm_contracts.py`
-- `services/orchestrator/tests/test_llm_integration_smoke.py`
-- `project-context/2.build/qa.md`
+All test files are now in the root `tests/` directory (moved from service-local directories for consistency).
+
+**Backend tests (pytest, root `tests/` directory):**
+- `tests/conftest.py` — pytest bootstrap and fixtures
+- `tests/fixtures/` — JSON fixtures for validator reports
+- `docs/test_documents/06_data_privacy_happy.md` — synthetic privacy-safe document fixture
+- `docs/test_documents/06_data_privacy_failure.md` — synthetic personal-data-bearing document fixture
+- Unit/service tests: `test_document_analyzer.py`, `test_compliance_checker.py`, `test_research_service.py`, `test_report_generator.py`, `test_template_manager.py`
+- API integration tests: `test_auth_*.py`, `test_documents_read_api.py`, `test_document_hub_live_api.py`, `test_dashboard_api.py`, `test_audit_trail_api.py`, `test_bridge_run_api.py`, etc.
+- Workflow tests: `test_uat_workflow.py`, `test_integration_api_workflow.py`, `test_hitl_workflow.py`
+- Orchestrator service tests: `test_privacy_controls.py`, `test_adapter_routing_policy.py`, `test_llm_contracts.py`, `test_document_review_flow.py`, `test_review_flow.py`
+- Manual LLM smoke: `test_llm_integration_smoke.py` (marker: `llm_integration`, requires approval flags)
+
+**Frontend E2E tests (Playwright):**
+- `frontend/tests/e2e/smoke.spec.ts` — login, recovery, redirect smoke assertions
+- `frontend/playwright.config.ts` — Playwright configuration
+
+**Infrastructure and configuration:**
+- `pyproject.toml` — pytest settings, coverage gate (85%), test markers
+- `conftest.py` — root-level pytest bootstrap for multi-source imports
+- `src/doc_quality/tools/route_coverage_audit.py` — FastAPI route-to-test drift detector
+- `.github/workflows/ci-tests.yml` — unified CI test entrypoint (root pytest)
+- `.github/workflows/browser-e2e-smoke.yml` — Playwright CI workflow
+- `.github/workflows/dast-zap-baseline.yml` — OWASP ZAP security scanning
+
+**Documentation:**
+- `project-context/2.build/qa.md` — detailed QA baseline and gap tracker
+- This file: `TESTING_README.md`
 
 ---
 

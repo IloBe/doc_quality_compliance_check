@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import AdminCenterSummaryGrid from '../../components/admin/AdminCenterSummaryGrid';
 import AdminNavigationCards from '../../components/admin/AdminNavigationCards';
+import AdminBootstrapDiagnosticBadge from '../../components/admin/AdminBootstrapDiagnosticBadge';
 import FooterInfoCard from '../../components/FooterInfoCard';
 import PageHeaderWithWhy from '../../components/PageHeaderWithWhy';
 import { ADMIN_NAVIGATION_CARDS, buildAdminCenterSummary } from '../../lib/adminCenterViewModel';
@@ -15,6 +16,7 @@ const AdminPage = () => {
         title="Admin Center"
         subtitle="Central workspace for operational observability and access governance."
         whyDescription="The Admin Center gives technical stakeholders one controlled location to monitor platform quality signals and maintain role governance. It reduces drift between operational reality and authorization policy."
+        rightContent={<AdminBootstrapDiagnosticBadge />}
       />
 
       <AdminCenterSummaryGrid summary={summary} />

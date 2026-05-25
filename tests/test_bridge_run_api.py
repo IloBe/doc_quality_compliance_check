@@ -3,13 +3,16 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import os
+from pathlib import Path
 import uuid
+import base64
 
 from fastapi.testclient import TestClient
 
 from src.doc_quality.api.main import app
+from src.doc_quality.api.routes import bridge as bridge_routes
 from src.doc_quality.core.database import get_db
-from src.doc_quality.models.orm import AuditEventORM, BridgeHumanReviewORM, SkillDocumentORM
+from src.doc_quality.models.orm import AuditEventORM, BridgeHumanReviewORM, ModelPolicyConfigORM, SkillDocumentORM
 
 
 def _client_with_db(test_db_session) -> TestClient:
@@ -56,6 +59,8 @@ def test_bridge_run_eu_ai_act_returns_results_and_persists_audit(client, test_db
     assert payload["human_review_required"] is True
     assert payload["human_review_status"] == "pending"
     assert payload["regulatory_update"]["requires_document_update"] is False
+    assert payload["active_model"]["model_id"] == "llama3.1:8b"
+    assert payload["active_model"]["provider"] == "ollama"
     assert "checked_frameworks" in payload
     assert "eu_ai_act" in payload["checked_frameworks"]
     assert "gdpr" in payload["checked_frameworks"]
@@ -69,6 +74,21 @@ def test_bridge_run_eu_ai_act_returns_results_and_persists_audit(client, test_db
     assert "iso_13485" in payload["checked_frameworks"]
     assert "iso_14971" in payload["checked_frameworks"]
     assert "iec_62304" in payload["checked_frameworks"]
+    assert "hipaa" not in payload["checked_frameworks"]
+    assert isinstance(payload.get("governance_controls"), list)
+    assert isinstance(payload.get("mitigation_recommendations"), list)
+    assert payload.get("runtime_topology", {}).get("explicitly_proven") is True
+    assert payload.get("runtime_topology", {}).get("isolated_deployments") is True
+    assert len(payload.get("runtime_topology", {}).get("agents", [])) == 4
+    assert len(payload["mitigation_recommendations"]) >= 1
+    assert all(item.get("topic") for item in payload["mitigation_recommendations"])
+    assert all(item.get("proposal") for item in payload["mitigation_recommendations"])
+    assert any(
+        "Affected controls:" in item.get("proposal", "")
+        for item in payload["mitigation_recommendations"]
+    )
+    assert any(item.get("framework_id") == "mdr_eu_medical_devices" for item in payload["governance_controls"])
+    assert all(item.get("framework_id") != "hipaa" for item in payload["governance_controls"])
 
     requirement_frameworks = {item.get("framework") for item in payload["requirements"]}
     assert "eu_ai_act" in requirement_frameworks
@@ -87,6 +107,24 @@ def test_bridge_run_eu_ai_act_returns_results_and_persists_audit(client, test_db
     events = test_db_session.query(AuditEventORM).filter(AuditEventORM.subject_id == "DOC-BRIDGE-1").all()
     assert any(e.event_type == "bridge.run.completed" for e in events)
     assert not any(e.event_type == "bridge.run.approved" for e in events)
+    completed_event = next(event for event in events if event.event_type == "bridge.run.completed")
+    assert completed_event.payload.get("ai_runtime", {}).get("model_id") == "llama3.1:8b"
+    reproducibility = completed_event.payload.get("reproducibility_audit", {})
+    assert reproducibility.get("run_initiated_by", {}).get("email")
+    assert isinstance(reproducibility.get("run_initiated_by", {}).get("roles"), list)
+    assert reproducibility.get("document", {}).get("document_name") == "qmm.md"
+    assert reproducibility.get("workflow_run_at")
+    assert len(reproducibility.get("agent_models", [])) == 4
+    assert all("model_params" in item for item in reproducibility.get("agent_models", []))
+    assert all("temperature" in item.get("model_params", {}) for item in reproducibility.get("agent_models", []))
+    assert all("top_p" in item.get("model_params", {}) for item in reproducibility.get("agent_models", []))
+    assert all("top_k" in item.get("model_params", {}) for item in reproducibility.get("agent_models", []))
+    assert reproducibility.get("runtime_topology", {}).get("explicitly_proven") is True
+    assert len(reproducibility.get("runtime_topology", {}).get("agents", [])) == 4
+    assert "controls_taken_into_account" in reproducibility.get("run_result", {})
+    assert "found_issues" in reproducibility.get("run_result", {})
+    assert "proposed_mitigations" in reproducibility.get("run_result", {})
+    assert reproducibility.get("run_result", {}).get("status_summary")
 
     updated_doc = (
         test_db_session.query(SkillDocumentORM)
@@ -95,6 +133,89 @@ def test_bridge_run_eu_ai_act_returns_results_and_persists_audit(client, test_db
     )
     assert updated_doc is not None
     assert updated_doc.workflow_status == "in_review"
+
+
+def test_bridge_runtime_self_check_reports_required_tables_and_local_models(client) -> None:
+    response = client.get("/api/v1/bridge/runtime/self-check")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] in {"ready", "blocked"}
+    assert "model_policy_configs" in payload["database"]["required_tables"]
+    assert isinstance(payload["agent_models"], list)
+    assert len(payload["agent_models"]) == 4
+    assert all(item["is_local_ollama"] is True for item in payload["agent_models"])
+    assert payload["topology"]["explicitly_proven"] is True
+    assert payload["topology"]["isolated_deployments"] is True
+    assert len(payload["topology"]["agents"]) == 4
+
+
+def test_bridge_runtime_topology_endpoint_returns_containerized_agent_evidence(client) -> None:
+    response = client.get("/api/v1/bridge/runtime/topology")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["orchestrator_name"]
+    assert payload["orchestrator_mode"] == "containerized-sandbox"
+    assert payload["explicitly_proven"] is True
+    assert payload["isolated_deployments"] is True
+    assert len(payload["agents"]) == 4
+    assert all(item["container_name"].startswith("bridge-agent-") for item in payload["agents"])
+    assert all(item["proof_source"] in {"metadata", "docker_inspect"} for item in payload["agents"])
+
+
+def test_bridge_run_is_blocked_when_runtime_self_check_fails(client, test_db_session, monkeypatch) -> None:
+    doc = SkillDocumentORM(
+        document_id="DOC-BRIDGE-SELF-CHECK-BLOCKED",
+        filename="blocked.md",
+        content_type="text/markdown",
+        document_type="sop",
+        extracted_text="quality management controls logging oversight",
+        source="skills_extract",
+    )
+    test_db_session.add(doc)
+    test_db_session.commit()
+
+    def _blocked_self_check(*, db, active_model, sandbox_steps):
+        return bridge_routes.BridgeRuntimeSelfCheckResponse(
+            checked_at=datetime.now(timezone.utc),
+            status="blocked",
+            bridge_run_allowed=False,
+            database=bridge_routes.BridgeDatabaseSelfCheckResponse(
+                database_dialect="postgresql",
+                required_tables=["model_policy_configs"],
+                missing_tables=["model_policy_configs"],
+                missing_columns={},
+                expected_migration_head="015",
+                current_migration_revision="014",
+                migration_drift_detected=True,
+                migration_drift_reason="database revision is behind expected head",
+            ),
+            agent_models=[],
+            issues=["migration drift detected: database revision is behind expected head"],
+        )
+
+    monkeypatch.setattr(bridge_routes, "_build_bridge_runtime_self_check", _blocked_self_check)
+
+    response = client.post(
+        "/api/v1/bridge/run/eu-ai-act",
+        json={
+            "document_id": "DOC-BRIDGE-SELF-CHECK-BLOCKED",
+            "domain_info": {
+                "domain": "medical devices",
+                "description": "AI diagnostic support tool",
+                "uses_ai_ml": True,
+                "intended_use": "assist diagnosis",
+                "target_market": "EU",
+            },
+        },
+    )
+
+    assert response.status_code == 503
+    payload = response.json()
+    assert payload["error"]["code"] == "database_unavailable"
+    assert payload["error"]["reason"] == "bridge_runtime_not_ready"
+    assert "migration drift" in " ".join(payload["error"]["details"]).lower()
 
 
 def test_bridge_run_excludes_mdr_for_non_medical_domain(client, test_db_session) -> None:
@@ -213,6 +334,142 @@ def test_bridge_run_includes_hipaa_for_us_medical_domain(client, test_db_session
 
     requirement_frameworks = {item.get("framework") for item in payload["requirements"]}
     assert "hipaa" in requirement_frameworks
+    assert any(item.get("framework_id") == "hipaa" for item in payload.get("governance_controls", []))
+
+
+def test_bridge_run_rejects_non_local_provider_under_strict_policy(client, test_db_session) -> None:
+    doc = SkillDocumentORM(
+        document_id="DOC-BRIDGE-NONLOCAL",
+        filename="remote-model.md",
+        content_type="text/markdown",
+        document_type="sop",
+        extracted_text="risk management system logging transparency human oversight technical documentation",
+        source="skills_extract",
+    )
+    test_db_session.add(doc)
+    test_db_session.merge(
+        ModelPolicyConfigORM(
+            config_id="default",
+            default_model_id="claude-3-5-sonnet-20241022",
+            items=[
+                {
+                    "model_id": "claude-3-5-sonnet-20241022",
+                    "display_name": "Anthropic claude-3-5-sonnet-20241022",
+                    "provider": "anthropic",
+                    "enabled": True,
+                    "priority": 1,
+                    "params": {},
+                }
+            ],
+            updated_by="test-suite",
+        )
+    )
+    test_db_session.commit()
+
+    response = client.post(
+        "/api/v1/bridge/run/eu-ai-act",
+        json={
+            "document_id": "DOC-BRIDGE-NONLOCAL",
+            "domain_info": {
+                "domain": "medical devices",
+                "description": "AI diagnostic support tool",
+                "uses_ai_ml": True,
+                "intended_use": "assist diagnosis",
+                "target_market": "EU",
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    assert "local-only sandbox policy" in response.json()["error"]["message"].lower()
+
+
+def test_bridge_run_detects_privacy_violation_and_returns_mitigations(client, test_db_session) -> None:
+    doc = SkillDocumentORM(
+        document_id="DOC-BRIDGE-PRIV-1",
+        filename="privacy-violation.md",
+        content_type="text/markdown",
+        document_type="sop",
+        extracted_text=(
+            "Patient complaint for chest x-ray image quality issue in Stockholm hospital. "
+            "Address and age/sex context included. "
+            "GDPR violation and security violation were flagged in an LLM GenAI workflow. "
+            "Mitigation had no success and the issue happened again."
+        ),
+        source="skills_extract",
+    )
+    test_db_session.add(doc)
+    test_db_session.commit()
+
+    response = client.post(
+        "/api/v1/bridge/run/eu-ai-act",
+        json={
+            "document_id": "DOC-BRIDGE-PRIV-1",
+            "domain_info": {
+                "domain": "medical devices",
+                "description": "AI diagnostic support tool",
+                "uses_ai_ml": True,
+                "intended_use": "assist diagnosis",
+                "target_market": "EU",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["privacy_violation"]["detected"] is True
+    assert payload["automatic_recommendation"] == "rejected"
+    assert payload["approved"] is False
+    assert len(payload["privacy_violation"]["proposals"]) >= 1
+    assert len(payload["sandbox_steps"]) == 4
+    assert all(step["processed_locally"] is True for step in payload["sandbox_steps"])
+
+    events = test_db_session.query(AuditEventORM).filter(AuditEventORM.subject_id == "DOC-BRIDGE-PRIV-1").all()
+    assert any(event.event_type == "bridge.run.privacy_violation.detected" for event in events)
+
+
+def test_bridge_run_detects_privacy_violation_from_real_pdf_document(client, test_db_session) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    pdf_path = repo_root / "docs" / "test_documents" / "07_bridge_gdpr_security_violation_xray_complaint.pdf"
+    assert pdf_path.exists()
+
+    extract_response = client.post(
+        "/api/v1/skills/extract_text",
+        json={
+            "filename": pdf_path.name,
+            "content_base64": base64.b64encode(pdf_path.read_bytes()).decode("ascii"),
+            "content_type": "application/pdf",
+            "store_document": True,
+            "document_type": "risk_assessment",
+        },
+    )
+    assert extract_response.status_code == 200
+    extracted = extract_response.json()
+    document_id = extracted.get("document_id")
+    assert document_id
+
+    run_response = client.post(
+        "/api/v1/bridge/run/eu-ai-act",
+        json={
+            "document_id": document_id,
+            "domain_info": {
+                "domain": "medical devices",
+                "description": "AI diagnostic support tool",
+                "uses_ai_ml": True,
+                "intended_use": "assist diagnosis",
+                "target_market": "EU",
+            },
+        },
+    )
+    assert run_response.status_code == 200
+    payload = run_response.json()
+
+    assert payload["privacy_violation"]["detected"] is True
+    assert payload["automatic_recommendation"] == "rejected"
+    assert payload["approved"] is False
+    assert len(payload["privacy_violation"]["proposals"]) >= 1
+    assert len(payload["sandbox_steps"]) == 4
 
 
 def test_bridge_alert_flags_requirement_drift_since_last_approved_run(client, test_db_session) -> None:

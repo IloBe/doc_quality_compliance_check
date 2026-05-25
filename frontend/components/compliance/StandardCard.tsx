@@ -14,12 +14,9 @@ const StandardCard = ({ standard }: StandardCardProps) => {
 
   return (
     <div className="bg-white border border-neutral-100 rounded-[2rem] p-8 shadow-sm hover:shadow-2xl transition-all duration-500 hover:-translate-y-1 overflow-hidden group">
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex items-start justify-start mb-8">
         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${tone.icon}`}>
           <LuShieldCheck className="w-6 h-6" />
-        </div>
-        <div className={`px-3 py-1 text-[10px] font-black uppercase rounded-full ${tone.badge}`}>
-          {standard.status}
         </div>
       </div>
 
@@ -28,9 +25,21 @@ const StandardCard = ({ standard }: StandardCardProps) => {
         <a href={standard.url} target="_blank" rel="noopener noreferrer" className="ml-1 text-blue-500 hover:underline" title="Open standard">
           <LuExternalLink className="w-4 h-4 inline" />
         </a>
+        {standard.secondaryUrl ? (
+          <a
+            href={standard.secondaryUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-neutral-400 hover:text-blue-500 transition-colors"
+            title={`Open secondary reference for ${standard.title}`}
+            aria-label={`Open secondary reference for ${standard.title}`}
+          >
+            <LuExternalLink className="w-4 h-4 inline" />
+          </a>
+        ) : null}
       </h3>
 
-      <p className="text-sm font-medium text-neutral-400 mb-8 line-clamp-2 italic">{standard.desc}</p>
+      <p className="text-sm font-medium text-neutral-400 mb-8 max-h-24 overflow-y-auto italic">{standard.desc}</p>
 
       <div className="flex-grow" />
       <div className="flex items-center justify-between pt-6 border-t border-neutral-50 mt-auto">

@@ -1,0 +1,35 @@
+NEGATIVE TEMPLATE FIXTURE: Quality Management Plan
+
+Fixture metadata:
+- Path: failure path
+- Template style: negative-template v1
+- Intent: intentionally non-compliant governance document for rejection-path testing
+
+1) Purpose (intentionally wrong)
+Ship fast even when quality evidence is incomplete or missing.
+
+2) Scope (intentionally wrong)
+Only developers are in scope. Security, privacy, operations, and support are excluded.
+
+3) Governance gaps
+- No independent approver is required.
+- One engineer may code, test, approve, and release.
+- No named privacy, security, or quality owner.
+
+4) Unsafe instructions
+- Skip threat modeling and security testing for internal changes.
+- Permit shared admin accounts during deadlines.
+- Allow logging of names, emails, schedules, and tokens for debugging.
+
+5) Missing required controls
+- No release gate for critical defects.
+- No root-cause analysis requirement for escaped defects.
+- No controlled evidence repository requirement.
+
+6) Incorrect claims (intentionally included)
+- GDPR allows indefinite retention for analytics without legal basis review.
+- Security incidents require documentation only if requested by the customer.
+
+Expected review outcome:
+- reject or rework
+- findings for missing accountability, absent release gates, privacy/security violations, and weak evidence control

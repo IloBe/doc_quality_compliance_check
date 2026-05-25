@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatDateTime } from '../../lib/dateTime';
 
 type AuditTrailSchedulePanelProps = {
   internalAuditDate: string;
@@ -66,7 +67,7 @@ const AuditTrailSchedulePanel = ({
         {nearestFutureAudit ? (
           <span>
             Nearest future audit: <span className="font-semibold text-neutral-900">{nearestFutureAudit.kind === 'external' ? 'External' : 'Internal'}</span> on{' '}
-            <span className="font-semibold text-neutral-900">{nearestFutureAudit.date.toLocaleDateString()}</span>
+            <span className="font-semibold text-neutral-900">{formatDateTime(nearestFutureAudit.date, 'n/a')}</span>
             {nearestFutureAudit.kind === 'external' && externalNotifiedBody.trim() ? ` · ${externalNotifiedBody.trim()}` : ''}
           </span>
         ) : (

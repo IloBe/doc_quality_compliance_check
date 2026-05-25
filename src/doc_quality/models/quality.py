@@ -109,11 +109,16 @@ class LlmPromptOutputPair(BaseModel):
     model_used: str | None = None
     prompt: str
     output: str
+    prompt_chars: int = 0
+    output_chars: int = 0
+    prompt_truncated: bool = False
+    output_truncated: bool = False
     trace_id: str | None = None
     correlation_id: str | None = None
     subject_type: str | None = None
     subject_id: str | None = None
     rich_payload: dict[str, Any] = Field(default_factory=dict)
+    rich_payload_keys: list[str] = Field(default_factory=list)
 
 
 class LlmPromptOutputListResponse(BaseModel):

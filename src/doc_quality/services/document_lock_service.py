@@ -7,6 +7,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import inspect
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
 from ..core.logging_config import get_logger
@@ -14,6 +16,25 @@ from ..core.security import sanitize_text
 from ..models.orm import DocumentLockORM, SkillDocumentORM
 
 logger = get_logger(__name__)
+
+
+def _ensure_lock_table_exists(db: Session) -> None:
+    """Ensure the lock table exists so read/write operations remain resilient.
+
+    This keeps document retrieval functional if a runtime starts before migrations
+    are applied. The canonical path is still Alembic migration execution.
+    """
+    bind = db.get_bind()
+    inspector = inspect(bind)
+    if inspector.has_table(DocumentLockORM.__tablename__):
+        return
+    DocumentLockORM.__table__.create(bind=bind, checkfirst=True)
+    logger.warning("document_lock_table_auto_created", table=DocumentLockORM.__tablename__)
+
+
+def _is_missing_table_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "document_locks" in message and ("does not exist" in message or "undefinedtable" in message or "f405" in message)
 
 
 def _utc_now() -> datetime:
@@ -64,7 +85,16 @@ def _delete_if_expired(db: Session, lock: DocumentLockORM) -> bool:
 
 
 def get_lock_state(db: Session, document_id: str) -> LockState:
-    lock = db.query(DocumentLockORM).filter(DocumentLockORM.document_id == document_id).first()
+    try:
+        _ensure_lock_table_exists(db)
+        lock = db.query(DocumentLockORM).filter(DocumentLockORM.document_id == document_id).first()
+    except ProgrammingError as exc:
+        if not _is_missing_table_error(exc):
+            raise
+        logger.exception("document_lock_state_missing_table_fallback", document_id=document_id)
+        db.rollback()
+        return LockState(document_id=document_id, locked_by=None, locked_at=None, expires_at=None)
+
     if lock is None:
         return LockState(document_id=document_id, locked_by=None, locked_at=None, expires_at=None)
 
@@ -82,6 +112,8 @@ def get_lock_state(db: Session, document_id: str) -> LockState:
 def acquire_lock(db: Session, *, document_id: str, actor_id: str, ttl_minutes: int = 30) -> LockActionResult:
     actor = _normalize_actor(actor_id)
     ttl = max(1, min(int(ttl_minutes), 8 * 60))
+
+    _ensure_lock_table_exists(db)
 
     document = db.query(SkillDocumentORM).filter(SkillDocumentORM.document_id == document_id).first()
     if document is None:
@@ -148,6 +180,7 @@ def acquire_lock(db: Session, *, document_id: str, actor_id: str, ttl_minutes: i
 
 def release_lock(db: Session, *, document_id: str, actor_id: str) -> LockActionResult:
     actor = _normalize_actor(actor_id)
+    _ensure_lock_table_exists(db)
     lock = db.query(DocumentLockORM).filter(DocumentLockORM.document_id == document_id).first()
     if lock is None:
         return LockActionResult(

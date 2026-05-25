@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { LuArrowLeft, LuFileCheck, LuInfo } from 'react-icons/lu';
 import PageHeaderWithWhy from '../../components/PageHeaderWithWhy';
 import { useAuth } from '../../lib/authContext';
+import { formatDateTime } from '../../lib/dateTime';
 import {
   fetchStandardMappingRequests,
   submitStandardMappingRequest,
@@ -231,7 +232,7 @@ const RequestStandardMappingPage = () => {
                   <p className="text-[11px] font-black uppercase tracking-wider text-neutral-500">{record.request_id}</p>
                   <p className="mt-1 text-sm font-bold text-neutral-800">{record.standard_name}</p>
                   <p className="text-xs text-neutral-600">{record.sop_reference}</p>
-                  <p className="mt-1 text-[11px] text-neutral-500">{new Date(record.submitted_at).toLocaleString()}</p>
+                  <p className="mt-1 text-[11px] text-neutral-500">{formatDateTime(record.submitted_at, 'n/a')}</p>
                 </article>
               ))
             )}

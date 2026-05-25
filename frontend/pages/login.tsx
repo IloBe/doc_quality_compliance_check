@@ -32,8 +32,8 @@ const readQueryValue = (value: string | string[] | undefined): string => {
 const Login = () => {
    const router = useRouter();
     const submitSequenceRef = useRef(0);
-   const [email, setEmail] = useState('mvp-user@example.invalid');
-    const [password, setPassword] = useState('CHANGE_ME_BEFORE_USE');
+   const [email, setEmail] = useState('demo@quality-station.ai');
+    const [password, setPassword] = useState('change-me');
   const [isLoading, setIsLoading] = useState(false);
    const [rememberSession, setRememberSession] = useState(true);
    const [error, setError] = useState<string | null>(null);

@@ -14,7 +14,7 @@ describe('rbac behavior matrix', () => {
   });
 
   it('denies actions outside each role permission set', () => {
-    expect(hasPermission({ roles: ['auditor'] }, 'doc.edit')).toBe(false);
+    expect(hasPermission({ roles: ['auditor'] }, 'doc.edit')).toBe(true);
     expect(hasPermission({ roles: ['developer'] }, 'bridge.run')).toBe(false);
     expect(hasPermission({ roles: ['developer'] }, 'review.approve')).toBe(false);
     expect(hasPermission({ roles: ['unknown_role'] }, 'bridge.run')).toBe(false);

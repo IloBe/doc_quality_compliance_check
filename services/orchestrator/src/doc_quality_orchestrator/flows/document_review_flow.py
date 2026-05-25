@@ -25,6 +25,16 @@ from pydantic import BaseModel, Field, ValidationError
 from ..adapters import get_adapter
 from ..config import OrchestratorSettings
 from ..models import GenerateOptions, ModelMessage, WorkflowRunRequest, WorkflowRunResponse, WorkflowStepEvent
+from ..privacy_controls import (
+    DataPrivacyClass,
+    ModelCapabilityRegistry,
+    PolicyDecision,
+    PrivacyPolicyEngine,
+    SandboxExecutionError,
+    SandboxExecutor,
+    SandboxPolicyViolation,
+    StepContract,
+)
 from ..runtime_limits import RuntimeLimitConfig, RuntimeLimitEnforcer
 from ..skills_api import SkillsApiClient
 
@@ -74,12 +84,66 @@ class DocumentReviewFlow:
         self.settings = settings
         self.skills_api = SkillsApiClient(settings.backend_base_url)
         self.model_validator_config = self._load_model_validator_config()
+        self.policy_engine = PrivacyPolicyEngine()
+        self.capability_registry = ModelCapabilityRegistry.default()
+        self.sandbox_executor = SandboxExecutor()
 
         # Flow state (initialized per execute_workflow call)
         self.run_id: str = ""
         self.trace_id: str = ""
         self.routing_mode: Literal["single_agent_wrapper", "crewai_workflow"] = "single_agent_wrapper"
         self.runtime_enforcer: RuntimeLimitEnforcer | None = None
+
+    @staticmethod
+    def _request_privacy_class(request: WorkflowRunRequest) -> DataPrivacyClass | None:
+        """Convert request-level privacy class to enum representation."""
+        if request.data_privacy_class is None:
+            return None
+        return DataPrivacyClass(request.data_privacy_class)
+
+    def _build_step_contract(
+        self,
+        *,
+        step_name: str,
+        business_purpose: str,
+        request: WorkflowRunRequest,
+        max_tokens: int | None = None,
+    ) -> StepContract:
+        """Build a step contract with request-aware sensitivity defaults."""
+        requested_privacy_class = self._request_privacy_class(request)
+        sensitivity = requested_privacy_class or DataPrivacyClass.NON_PERSONAL
+        return StepContract(
+            step_name=step_name,
+            business_purpose=business_purpose,
+            sensitivity_class=sensitivity,
+            max_tokens=max_tokens,
+            timeout_seconds=self.settings.step_timeout_seconds,
+        )
+
+    def _resolve_policy_and_adapter(
+        self,
+        *,
+        request: WorkflowRunRequest,
+        step_contract: StepContract,
+        force_onprem: bool = False,
+    ) -> tuple[Any, PolicyDecision]:
+        """Resolve a policy decision and matching adapter for a given step contract."""
+        requested_privacy_class = self._request_privacy_class(request)
+        decision = self.policy_engine.evaluate(
+            input_payload=request.input_payload,
+            requested_privacy_class=requested_privacy_class,
+            onprem_first_for_personal_data=self.settings.onprem_first_for_personal_data,
+            allow_external_fallback_for_scrubbed=self.settings.allow_external_fallback_for_scrubbed,
+        )
+        requested_provider = self.settings.onprem_provider if force_onprem else request.provider
+        effective_provider = self.capability_registry.resolve_provider(
+            requested_provider=requested_provider,
+            onprem_provider=self.settings.onprem_provider,
+            step_contract=step_contract,
+            decision=decision,
+        )
+        adapter = get_adapter(effective_provider, self.settings)
+        return adapter, decision
 
     @staticmethod
     def _load_model_validator_config() -> dict[str, Any]:
@@ -138,6 +202,17 @@ class DocumentReviewFlow:
         document_id: str | None,
     ) -> ModelValidatorStageResult:
         """Run a dedicated model-backed validation stage over crew output."""
+        step_contract = self._build_step_contract(
+            step_name="model_validator_stage",
+            business_purpose="post_crew_output_validation",
+            request=request,
+            max_tokens=self.settings.model_validator_max_tokens,
+        )
+        _, decision = self._resolve_policy_and_adapter(
+            request=request,
+            step_contract=step_contract,
+            force_onprem=True,
+        )
         prompt_version = str(self.model_validator_config["prompt_version"])
         if not self.settings.model_validator_enabled or not self.model_validator_config.get("enabled", True):
             return ModelValidatorStageResult(
@@ -200,15 +275,42 @@ class DocumentReviewFlow:
         ]
 
         try:
-            response = await adapter.generate(
+            response = await self.sandbox_executor.execute_model_step(
+                adapter=adapter,
                 messages=messages,
                 options=GenerateOptions(
                     response_schema=ModelValidatorReport.model_json_schema(),
                     temperature=0.0,
                     max_tokens=self.settings.model_validator_max_tokens,
                 ),
+                step_contract=step_contract,
+                decision=decision,
             )
             report = self._extract_model_validator_report(response.json_payload, response.content)
+        except (SandboxPolicyViolation, SandboxExecutionError) as exc:
+            await self.skills_api.log_event(
+                {
+                    "event_type": "model_validator_stage_skipped",
+                    "actor_type": "agent",
+                    "actor_id": "model_validator_stage",
+                    "subject_type": "workflow",
+                    "subject_id": self.run_id,
+                    "trace_id": self.trace_id,
+                    "correlation_id": self.run_id,
+                    "payload": {
+                        "workflow_id": request.workflow_id,
+                        "prompt_version": prompt_version,
+                        "reason": f"sandbox_error:{exc}",
+                        "provider": adapter.provider_id,
+                    },
+                }
+            )
+            return ModelValidatorStageResult(
+                stage_status="skipped",
+                prompt_version=prompt_version,
+                reason=f"sandbox_error:{exc}",
+                provider_id=adapter.provider_id,
+            )
         except (ValidationError, ValueError, json.JSONDecodeError) as exc:
             await self.skills_api.log_event(
                 {
@@ -362,6 +464,17 @@ class DocumentReviewFlow:
             config=limit_config,
         )
 
+        routing_step_contract = self._build_step_contract(
+            step_name="workflow_routing",
+            business_purpose="routing_and_provider_selection",
+            request=request,
+        )
+        routing_adapter, routing_policy = self._resolve_policy_and_adapter(
+            request=request,
+            step_contract=routing_step_contract,
+            force_onprem=request.workflow_id == _GENERATE_AUDIT_PACKAGE,
+        )
+
         # Log routing decision immediately
         await self.skills_api.log_event(
             {
@@ -376,8 +489,16 @@ class DocumentReviewFlow:
                     "workflow_id": request.workflow_id,
                     "requested_routing_mode": request.routing_mode,
                     "effective_routing_mode": self.routing_mode,
+                    "requested_provider": request.provider,
+                    "effective_provider": routing_adapter.provider_id,
+                    "data_privacy_class": routing_policy.data_privacy_class.value,
+                    "policy_model_zone": routing_policy.model_zone.value,
+                    "policy_reason": routing_policy.reason,
+                    "policy_signals": routing_policy.signals,
+                    "contains_special_category_data": routing_policy.contains_special_category_data,
                     "crewai_available": self.crewai_available(),
                     "crewai_workflow_enabled": self.settings.crewai_workflow_enabled,
+                    "privacy_override_applied": request.workflow_id == _GENERATE_AUDIT_PACKAGE,
                     "runtime_limits": {
                         "max_steps": self.settings.max_steps,
                         "max_retries_per_step": self.settings.max_retries_per_step,
@@ -401,7 +522,7 @@ class DocumentReviewFlow:
                 run_id=self.run_id,
                 timeout=self.settings.global_run_timeout_seconds,
             )
-            adapter = get_adapter(request.provider, self.settings)
+            adapter = routing_adapter
             return WorkflowRunResponse(
                 run_id=self.run_id,
                 workflow_id=request.workflow_id,
@@ -450,7 +571,17 @@ class DocumentReviewFlow:
         """
         from ..crews.review_flow import build_generate_audit_package_crew
 
-        adapter = get_adapter(request.provider, self.settings)
+        crew_step_contract = self._build_step_contract(
+            step_name="provider_summary",
+            business_purpose="crew_result_validation_provider_selection",
+            request=request,
+            max_tokens=self.settings.model_validator_max_tokens,
+        )
+        adapter, _ = self._resolve_policy_and_adapter(
+            request=request,
+            step_contract=crew_step_contract,
+            force_onprem=True,
+        )
         document_id = request.input_payload.get("document_id")
         _doc_id: str | None = document_id if isinstance(document_id, str) and document_id else None
 
@@ -460,6 +591,9 @@ class DocumentReviewFlow:
             trace_id=self.trace_id,
             correlation_id=self.run_id,
             document_id=_doc_id,
+            model_name=self.settings.nemotron_model,
+            model_base_url=self.settings.nemotron_base_url,
+            model_api_key=self.settings.nemotron_api_key or None,
             max_retries_per_step=self.settings.max_retries_per_step,
         )
 
@@ -562,7 +696,16 @@ class DocumentReviewFlow:
         6. Write finding
         7. Log completion event
         """
-        adapter = get_adapter(request.provider, self.settings)
+        summary_step_contract = self._build_step_contract(
+            step_name="provider_summary",
+            business_purpose="scaffold_workflow_summary",
+            request=request,
+        )
+        adapter, summary_policy = self._resolve_policy_and_adapter(
+            request=request,
+            step_contract=summary_step_contract,
+            force_onprem=True,
+        )
         steps: list[WorkflowStepEvent] = []
 
         # Step 1 — normalise input
@@ -665,25 +808,66 @@ class DocumentReviewFlow:
             provider_id=adapter.provider_id,
         )
         steps.append(model_step)
-        model_response = await adapter.generate(
-            messages=[
-                ModelMessage(
-                    role="system",
-                    content=(
-                        "Summarize the workflow run and confirm that all system access must go through the backend Skills API."
+        try:
+            model_response = await self.sandbox_executor.execute_model_step(
+                adapter=adapter,
+                messages=[
+                    ModelMessage(
+                        role="system",
+                        content=(
+                            "Summarize the workflow run and confirm that all system access must go through the backend Skills API."
+                        ),
                     ),
-                ),
-                ModelMessage(
-                    role="user",
-                    content=str(normalized_payload),
-                ),
-            ],
-            options=GenerateOptions(response_schema={"type": "object"}),
-        )
-        model_step.status = "completed"
-        model_step.ended_at = datetime.now(timezone.utc)
-        model_step.model_id = model_response.model_id
-        model_step.details = {"usage": model_response.usage}
+                    ModelMessage(
+                        role="user",
+                        content=str(normalized_payload),
+                    ),
+                ],
+                options=GenerateOptions(response_schema={"type": "object"}),
+                step_contract=summary_step_contract,
+                decision=summary_policy,
+            )
+            model_step.status = "completed"
+            model_step.ended_at = datetime.now(timezone.utc)
+            model_step.model_id = model_response.model_id
+            model_step.details = {"usage": model_response.usage}
+        except (SandboxPolicyViolation, SandboxExecutionError) as exc:
+            model_step.status = "failed"
+            model_step.ended_at = datetime.now(timezone.utc)
+            model_step.details = {"error": str(exc)}
+            await self.skills_api.log_event(
+                {
+                    "event_type": "workflow_run_failed",
+                    "actor_type": "agent",
+                    "actor_id": "orchestrator",
+                    "subject_type": "workflow",
+                    "subject_id": self.run_id,
+                    "trace_id": self.trace_id,
+                    "correlation_id": self.run_id,
+                    "payload": {
+                        "workflow_id": request.workflow_id,
+                        "routing_mode": "single_agent_wrapper",
+                        "provider": adapter.provider_id,
+                        "error": str(exc),
+                        "failure_stage": "provider_summary",
+                    },
+                }
+            )
+            return WorkflowRunResponse(
+                run_id=self.run_id,
+                workflow_id=request.workflow_id,
+                trace_id=self.trace_id,
+                status="failed",
+                adapter_id=adapter.provider_id,
+                routing_mode="single_agent_wrapper",
+                output={
+                    "backend_health": backend_health,
+                    "error": str(exc),
+                    "failure_stage": "provider_summary",
+                    "data_privacy_class": summary_policy.data_privacy_class.value,
+                },
+                steps=steps,
+            )
 
         # Step 6 — write_finding (if document resolved)
         finding_id: str | None = None
@@ -734,6 +918,9 @@ class DocumentReviewFlow:
                     "workflow_id": request.workflow_id,
                     "routing_mode": "single_agent_wrapper",
                     "provider": adapter.provider_id,
+                    "data_privacy_class": summary_policy.data_privacy_class.value,
+                    "policy_model_zone": summary_policy.model_zone.value,
+                    "policy_reason": summary_policy.reason,
                     "adapter_model_id": model_response.model_id,
                     "finding_id": finding_id,
                 },

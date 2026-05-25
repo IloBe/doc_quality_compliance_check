@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../components/AppShell';
+import AppErrorBoundary from '../components/AppErrorBoundary';
 import { AuthUser, fetchCurrentUser } from '../lib/authClient';
 import { AuthProvider } from '../lib/authContext';
 import '../styles/globals.css';
@@ -23,6 +24,7 @@ function MyApp({ Component, pageProps }) {
   const router = useRouter();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [isRouteChanging, setIsRouteChanging] = useState(false);
 
   // Pages that don't use the AppShell (public auth/recovery pages)
   const noShellPages = ['/login', '/forgot-access', '/reset-access'];
@@ -69,10 +71,27 @@ function MyApp({ Component, pageProps }) {
     };
   }, [isNoShell, router]);
 
+  useEffect(() => {
+    const handleRouteStart = () => setIsRouteChanging(true);
+    const handleRouteSettled = () => setIsRouteChanging(false);
+
+    router.events.on('routeChangeStart', handleRouteStart);
+    router.events.on('routeChangeComplete', handleRouteSettled);
+    router.events.on('routeChangeError', handleRouteSettled);
+
+    return () => {
+      router.events.off('routeChangeStart', handleRouteStart);
+      router.events.off('routeChangeComplete', handleRouteSettled);
+      router.events.off('routeChangeError', handleRouteSettled);
+    };
+  }, [router.events]);
+
   if (isNoShell) {
     return (
       <AuthProvider currentUser={null}>
-        <Component {...pageProps} />
+        <AppErrorBoundary>
+          <Component {...pageProps} />
+        </AppErrorBoundary>
       </AuthProvider>
     );
   }
@@ -88,9 +107,17 @@ function MyApp({ Component, pageProps }) {
 
   return (
     <AuthProvider currentUser={currentUser}>
-      <AppShell currentUser={currentUser}>
-        <Component {...pageProps} />
-      </AppShell>
+      <AppErrorBoundary>
+        <AppShell currentUser={currentUser}>
+          {isRouteChanging ? (
+            <div className="min-h-[40vh] flex items-center justify-center text-sm font-semibold text-neutral-500">
+              Loading page...
+            </div>
+          ) : (
+            <Component {...pageProps} />
+          )}
+        </AppShell>
+      </AppErrorBoundary>
     </AuthProvider>
   );
 }

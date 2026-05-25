@@ -5,10 +5,13 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import secrets
 
+import structlog
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from ...core.auth_bootstrap import bootstrap_accounts_public_view, resolve_bootstrap_account
 from ...core.config import get_settings
 from ...core.database import get_db
 from ...core.passwords import hash_password, verify_password
@@ -17,7 +20,7 @@ from ...core.session_auth import (
     AuthenticatedUser,
     clear_session_cookie,
     create_server_session,
-    parse_mvp_roles,
+    require_roles,
     require_session_user,
     revoke_server_session,
     set_session_cookie,
@@ -25,6 +28,7 @@ from ...core.session_auth import (
 from ...models.orm import AppUserORM, AuditEventORM, PasswordRecoveryTokenORM, UserSessionORM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = structlog.get_logger(__name__)
 
 
 class LoginRequest(BaseModel):
@@ -98,6 +102,22 @@ class RecoveryResetResponse(BaseModel):
     message: str
 
 
+class BootstrapAccountSummaryResponse(BaseModel):
+    """Safe bootstrap account metadata for startup diagnostics."""
+
+    email: str
+    roles: list[str]
+    org: str | None = None
+
+
+class BootstrapSelfCheckResponse(BaseModel):
+    """Self-check payload describing configured bootstrap identities."""
+
+    auto_provision_enabled: bool
+    account_count: int
+    accounts: list[BootstrapAccountSummaryResponse]
+
+
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -135,12 +155,14 @@ def _log_audit_event(
     db.add(event)
 
 
-def _provision_mvp_user_if_enabled(db: Session, email: str) -> AppUserORM | None:
+def _provision_configured_user_if_enabled(db: Session, email: str) -> AppUserORM | None:
+    """Provision configured bootstrap account in app_users table when enabled."""
     settings = get_settings()
     if not settings.auth_auto_provision_mvp_user:
         return None
 
-    if email.lower() != settings.auth_mvp_email.lower():
+    configured = resolve_bootstrap_account(email)
+    if configured is None:
         return None
 
     existing = db.query(AppUserORM).filter(AppUserORM.email == email.lower()).first()
@@ -150,14 +172,15 @@ def _provision_mvp_user_if_enabled(db: Session, email: str) -> AppUserORM | None
     row = AppUserORM(
         user_id=secrets.token_urlsafe(24),
         email=email.lower(),
-        password_hash=hash_password(settings.auth_mvp_password),
-        roles=parse_mvp_roles(settings.auth_mvp_roles),
-        org=settings.auth_mvp_org,
+        password_hash=hash_password(configured.password),
+        roles=configured.roles,
+        org=configured.org,
         is_active=True,
         is_locked=False,
     )
     db.add(row)
     db.commit()
+    logger.info("auth.bootstrap_user_provisioned", email=email.lower(), roles=configured.roles)
     return row
 
 
@@ -261,9 +284,11 @@ async def login(request: LoginRequest, response: Response, http_request: Request
             headers={"Retry-After": str(retry_after)},
         )
 
+    configured = resolve_bootstrap_account(email)
+
     user = db.query(AppUserORM).filter(AppUserORM.email == email).first()
     if user is None:
-        user = _provision_mvp_user_if_enabled(db, email)
+        user = _provision_configured_user_if_enabled(db, email)
 
     if user is not None and user.is_active and not user.is_locked:
         valid_password = verify_password(request.password, user.password_hash)
@@ -281,7 +306,7 @@ async def login(request: LoginRequest, response: Response, http_request: Request
         org = user.org
     else:
         # Backward-compatible fallback when app_users row does not exist yet.
-        if email != settings.auth_mvp_email.lower() or request.password != settings.auth_mvp_password:
+        if configured is None or request.password != configured.password:
             lockout_for = _register_login_failure(email, client_ip)
             if lockout_for > 0:
                 raise HTTPException(
@@ -290,8 +315,8 @@ async def login(request: LoginRequest, response: Response, http_request: Request
                     headers={"Retry-After": str(lockout_for)},
                 )
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-        roles = parse_mvp_roles(settings.auth_mvp_roles)
-        org = settings.auth_mvp_org
+        roles = configured.roles
+        org = configured.org
 
     _clear_login_failures(email, client_ip)
 
@@ -340,7 +365,31 @@ async def me(user: AuthenticatedUser = Depends(require_session_user)) -> AuthUse
     return AuthUserResponse(email=user.email, roles=user.roles, org=user.org)
 
 
-@router.post("/recovery/request", response_model=RecoveryRequestResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.get("/bootstrap-self-check", response_model=BootstrapSelfCheckResponse)
+async def bootstrap_self_check(
+    _user: AuthenticatedUser = Depends(require_roles("app_admin", "qm_lead")),
+) -> BootstrapSelfCheckResponse:
+    """Return safe metadata for configured bootstrap login identities.
+
+    This endpoint intentionally exposes only non-secret fields to help
+    operational troubleshooting in controlled environments.
+    """
+    settings = get_settings()
+    public_accounts = bootstrap_accounts_public_view(settings)
+    accounts = [BootstrapAccountSummaryResponse(**item) for item in public_accounts]
+    return BootstrapSelfCheckResponse(
+        auto_provision_enabled=settings.auth_auto_provision_mvp_user,
+        account_count=len(accounts),
+        accounts=accounts,
+    )
+
+
+@router.post(
+    "/recovery/request",
+    response_model=RecoveryRequestResponse,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def recovery_request(
     payload: RecoveryRequestPayload,
     request: Request,
@@ -359,7 +408,7 @@ async def recovery_request(
 
     user = db.query(AppUserORM).filter(AppUserORM.email == email).first()
     if user is None:
-        user = _provision_mvp_user_if_enabled(db, email)
+        user = _provision_configured_user_if_enabled(db, email)
 
     if user is None or not user.is_active or user.is_locked:
         _log_audit_event(

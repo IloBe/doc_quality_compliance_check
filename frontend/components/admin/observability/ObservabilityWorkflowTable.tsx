@@ -1,5 +1,6 @@
 import React from 'react';
 import { WorkflowComponentBreakdown } from '../../../lib/observabilityClient';
+import { formatDateTime } from '../../../lib/dateTime';
 
 type ObservabilityWorkflowTableProps = {
   workflowBreakdown: WorkflowComponentBreakdown | null;
@@ -36,7 +37,7 @@ const ObservabilityWorkflowTable = ({ workflowBreakdown }: ObservabilityWorkflow
                   <td className="py-2 pr-3 text-rose-700">{component.fail_count}</td>
                   <td className="py-2 pr-3 text-sky-700">{component.info_count}</td>
                   <td className="py-2 pr-3">{component.average_latency_ms !== null ? `${component.average_latency_ms} ms` : 'n/a'}</td>
-                  <td className="py-2 pr-3">{component.latest_event_time ? new Date(component.latest_event_time).toLocaleString() : 'n/a'}</td>
+                  <td className="py-2 pr-3">{formatDateTime(component.latest_event_time, 'n/a')}</td>
                 </tr>
               ))}
             </tbody>

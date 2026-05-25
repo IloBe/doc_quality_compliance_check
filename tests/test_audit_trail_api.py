@@ -26,12 +26,20 @@ def test_audit_trail_events_returns_logged_event(client) -> None:
     assert list_response.status_code == 200
     payload = list_response.json()
     assert "items" in payload
-    assert any(
-        item.get("event_type") == "bridge.run.approved"
+    matching = [
+        item for item in payload["items"]
+        if item.get("event_type") == "bridge.run.approved"
         and item.get("subject_type") == "hitl_review"
         and item.get("subject_id") == "review-1001"
-        for item in payload["items"]
-    )
+    ]
+    assert matching
+    item = matching[0]
+    # list view must NOT expose the raw payload blob
+    assert "payload" not in item
+    # but must expose the keys so callers can decide whether to fetch detail
+    assert "payload_keys" in item
+    assert "verdict" in item["payload_keys"]
+    assert "risk_level" in item["payload_keys"]
 
 
 def test_audit_trail_events_supports_filters(client) -> None:
@@ -226,3 +234,49 @@ def test_audit_trail_event_detail_response_contract(client) -> None:
         "payload",
         "created_at",
     }
+
+
+def test_audit_trail_list_response_contract_no_payload_blob(client) -> None:
+    """List items expose payload_keys but never the raw payload blob."""
+    client.post(
+        "/api/v1/skills/log_event",
+        json={
+            "event_type": "audit.contract.list",
+            "actor_type": "user",
+            "actor_id": "qa.list@example.com",
+            "subject_type": "workflow",
+            "subject_id": "wf-list-contract",
+            "payload": {"step": "verify", "internal_hint": "secret"},
+        },
+    )
+
+    response = client.get("/api/v1/audit-trail/events?window_hours=24&event_type=audit.contract.list&limit=5")
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert items
+
+    item = items[0]
+    # payload blob must be absent from list items
+    assert "payload" not in item
+    # keys-only enumeration must be present
+    assert "payload_keys" in item
+    assert sorted(item["payload_keys"]) == ["internal_hint", "step"]
+
+    # Verify the exact field set of a list item
+    expected_keys = {
+        "event_id",
+        "event_type",
+        "actor_type",
+        "actor_id",
+        "subject_type",
+        "subject_id",
+        "trace_id",
+        "correlation_id",
+        "tenant_id",
+        "org_id",
+        "project_id",
+        "event_time",
+        "payload_keys",
+        "created_at",
+    }
+    assert set(item.keys()) == expected_keys

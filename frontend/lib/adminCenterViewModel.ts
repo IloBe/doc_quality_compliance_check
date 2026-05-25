@@ -37,7 +37,7 @@ export const ADMIN_NAVIGATION_CARDS: AdminNavigationCard[] = [
   },
   {
     id: 'governance',
-    title: 'Governance',
+    title: 'Compliance Controls',
     description: 'Configure compliance policies and controls',
     href: '/admin/governance',
     icon: LuShield,

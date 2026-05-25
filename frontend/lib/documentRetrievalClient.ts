@@ -28,9 +28,26 @@ interface ListDocumentsResponse {
   documents?: BackendDocument[];
 }
 
+interface BackendDocumentSummary {
+  document_id: string;
+  filename?: string;
+  document_type?: string;
+  status?: string;
+  updated_at?: string;
+  locked_by?: string | null;
+}
+
+function getApiBase(): string {
+  return process.env.NEXT_PUBLIC_API_ORIGIN?.trim() || '';
+}
+
+function buildApiUrl(path: string): string {
+  const base = getApiBase();
+  return base ? `${base}${path}` : path;
+}
+
 export async function listDocuments(): Promise<{ ok: boolean; documents: RetrievedDocument[]; degradedToDemo?: boolean }> {
-  const apiOrigin = process.env.NEXT_PUBLIC_API_ORIGIN?.trim();
-  const endpoint = apiOrigin ? `${apiOrigin}/api/v1/documents` : '/api/v1/documents';
+  const endpoint = buildApiUrl('/api/v1/documents');
 
   try {
     const response = await fetch(endpoint, {
@@ -59,5 +76,44 @@ export async function listDocuments(): Promise<{ ok: boolean; documents: Retriev
     return { ok: true, documents };
   } catch {
     return { ok: true, documents: [], degradedToDemo: true };
+  }
+}
+
+export async function getDocumentSummaryById(documentId: string): Promise<{ ok: boolean; document?: RetrievedDocument; message?: string }> {
+  const normalizedId = (documentId || '').trim();
+  if (!normalizedId) {
+    return { ok: false, message: 'Missing document id.' };
+  }
+
+  const endpoint = buildApiUrl(`/api/v1/documents/${encodeURIComponent(normalizedId)}/summary`);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      return { ok: false, message: `Unable to load document ${normalizedId} (status ${response.status}).` };
+    }
+
+    const payload = (await response.json()) as BackendDocumentSummary;
+    return {
+      ok: true,
+      document: {
+        id: payload.document_id,
+        title: payload.filename ?? payload.document_id,
+        type: payload.document_type ?? 'generic',
+        product: '',
+        status: payload.status ?? 'Draft',
+        version: '0.1.0',
+        lockedBy: payload.locked_by ?? null,
+        updatedAt: payload.updated_at ?? new Date().toISOString(),
+        updatedBy: 'system',
+        content: '',
+      },
+    };
+  } catch {
+    return { ok: false, message: 'Unable to load selected document from backend.' };
   }
 }

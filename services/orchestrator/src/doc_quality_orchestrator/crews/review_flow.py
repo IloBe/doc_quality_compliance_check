@@ -32,13 +32,14 @@ import yaml
 
 try:
     import httpx
-    from crewai import Agent, Crew, Process, Task  # type: ignore[import-untyped]
+    from crewai import Agent, Crew, LLM, Process, Task  # type: ignore[import-untyped]
     from crewai.tools import BaseTool  # type: ignore[import-untyped]
 
     _CREWAI_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _CREWAI_AVAILABLE = False
     Agent = Crew = Process = Task = BaseTool = None  # type: ignore[assignment,misc]
+    LLM = None  # type: ignore[assignment]
 
 
 _CONFIG_DIR = Path(__file__).with_name("config")
@@ -431,27 +432,58 @@ def _build_agent_with_config(
     *,
     tools: list[Any],
     max_retries_per_step: int,
+    llm: Any | None = None,
+    function_calling_llm: Any | None = None,
 ) -> Any:
     """Build Agent using CrewAI `config=...` convention with compatibility fallback."""
     try:
         return Agent(  # type: ignore[call-arg]
             config=config,
             tools=tools,
+            llm=llm,
+            function_calling_llm=function_calling_llm,
             max_iter=max_retries_per_step,
             allow_delegation=False,
             verbose=False,
         )
     except TypeError:
         # Compatibility fallback for CrewAI versions without `config` support.
+        fallback_kwargs: dict[str, Any] = {
+            "role": config["role"],
+            "goal": config["goal"],
+            "backstory": config["backstory"],
+            "tools": tools,
+            "max_iter": max_retries_per_step,
+            "allow_delegation": False,
+            "verbose": False,
+        }
+        if llm is not None:
+            fallback_kwargs["llm"] = llm
+        if function_calling_llm is not None:
+            fallback_kwargs["function_calling_llm"] = function_calling_llm
         return Agent(  # type: ignore[call-arg]
-            role=config["role"],
-            goal=config["goal"],
-            backstory=config["backstory"],
-            tools=tools,
-            max_iter=max_retries_per_step,
-            allow_delegation=False,
-            verbose=False,
+            **fallback_kwargs,
         )
+
+
+def _build_onprem_llm(
+    *,
+    model_name: str,
+    model_base_url: str,
+    model_api_key: str | None,
+) -> Any:
+    """Build the CrewAI LLM binding for the on-prem model gateway."""
+    if LLM is None:  # pragma: no cover - guarded by crewai import availability
+        raise RuntimeError("CrewAI LLM support is unavailable in the current runtime")
+    if not model_base_url.strip():
+        raise RuntimeError(
+            "model_base_url must be configured to run Generate Audit Package on-prem"
+        )
+    return LLM(
+        model=model_name,
+        base_url=model_base_url.rstrip("/"),
+        api_key=model_api_key or None,
+    )
 
 
 def _build_task_with_config(
@@ -561,6 +593,9 @@ def build_generate_audit_package_crew(
     trace_id: str,
     correlation_id: str,
     document_id: str | None = None,
+    model_name: str,
+    model_base_url: str,
+    model_api_key: str | None = None,
     max_retries_per_step: int = 3,
 ) -> Any:
     """Build and return a configured *Generate Audit Package* CrewAI crew.
@@ -590,6 +625,12 @@ def build_generate_audit_package_crew(
             "crewai package is not installed; cannot build GenerateAuditPackage crew. "
             "Install it with: pip install crewai"
         )
+
+    onprem_llm = _build_onprem_llm(
+        model_name=model_name,
+        model_base_url=model_base_url,
+        model_api_key=model_api_key,
+    )
 
     base_url = backend_base_url.rstrip("/")
 
@@ -738,30 +779,40 @@ def build_generate_audit_package_crew(
         agent_cfg["intake_agent"],
         tools=[get_doc_tool, search_docs_tool],
         max_retries_per_step=max_retries_per_step,
+        llm=onprem_llm,
+        function_calling_llm=onprem_llm,
     )
 
     evidence_agent = _build_agent_with_config(
         agent_cfg["evidence_agent"],
         tools=[extract_tool, search_docs_tool],
         max_retries_per_step=max_retries_per_step,
+        llm=onprem_llm,
+        function_calling_llm=onprem_llm,
     )
 
     compliance_agent = _build_agent_with_config(
         agent_cfg["compliance_agent"],
         tools=[write_finding_tool],
         max_retries_per_step=max_retries_per_step,
+        llm=onprem_llm,
+        function_calling_llm=onprem_llm,
     )
 
     synthesis_agent = _build_agent_with_config(
         agent_cfg["synthesis_agent"],
         tools=[log_event_tool],
         max_retries_per_step=max_retries_per_step,
+        llm=onprem_llm,
+        function_calling_llm=onprem_llm,
     )
 
     verifier_agent = _build_agent_with_config(
         agent_cfg["verifier_agent"],
         tools=[],
         max_retries_per_step=max_retries_per_step,
+        llm=onprem_llm,
+        function_calling_llm=onprem_llm,
     )
 
     # ------------------------------------------------------------------ tasks

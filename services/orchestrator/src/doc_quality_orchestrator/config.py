@@ -44,6 +44,13 @@ class OrchestratorSettings(BaseSettings):
     model_validator_enabled: bool = True
     model_validator_max_tokens: int = 600
 
+    # --- Privacy-preserving adapter routing (Risk 1 mitigation phase 1) ---
+    # Keep API contracts stable while preferring internal/on-prem inference for
+    # payloads that likely carry personal or sensitive document context.
+    onprem_first_for_personal_data: bool = True
+    onprem_provider: Literal["anthropic", "openai_compatible", "nemotron"] = "nemotron"
+    allow_external_fallback_for_scrubbed: bool = True
+
 
 def get_settings() -> OrchestratorSettings:
     """Return settings instance."""

@@ -140,7 +140,14 @@ const DocumentHubPage = ({ eyebrow = 'Home' }: DocumentHubPageProps) => {
   };
 
   const handleUploadButtonClick = () => {
-    if (!canEditDocuments || isUploading) {
+    if (!canEditDocuments) {
+      setActionError('Your role is read-only for document upload. Please contact a QM Lead or Architect.');
+      setActionInfo(null);
+      return;
+    }
+    if (isUploading) {
+      setActionInfo('Upload already in progress. Please wait.');
+      setActionError(null);
       return;
     }
     fileInputRef.current?.click();

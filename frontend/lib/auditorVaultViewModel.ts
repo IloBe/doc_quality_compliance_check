@@ -2,6 +2,7 @@
 
 import type { Document, ExportJob, BridgeRun } from './mockStore';
 import type { DashboardTimeframe } from './dashboardClient';
+import { formatDateTime } from './dateTime';
 
 export interface VaultEvidenceRow {
   id: string;
@@ -56,7 +57,7 @@ export function buildVaultEvidenceRows(
       product: doc.product ?? '-',
       status: doc.status,
       health: healthOf(doc.updatedAt, wMs),
-      updatedAt: doc.updatedAt ? new Date(doc.updatedAt).toLocaleDateString() : '-',
+      updatedAt: formatDateTime(doc.updatedAt, '-'),
       updatedBy: doc.updatedBy ?? '-',
     });
   }
@@ -82,7 +83,7 @@ export function buildVaultEvidenceRows(
       product: run.product ?? '-',
       status: run.status,
       health: healthOf(run.startedAt ?? run.createdAt, wMs),
-      updatedAt: run.startedAt ? new Date(run.startedAt).toLocaleDateString() : '-',
+      updatedAt: formatDateTime(run.startedAt, '-'),
       updatedBy: '-',
     });
   }

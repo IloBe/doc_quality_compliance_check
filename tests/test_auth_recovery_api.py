@@ -29,8 +29,8 @@ def test_recovery_request_returns_generic_success_without_debug_token_by_default
         payload = response.json()
         assert payload["success"] is True
         assert "If the account exists" in payload["message"]
-        assert payload.get("debug_token") is None
-        assert payload.get("reset_url") is None
+        assert "debug_token" not in payload
+        assert "reset_url" not in payload
     finally:
         app.dependency_overrides.clear()
 

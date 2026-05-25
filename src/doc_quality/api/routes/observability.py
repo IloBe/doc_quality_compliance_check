@@ -55,6 +55,7 @@ async def llm_prompt_output_traces(
     limit: int = Query(default=20, ge=1, le=100),
     window_hours: int = Query(default=24, ge=1, le=24 * 90),
     source_component: str | None = Query(default=None),
+    include_content: bool = Query(default=False),
     db: Session = Depends(get_db),
     _user=Depends(require_roles("qm_lead", "auditor", "riskmanager", "architect", allow_service=True)),
 ) -> LlmPromptOutputListResponse:
@@ -64,6 +65,7 @@ async def llm_prompt_output_traces(
         limit=limit,
         window_hours=window_hours,
         source_component=source_component,
+        include_content=include_content,
     )
 
 

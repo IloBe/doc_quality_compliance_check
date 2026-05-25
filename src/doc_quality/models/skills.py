@@ -15,7 +15,9 @@ class SkillDocumentRecord(BaseModel):
     content_type: str
     document_type: DocumentType
     workflow_status: str = "draft"
-    extracted_text: str
+    extracted_text: str | None = None
+    extracted_text_preview: str | None = None
+    extracted_text_chars: int = 0
     source: Literal["analyze_text", "upload", "skills_extract"]
     created_at: datetime
     updated_at: datetime
@@ -25,6 +27,22 @@ class GetDocumentRequest(BaseModel):
     """Request payload for document lookup."""
 
     document_id: str
+    include_extracted_text: bool = False
+
+
+class SkillDocumentSearchRecord(BaseModel):
+    """Preview-only search record for stored documents."""
+
+    document_id: str
+    filename: str
+    content_type: str
+    document_type: DocumentType
+    workflow_status: str = "draft"
+    extracted_text_preview: str | None = None
+    extracted_text_chars: int = 0
+    source: Literal["analyze_text", "upload", "skills_extract"]
+    created_at: datetime
+    updated_at: datetime
 
 
 class SearchDocumentsRequest(BaseModel):
@@ -38,7 +56,7 @@ class SearchDocumentsRequest(BaseModel):
 class SearchDocumentsResponse(BaseModel):
     """Search result payload."""
 
-    results: list[SkillDocumentRecord] = Field(default_factory=list)
+    results: list[SkillDocumentSearchRecord] = Field(default_factory=list)
 
 
 class ExtractTextRequest(BaseModel):
@@ -111,10 +129,42 @@ class AuditEventRecord(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class AuditEventSummaryRecord(BaseModel):
+    """Payload-free audit event record for bulk list responses.
+
+    The full ``payload`` blob is omitted to avoid bulk exposure of LLM prompts,
+    model outputs, or other sensitive content in list views.  Use the detail
+    endpoint (``GET /audit-trail/events/{event_id}``) to access the full record.
+    ``payload_keys`` exposes which payload fields exist so callers can decide
+    whether to fetch the detail.
+    """
+
+    event_id: str
+    event_type: str
+    actor_type: str
+    actor_id: str
+    subject_type: str
+    subject_id: str
+    trace_id: str | None = None
+    correlation_id: str | None = None
+    tenant_id: str = "default_tenant"
+    org_id: str | None = None
+    project_id: str | None = None
+    event_time: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    payload_keys: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class AuditEventListResponse(BaseModel):
     """List response for governance-focused audit trail views."""
 
     items: list[AuditEventRecord] = Field(default_factory=list)
+
+
+class AuditEventSummaryListResponse(BaseModel):
+    """Payload-safe bulk list response for the audit trail list endpoint."""
+
+    items: list[AuditEventSummaryRecord] = Field(default_factory=list)
 
 
 class AuditScheduleRecord(BaseModel):

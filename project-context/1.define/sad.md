@@ -233,6 +233,248 @@ The system architecture supports a hybrid agentic decision framework combining a
 | Regulatory Submission | No | Yes | Yes |
 | Audit Trail Logging | Yes | Yes | Yes |
 
+### 1.8 Change Request — Data Privacy CR-2026-05-16 (Risk 1 Mitigation)
+
+**Risk addressed:** Risk 1: External model transfer of potentially personal prompt/output data.
+
+**Architecture decision:** For production workflows that may contain direct or inferred personal data, inference is executed on internal on-prem models. External model providers are treated as controlled fallback paths for scrubbed/non-personal requests only.
+
+#### 1.8.1 Sensitive Data Classification and Controls
+
+| Sensitive Data | Category | Exposure Risk | Architecture Controls (Target State) |
+|----------------|----------|---------------|--------------------------------------|
+| Prompt context and model output content | Direct/inferred personal data in model I/O | Third-party disclosure during external inference | On-prem inference default, prompt minimization, redaction before persistence/export, policy-based routing deny for external calls |
+| Provider/model telemetry and rich trace payload | Actor/workflow metadata and content fingerprints | Re-identification and profiling when combined with audit records | Telemetry stratification (operational vs audit), strict RBAC, field-level masking, short retention for rich traces |
+| Model credentials and routing configuration | Secrets and control-plane config | Unauthorized model use or data exfiltration | Managed secrets store, key rotation, least-privilege access, audited configuration changes |
+
+#### 1.8.2 Architecture Delta
+
+1. **Routing policy hardening**
+  - Introduce mandatory `data_privacy_class` routing input (`personal_data_possible`, `non_personal`, `scrubbed_fallback`).
+  - Enforce policy: `personal_data_possible` -> `on_prem_required`.
+
+2. **Provider adapter governance**
+  - Keep adapter abstraction, but classify external adapters as fallback-only for approved flows.
+  - Persist routing decision evidence (`selected_inference_location`, `policy_rule_id`, `decision_reason`) in audit events.
+
+3. **Observability segregation**
+  - Separate stores/retention classes for:
+    - compliance-grade audit evidence,
+    - operational telemetry,
+    - temporary rich traces for incident/debug windows.
+  - Disallow unrestricted prompt/output snapshots in long-retention telemetry tables.
+
+4. **Secrets and control plane hardening**
+  - Move provider keys and routing controls to managed secret/config services with rotation.
+  - Require dual-control approval for routing-policy changes that allow external fallback.
+
+#### 1.8.3 Migration Plan (On-Prem Substitution)
+
+1. **Phase A: Guardrails first**
+  - Mark and route all personal-data-capable workflows to on-prem path.
+  - Add policy-deny behavior for non-compliant external routing attempts.
+
+2. **Phase B: Controlled fallback**
+  - Allow external fallback only for scrubbed requests and explicit incident/runbook scenarios.
+  - Capture fallback reason codes for compliance review.
+
+3. **Phase C: Steady-state privacy posture**
+  - On-prem becomes default and expected path for production governance workflows.
+  - External usage remains exception-based, auditable, and periodically reviewed by security/compliance.
+
+#### 1.8.4 Verification Requirements
+
+- Architecture conformance tests must fail if `personal_data_possible` requests are routed externally.
+- Audit trail must include routing and policy decision metadata for every model invocation.
+- Retention and access checks must validate least-privilege visibility for telemetry and traces.
+- Secret rotation and access logs must be verifiable in release governance evidence.
+
+#### 1.8.5 Step Contract + Sandbox Pattern
+
+The target architecture improves privacy and control by turning broad business workflows into isolated, policy-scoped step executions. Each step is a contract, not an implicit prompt blob.
+
+**Step execution contract**
+
+| Contract Item | Architectural Rule |
+|---------------|--------------------|
+| Step identity | Every step has a stable `step_id` and business meaning |
+| Input contract | Strict versioned schema, minimal required fields only |
+| Output contract | Structured response, validated before downstream use |
+| Policy context | Sensitivity and routing class must be explicit |
+| Tool boundary | Allowlisted tools only; no direct DB or unrestricted network access |
+| Sandbox boundary | Isolated runtime per step with denied egress by default |
+| Validation | Schema, redaction, and policy checks before persistence |
+| Retry semantics | Only the failed step retries, not the full workflow |
+
+**Sandbox mechanics**
+
+- Run model calls in a sandbox with no default outbound internet access.
+- Mount only the minimum internal data required for the specific step.
+- Inject secrets only when the step policy explicitly authorizes them.
+- Prefer local model invocation endpoints on the same internal trust zone.
+- Persist only redacted outputs and structured step metadata in long-retention stores.
+
+**Why this is an architectural improvement**
+
+- It reduces the blast radius of any one model call.
+- It keeps personal data closer to the application boundary.
+
+#### 1.8.6 Bridge Startup Runtime Self-Check Gate (Implemented)
+
+To prevent bridge execution on schema-drifted or policy-inconsistent runtimes, a mandatory startup/runtime gate is implemented.
+
+**Endpoint**
+- `GET /api/v1/bridge/runtime/self-check`
+
+**Purpose**
+- Report migration drift and schema readiness before a bridge run starts.
+- Explicitly verify required bridge tables (including `model_policy_configs`) and required columns.
+- Verify model-runtime policy for each bridge agent step.
+
+**Checked controls**
+1. Database migration state (`alembic_version` vs code migration head) on PostgreSQL runtimes.
+2. Required bridge tables and columns:
+  - `hitl_reviews`, `skill_documents`, `document_locks`, `skill_findings`, `audit_events`, `user_sessions`, `quality_observations`, `governance_controls`, `model_policy_configs`, `stakeholder_profiles`, `stakeholder_employee_assignments`.
+3. Per-agent model locality:
+  - Inspection, Compliance, Research, and Quality Gate each must resolve to local `ollama` execution and local processing.
+
+**Enforcement**
+- `POST /api/v1/bridge/run/eu-ai-act` executes the same self-check before run start.
+- If self-check fails, bridge run is blocked with explicit remediation details.
+
+#### 1.8.7 Agent Model Locality Policy (Implemented)
+
+For privacy-sensitive bridge workflows, each bridge agent is required to use a local `ollama` model runtime:
+
+1. Inspection Agent -> local `ollama` model.
+2. Compliance Agent -> local `ollama` model.
+3. Research Agent -> local `ollama` model.
+4. Quality Gate Agent -> local `ollama` model.
+
+This requirement is both:
+- policy enforced in runtime checks and bridge execution guardrails,
+- auditable through sandbox-step metadata and startup self-check responses.
+- It supports swapping local models per step without redesigning the whole workflow.
+- It makes validation and audit simpler because each step has an explicit contract and evidence trail.
+
+**Architectural consequence**
+
+The orchestrator becomes a policy-driven step router, not just a chain-of-prompts engine. That change is important because it lets the system assign the smallest capable local model to each step while preserving privacy boundaries and explainability.
+
+#### 1.8.6 On-Prem Model Capability Registry + Migration KPIs
+
+The architecture shall maintain a registry of approved on-prem models and use it as the source of truth for routing decisions.
+
+**Capability registry content**
+
+| Registry Field | Purpose |
+|---------------|---------|
+| `model_id` | Unique internal model identifier |
+| `deployment_zone` | On-prem, internal cloud, or external fallback |
+| `step_types` | Approved workflow steps |
+| `sensitivity_classes` | Allowed data categories |
+| `context_window` | Token/context limit |
+| `format_support` | JSON, tool calling, streaming, citations |
+| `quality_score` | Benchmark result for the approved step set |
+| `latency_p95` | Routing and SLO planning input |
+| `resource_profile` | CPU/GPU/memory expectations |
+| `approval_status` | Experimental, approved, deprecated |
+| `review_date` | Last benchmark and compliance review |
+
+**Migration KPIs**
+
+| KPI | Architectural Target |
+|-----|----------------------|
+| On-prem coverage for privacy-sensitive steps | High and increasing |
+| External fallback frequency | Low, exceptional, and decreasing |
+| Step validation success rate | High and stable for approved steps |
+| Reviewer override rate | Low enough to justify automation |
+| Privacy leakage incidents | Zero for production traffic |
+| Registry freshness | Within the required review cadence |
+
+**Migration governance rules**
+
+1. A model may not be used for a step until it is benchmarked against that exact step contract.
+2. Local model promotion requires privacy, quality, and latency sign-off.
+3. External fallback requires an explicit exception reason, audit entry, and retention controls.
+4. The orchestrator must refuse to route privacy-sensitive requests to any model not listed in the approved registry.
+
+**Design benefit**
+
+This turns the privacy migration from a one-time platform change into a controlled capability-management process with measurable evidence.
+
+#### 1.8.7 GDPR Data Guardrails and Lookup Tables
+
+The architecture must treat both standard PII and special category personal data as first-class policy inputs before any model step executes.
+
+**Mandatory sensitive-data dictionaries (lookup tables)**
+
+| Dictionary / Lookup Table | Purpose | Minimum Fields |
+|---------------------------|---------|----------------|
+| `pii_type_catalog` | Canonical taxonomy for common identifiers | `pii_type_id`, `name`, `examples`, `risk_level`, `default_action` |
+| `special_category_catalog` | GDPR Art. 9 special category data taxonomy | `category_id`, `name`, `legal_basis_required`, `default_action`, `review_gate` |
+| `pattern_rule_catalog` | Detection rules for direct identifiers and account numbers | `rule_id`, `pii_type_id`, `pattern_type`, `pattern_reference`, `confidence_weight` |
+| `entity_detector_catalog` | NER/detector mapping for inferred identifiers (name, address, health entities) | `detector_id`, `supported_types`, `model_or_rule`, `threshold` |
+| `policy_action_matrix` | Decision table from data class + purpose to allowed action | `data_class`, `processing_purpose`, `allowed_zone`, `required_controls`, `deny_reason` |
+| `retention_policy_catalog` | Storage limitation controls by payload class | `payload_class`, `retention_class`, `ttl_days`, `storage_tier`, `deletion_mode` |
+| `dsr_action_catalog` | Data-subject-right action playbooks | `right_type`, `sla_days`, `required_artifacts`, `processor_steps`, `approval_role` |
+| `cross_border_transfer_policy` | Transfer restriction policy for external fallback | `destination_zone`, `allowed_data_class`, `required_safeguard`, `approval_required` |
+
+**Baseline PII coverage requirements**
+
+- The dictionary set must classify at least: full name, home address, email address, social security number, driver license number, financial account numbers, passport numbers, biometric identifiers, and derived identity signals.
+- Special category coverage must include: racial or ethnic origin, political opinions, religious or philosophical beliefs, trade union membership, genetic data, biometric data for unique identification, health data, sex life, and sexual orientation.
+
+**Step-level privacy guardrails (mandatory order)**
+
+1. **Classify:** Detect PII/special-category entities using pattern and entity lookup tables.
+2. **Purpose-check:** Verify lawful purpose and purpose limitation against `policy_action_matrix`.
+3. **Minimize:** Remove non-essential fields and chunk context to least-necessary scope.
+4. **Protect:** Apply tokenization/masking/redaction by data class policy.
+5. **Route:** Enforce local on-prem execution for restricted classes; deny or quarantine on policy violation.
+6. **Validate:** Check structured output for leakage patterns and policy breaches.
+7. **Persist:** Store only approved redacted payload classes with TTL from retention catalog.
+8. **Audit:** Record policy decision, controls applied, and legal/purpose rationale.
+
+**GDPR principles mapped to architecture controls**
+
+| GDPR Principle | Architectural Control |
+|----------------|------------------------|
+| Lawfulness, Fairness, Transparency | Policy decision records include lawful basis reference and user-facing processing explanation metadata |
+| Purpose Limitation | Per-step purpose tags enforced by `policy_action_matrix`; out-of-purpose processing denied |
+| Data Minimization | Contract-driven field allowlists and context chunking before inference |
+| Accuracy | Entity/detector confidence thresholds with HITL review for low-confidence classification |
+| Storage Limitation | Retention catalog with automated TTL deletion and legal-hold override controls |
+| Integrity and Confidentiality | Encryption, RBAC, sandbox isolation, egress deny-by-default, secret rotation |
+| Accountability | Immutable audit events and periodic conformance reporting |
+
+#### 1.8.8 Data Subject Rights Guardrails (GDPR Articles 15, 16, 17, 18, 20, 21)
+
+The privacy architecture must include operational paths and auditability for data-subject rights.
+
+| Right | Architectural Requirement |
+|-------|---------------------------|
+| Access (Art. 15) | Provide traceable export of personal-data records and model-processing metadata by subject identifier |
+| Rectification (Art. 16) | Support correction workflow with versioned updates and downstream reprocessing markers |
+| Erasure (Art. 17) | Execute deletion orchestration across operational stores, telemetry classes, and derived indexes where legally required |
+| Restrict Processing (Art. 18) | Enforce per-subject processing lock flags checked by step router before model invocation |
+| Data Portability (Art. 20) | Provide structured export format with provenance and field dictionary |
+| Object (Art. 21) | Register objection flags and deny non-exempt processing paths automatically |
+
+**DSR guardrail implementation rules**
+
+- Every DSR request must create a case record with SLA, state transitions, and evidence artifacts.
+- Model step execution must check subject restriction/objection flags before processing.
+- Erasure and restriction outcomes must propagate to caches, embeddings, and search indexes.
+- DSR operations must be auditable without exposing sensitive payload content.
+
+**Verification requirements for GDPR guardrails**
+
+- Detection tests must cover direct identifiers, quasi-identifiers, and special category data examples.
+- Routing tests must prove denied external transfer for restricted classes.
+- Retention tests must verify TTL enforcement and legal-hold exceptions.
+- DSR tests must validate access, rectification, erasure, restriction, portability, and objection workflows end-to-end.
+
 ---
 
 ## Section 2 – Stakeholders and Concerns
@@ -262,7 +504,7 @@ The system is decomposed into five logical layers:
 │        (Next.js Multi-Page React/TypeScript Frontend)        │
 │ [Doc Hub] [Dashboard] [Bridge] [Artifact Lab] [Admin Center] │
 │                                                             │
-│   Goal: The multi-page frontend is designed to fulfill trust, clarity, traceability, and speed—while feeling modern and uplifting. The visual style will use a white-blue-green colour palette to evoke trust, calm, and progress. Dark mode is selectable by user. Detailed UI requirements will be clarified later; for now, the mood-enhancing style and UX principles are prioritized.
+│   Goal: The multi-page frontend is designed to fulfill trust, clarity, traceability, and speed—while feeling modern and uplifting. The visual style uses a white-blue-green colour palette to evoke trust, calm, and progress. Dark mode is currently not implemented and is treated as an optional future topic (not a mandatory MVP requirement). Detailed UI requirements will be clarified later; for now, the mood-enhancing style and UX principles are prioritized.
 │                                                             │
 │   After login, the first page presents a left navigation pane with the following elements:
 │     - Home (Doc Hub)
@@ -284,6 +526,8 @@ The system is decomposed into five logical layers:
 │     - Admin
 │         - Observability
 │         - Stakeholders & Rights
+│         - Model Policy & Parameters
+│         - Compliance Controls (Governance)
 │                                                             │
 │   fetch() → /api/v1/* endpoints                       │
 └─────────────────────────────┬───────────────────────────────┘
@@ -338,7 +582,89 @@ The system is decomposed into five logical layers:
                     (may be optional, graceful fallback)
 ```
 
-### 3.1.1 Flow Pattern (CrewAI Best Practice)
+### 3.1.1 SOLID-Oriented Privacy Architecture
+
+The target architecture should follow SOLID principles so the privacy-sensitive on-prem migration remains maintainable, testable, and extensible.
+
+**SOLID mapping**
+
+| Principle | Architectural application |
+|----------|----------------------------|
+| Single Responsibility | Each component has one reason to change: routing, policy, model execution, redaction, audit, or persistence |
+| Open/Closed | New local models are added through registry entries and adapters, not by changing orchestration logic |
+| Liskov Substitution | Every model adapter and step executor must satisfy the same contract so the orchestrator can swap implementations safely |
+| Interface Segregation | Separate interfaces for routing, inference, validation, sandboxing, and audit writing avoid fat abstractions |
+| Dependency Inversion | The orchestrator depends on policy and model-execution interfaces, not concrete providers or deployment details |
+
+**Quality engineering best practices**
+
+- Prefer explicit interfaces, typed schemas, and small services over monolithic agent code.
+- Keep privacy policy evaluation separate from model execution so the same policy can govern multiple local models.
+- Treat local model invocation as a bounded capability, not a free-form SDK call.
+- Keep validation deterministic and provider-neutral so local and fallback paths produce comparable evidence.
+- Make every cross-cutting concern observable through structured audit events and redacted telemetry.
+
+**Main component diagram**
+
+```mermaid
+flowchart LR
+  UI[Next.js Frontend / UI] --> API[FastAPI API Layer]
+  API --> ORCH[Workflow Orchestrator]
+
+  ORCH --> POLICY[Privacy Policy Engine]
+  ORCH --> ROUTER[Step Router]
+  ORCH --> AUDIT[Audit Event Writer]
+
+  ROUTER --> REG[Model Capability Registry]
+  ROUTER --> STEP[Step Contract Validator]
+  STEP --> SANDBOX[Sandboxed Step Executor]
+  SANDBOX --> LOCAL[On-Prem Local Model Gateway]
+  SANDBOX --> FALLBACK[Controlled External Fallback Adapter]
+
+  LOCAL --> REDACT[Redaction / Normalization Service]
+  FALLBACK --> REDACT
+  REDACT --> PERSIST[PostgreSQL / Audit Stores]
+  AUDIT --> PERSIST
+
+  REG --> POLICY
+  POLICY --> ROUTER
+```
+
+**Component responsibilities**
+
+| Component | Responsibility | SOLID emphasis |
+|-----------|----------------|-----------------|
+| Privacy Policy Engine | Classifies sensitivity and decides allowed execution zone | SRP, DIP |
+| Step Router | Routes each business step to an approved execution target | OCP, DIP |
+| Model Capability Registry | Stores approved models, task scopes, and benchmark metadata | SRP, OCP |
+| Step Contract Validator | Enforces schema, allowed tools, and output contract | SRP, ISP |
+| Sandboxed Step Executor | Runs each step with isolated resources and no default egress | SRP, LSP |
+| On-Prem Local Model Gateway | Serves local inference behind a stable adapter contract | LSP, DIP |
+| Controlled External Fallback Adapter | Provides exception-only external inference path | LSP, OCP |
+| Redaction / Normalization Service | Minimizes and sanitizes prompt/output payloads before storage | SRP |
+| Audit Event Writer | Writes immutable model-routing evidence and policy decisions | SRP |
+
+**Design rules**
+
+- Business workflows must be split into step contracts before any model execution.
+- Personal-data-capable steps default to the local model gateway.
+- External fallback requires an explicit policy exception and a redacted payload.
+- No component may access PostgreSQL directly unless it is a designated persistence service.
+- No model adapter may bypass the step validator or audit writer.
+
+### 3.1.2 Flow Pattern (CrewAI Best Practice)
+
+**Current implementation status (Bridge orchestration and sandboxing):**
+
+- Four bridge agent steps are explicitly modeled in code: `inspection`, `compliance`, `research`, `quality_gate`.
+- Each step has a dedicated sandbox identity (`sandbox_id`) and `local_isolated`/`deny_external` execution policy metadata.
+- This currently represents enforced runtime policy and auditable execution metadata, not yet a separately deployed "one container per agent" runtime topology.
+- Bridge orchestration in the current codebase is implemented primarily in the `/api/v1/bridge` route/service flow (with frontend pipeline orchestration for UX step progression), not yet as a standalone `services/orchestrator/*` module stack.
+
+**Target architecture intent:**
+
+- The architecture still expects a dedicated orchestrator layer to coordinate the full multi-step agent workflow with explicit step contracts and runtime controls.
+- A container-per-agent sandbox deployment model remains a valid target topology for future hardening phases, but is not required to claim current implementation completeness.
 
 **Orchestration Architecture (Phase 0+):**
 
@@ -411,10 +737,44 @@ The orchestrator implements the **CrewAI Flow best practice pattern**:
 
 ### 3.2 Process / Runtime View
 
+**Privacy-sensitive on-prem step execution sequence:**
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Client as Client/UI
+  participant API as FastAPI API
+  participant ORCH as Workflow Orchestrator
+  participant POLICY as Privacy Policy Engine
+  participant REG as Model Capability Registry
+  participant VALIDATOR as Step Contract Validator
+  participant SANDBOX as Sandboxed Step Executor
+  participant LOCAL as On-Prem Local Model Gateway
+  participant AUDIT as Audit Event Writer
+  participant DB as PostgreSQL / Audit Stores
+
+  Client->>API: Submit workflow request
+  API->>ORCH: Create workflow run
+  ORCH->>POLICY: Classify sensitivity + step type
+  POLICY-->>ORCH: data_privacy_class + allowed zone
+  ORCH->>REG: Resolve approved model for step
+  REG-->>ORCH: model_id + capability profile
+  ORCH->>VALIDATOR: Validate step contract
+  VALIDATOR-->>ORCH: step accepted
+  ORCH->>SANDBOX: Execute step in isolated sandbox
+  SANDBOX->>LOCAL: Invoke on-prem model
+  LOCAL-->>SANDBOX: Structured model output
+  SANDBOX-->>ORCH: Redacted, validated result
+  ORCH->>AUDIT: Record routing, policy, and model evidence
+  AUDIT->>DB: Persist immutable audit event
+  ORCH-->>API: Workflow step response
+  API-->>Client: JSON response
+```
+
 **Document Analysis Sequence:**
 
 ```
-Client          DocumentsRouter    DocumentAnalyzerService    [LLM API]
+Client          DocumentsRouter    DocumentAnalyzerService    [Model Adapter Path]
   │                   │                       │                    │
   │ POST /analyze     │                       │                    │
   │──────────────────►│                       │                    │
@@ -426,10 +786,10 @@ Client          DocumentsRouter    DocumentAnalyzerService    [LLM API]
   │                   │                       │ _check_sections()  │
   │                   │                       │ (arc42 regex)      │
   │                   │                       │                    │
-  │                   │                       │ [if API key set]   │
+  │                   │                       │ [if policy allows model call] │
   │                   │                       │───────────────────►│
   │                   │                       │ LLM enrichment     │
-  │                   │                       │ (OpenAI/Claude)    │
+  │                   │                       │ (On-prem preferred; controlled external fallback) │
   │                   │                       │◄───────────────────│
   │                   │◄──────────────────────│                    │
   │                   │  DocumentAnalysisResult                    │
@@ -440,7 +800,7 @@ Client          DocumentsRouter    DocumentAnalyzerService    [LLM API]
 **EU AI Act Compliance Check Sequence:**
 
 ```
-Client          ComplianceRouter   ComplianceCheckerService   [LLM API]
+Client          ComplianceRouter   ComplianceCheckerService   [Model Adapter Path]
   │                   │                       │                    │
   │ POST /check/eu-ai-act                     │                    │
   │──────────────────►│                       │                    │
@@ -452,10 +812,10 @@ Client          ComplianceRouter   ComplianceCheckerService   [LLM API]
   │                   │                       │ check requirements │
   │                   │                       │ (EUAIA-1..9)       │
   │                   │                       │                    │
-  │                   │                       │ [if API key set]   │
+  │                   │                       │ [if policy allows model call] │
   │                   │                       │───────────────────►│
   │                   │                       │ LLM enrichment     │
-  │                   │                       │ (OpenAI/Claude)    │
+  │                   │                       │ (On-prem preferred; controlled external fallback) │
   │                   │                       │◄───────────────────│
   │                   │◄──────────────────────│                    │
   │                   │  ComplianceCheckResult │                    │
@@ -787,29 +1147,30 @@ The above architectural decisions are elaborated with detailed acceptance criter
 |------------|-------|-----------|
 | MVP delivery | 6 weeks, 1 developer | Validated by AAMAD agentic tooling approach |
 | No external cloud dependencies | All core functions work offline | Enterprise security requirements; no SaaS lock-in |
-| No PII persistence | GDPR Art. 25 | No user data stored beyond session |
+| No raw/unnecessary PII persistence | GDPR Art. 25 | Only minimum required, policy-approved, redacted personal data may be stored with retention limits and audit controls |
 | Open source stack | All core dependencies are OSI-licensed | License compliance; no proprietary runtime |
 
 ---
 
 ## Section 8 – Traceability to PRD
 
-| SAD Component | PRD Requirement(s) | Implementation |
-|--------------|-------------------|---------------|
-| `document_analyzer.py` | F1, F2, F3 | `analyze_document()`, `analyze_arc42_document()`, `analyze_model_card()` |
-| `compliance_checker.py` | F4, F8 | `check_eu_ai_act_compliance()`, `get_applicable_regulations()` |
-| `report_generator.py` | F5 | `generate_report()` → ReportLab PDF |
-| `template_manager.py` | F6 | `list_templates()`, `get_template()` |
-| `hitl_workflow.py` | F7 | `create_review()`, `update_review_status()` |
-| `agents/doc_check_agent.py` | F9 | `DocumentCheckAgent` with optional Claude |
-| `agents/compliance_agent.py` | F9 | `ComplianceCheckAgent` with optional Claude |
-| `api/routes/documents.py` | F1 | POST /analyze, POST /upload |
-| `api/routes/compliance.py` | F4, F7, F8 | POST /check/eu-ai-act, POST /applicable-regulations, POST/GET /review |
-| `api/routes/reports.py` | F5 | POST /generate, GET /download/{id} |
-| `api/routes/templates.py` | F6 | GET /templates/, GET /templates/{id} |
+| SAD Component | PRD F-ID | Implementation |
+|--------------|-----------|---------------|
+| `document_analyzer.py` | F3 | `analyze_document()`, `analyze_arc42_document()`, `analyze_model_card()` |
+| `compliance_checker.py` | F1 | `check_eu_ai_act_compliance()`, `get_applicable_regulations()` |
+| `report_generator.py` | F6 | `generate_report()` → ReportLab PDF |
+| `template_manager.py` | F2 | `list_templates()`, `get_template()` |
+| `hitl_workflow.py` | F5 | `create_review()`, `update_review_status()` |
+| `agents/doc_check_agent.py` | F3 | `DocumentCheckAgent` with optional Claude |
+| `agents/compliance_agent.py` | F1 | `ComplianceCheckAgent` with optional Claude |
+| `api/routes/documents.py` | F3 | POST /analyze, POST /upload |
+| `api/routes/compliance.py` | F1 | POST /check/eu-ai-act, POST /applicable-regulations |
+| `api/routes/compliance.py` | F5 | POST/GET /review |
+| `api/routes/reports.py` | F6 | POST /generate, GET /download/{id} |
+| `api/routes/templates.py` | F2 | GET /templates/, GET /templates/{id} |
 | `core/security.py` | NFR Security | `sanitize_text()`, `validate_filename()`, `validate_file_size()` |
 | `core/logging_config.py` | NFR Security (Art. 12) | structlog JSON configuration |
-| `frontend/` | F10 (partial), UX requirements | 4-tab dashboard, fetch() API integration |
+| `frontend/` | F10 | 4-tab dashboard, fetch() API integration |
 
 ---
 
@@ -857,12 +1218,12 @@ The application exposes a RESTful API with the following main routes (for tracea
 - `/api/v1/templates` — SOP/arc42 template listing and retrieval
 - `/api/v1/research` — Perplexity-powered regulatory research with static fallback
 - `/api/v1/bridge` — Production-grade compliance execution with HITL gate and regulatory drift detection
-- `/api/v1/skills` — Backend Skills API for CrewAI orchestrator tool calls (machine-to-machine)
+- `/api/v1/skills` — Backend Skills API for machine-to-machine tool calls (and future dedicated CrewAI orchestrator integration)
 - `/api/v1/risk-templates` — RMF/FMEA risk template CRUD with CSV export and AI-assisted rows
 - `/api/v1/audit-trail` — Governance audit trail read access and audit schedule management
 - `/api/v1/dashboard` — Aggregated compliance KPIs and document risk analytics
 - `/api/v1/observability` — Quality observation ingestion, quality summaries, and LLM trace access
-- `/api/v1/admin` — Stakeholder profile governance and employee assignment management
+- `/api/v1/admin` — Stakeholder profile governance, employee assignment management, model-policy administration, and governance-control management
 - `/api/v1/auth` — Email/password authentication, session management, and password recovery
 - `/metrics` — Prometheus scrape endpoint for operational telemetry
 

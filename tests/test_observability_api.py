@@ -57,6 +57,7 @@ def test_llm_traces_returns_prompt_output_pairs(client) -> None:
                 "llm_output": "EU AI Act and MDR are applicable with specific obligations.",
                 "provider": "perplexity",
                 "model_used": "sonar-pro",
+                "request_id": "req-123",
             },
         },
     )
@@ -73,6 +74,20 @@ def test_llm_traces_returns_prompt_output_pairs(client) -> None:
         for item in payload["items"]
     )
     assert any("rich_payload" in item for item in payload["items"])
+    assert any(item.get("rich_payload") == {} for item in payload["items"])
+    assert any("request_id" in item.get("rich_payload_keys", []) for item in payload["items"])
+
+    full_response = client.get("/api/v1/observability/llm-traces?limit=10&window_hours=24&include_content=true")
+    assert full_response.status_code == 200
+    full_payload = full_response.json()
+    assert any(
+        item.get("source_component") == "research_agent"
+        and item.get("prompt_truncated") is False
+        and item.get("output_truncated") is False
+        and item.get("prompt_chars", 0) >= len(item.get("prompt", ""))
+        and item.get("output_chars", 0) >= len(item.get("output", ""))
+        for item in full_payload["items"]
+    )
 
 
 def test_workflow_component_breakdown_returns_component_rows(client) -> None:
