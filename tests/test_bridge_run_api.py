@@ -12,7 +12,9 @@ from fastapi.testclient import TestClient
 from src.doc_quality.api.main import app
 from src.doc_quality.api.routes import bridge as bridge_routes
 from src.doc_quality.core.database import get_db
+from src.doc_quality.models.compliance import DataPrivacyClass, InferenceLocation, StepPolicyContract
 from src.doc_quality.models.orm import AuditEventORM, BridgeHumanReviewORM, ModelPolicyConfigORM, SkillDocumentORM
+from src.doc_quality.services.policy_contract_service import PolicyContractValidationError
 
 
 def _client_with_db(test_db_session) -> TestClient:
@@ -115,6 +117,9 @@ def test_bridge_run_eu_ai_act_returns_results_and_persists_audit(client, test_db
     assert reproducibility.get("document", {}).get("document_name") == "qmm.md"
     assert reproducibility.get("workflow_run_at")
     assert len(reproducibility.get("agent_models", [])) == 4
+    assert len(reproducibility.get("step_policy_contracts", [])) == 4
+    assert all(item.get("policy_rule_id", "").startswith("policy.") for item in reproducibility.get("step_policy_contracts", []))
+    assert all(item.get("selected_inference_location") == "on_prem" for item in reproducibility.get("step_policy_contracts", []))
     assert all("model_params" in item for item in reproducibility.get("agent_models", []))
     assert all("temperature" in item.get("model_params", {}) for item in reproducibility.get("agent_models", []))
     assert all("top_p" in item.get("model_params", {}) for item in reproducibility.get("agent_models", []))
@@ -126,13 +131,49 @@ def test_bridge_run_eu_ai_act_returns_results_and_persists_audit(client, test_db
     assert "proposed_mitigations" in reproducibility.get("run_result", {})
     assert reproducibility.get("run_result", {}).get("status_summary")
 
-    updated_doc = (
-        test_db_session.query(SkillDocumentORM)
-        .filter(SkillDocumentORM.document_id == "DOC-BRIDGE-1")
-        .first()
+
+def test_bridge_run_is_blocked_when_step_policy_contract_validation_fails(client, test_db_session, monkeypatch) -> None:
+    doc = SkillDocumentORM(
+        document_id="DOC-BRIDGE-POLICY-INVALID",
+        filename="policy-invalid.md",
+        content_type="text/markdown",
+        document_type="sop",
+        extracted_text="Risk Management System logging transparency human oversight technical documentation",
+        source="skills_extract",
     )
-    assert updated_doc is not None
-    assert updated_doc.workflow_status == "in_review"
+    test_db_session.add(doc)
+    test_db_session.commit()
+
+    def _raise_policy_error(sandbox_steps):
+        raise PolicyContractValidationError(
+            "step policy contract missing required metadata",
+            action_points=[
+                "Ensure sensitivity_class is set for each step.",
+                "Ensure policy_rule_id uses policy namespace.",
+            ],
+        )
+
+    monkeypatch.setattr(bridge_routes, "build_and_validate_step_policy_contracts", _raise_policy_error)
+
+    response = client.post(
+        "/api/v1/bridge/run/eu-ai-act",
+        json={
+            "document_id": "DOC-BRIDGE-POLICY-INVALID",
+            "domain_info": {
+                "domain": "medical devices",
+                "description": "AI diagnostic support tool",
+                "uses_ai_ml": True,
+                "intended_use": "assist diagnosis",
+                "target_market": "EU",
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["error"]["code"] == "validation_error"
+    assert payload["error"]["reason"] == "bridge_step_policy_invalid"
+    assert any("sensitivity_class" in item for item in payload["error"]["details"])
 
 
 def test_bridge_runtime_self_check_reports_required_tables_and_local_models(client) -> None:
@@ -215,6 +256,8 @@ def test_bridge_run_is_blocked_when_runtime_self_check_fails(client, test_db_ses
     payload = response.json()
     assert payload["error"]["code"] == "database_unavailable"
     assert payload["error"]["reason"] == "bridge_runtime_not_ready"
+    assert isinstance(payload["error"].get("action_points"), list)
+    assert len(payload["error"]["action_points"]) >= 1
     assert "migration drift" in " ".join(payload["error"]["details"]).lower()
 
 
@@ -382,6 +425,93 @@ def test_bridge_run_rejects_non_local_provider_under_strict_policy(client, test_
 
     assert response.status_code == 422
     assert "local-only sandbox policy" in response.json()["error"]["message"].lower()
+
+
+def test_bridge_run_fail_closed_denies_personal_data_when_on_prem_unavailable(client, test_db_session, monkeypatch) -> None:
+    doc = SkillDocumentORM(
+        document_id="DOC-BRIDGE-FAIL-CLOSED",
+        filename="fail-closed.md",
+        content_type="text/markdown",
+        document_type="sop",
+        extracted_text="highly sensitive workflow requiring strict on-prem controls",
+        source="skills_extract",
+    )
+    test_db_session.add(doc)
+    test_db_session.merge(
+        ModelPolicyConfigORM(
+            config_id="default",
+            default_model_id="claude-3-5-sonnet-20241022",
+            items=[
+                {
+                    "model_id": "claude-3-5-sonnet-20241022",
+                    "display_name": "Anthropic claude-3-5-sonnet-20241022",
+                    "provider": "anthropic",
+                    "enabled": True,
+                    "priority": 1,
+                    "params": {},
+                }
+            ],
+            updated_by="test-suite",
+        )
+    )
+    test_db_session.commit()
+
+    base_settings = bridge_routes.get_settings()
+
+    def _settings_override():
+        settings = base_settings.model_copy(deep=True)
+        settings.bridge_local_only_enforced = False
+        settings.bridge_egress_policy = "allow_controlled"
+        return settings
+
+    def _force_personal_contracts(*, sandbox_steps):
+        return [
+            StepPolicyContract(
+                step_id="bridge_step_1",
+                step_name="bridge_inspection",
+                sensitivity_class=DataPrivacyClass.PERSONAL_DATA_POSSIBLE,
+                policy_rule_id="policy.bridge.on_prem_required.v1",
+                decision_reason="Sensitive context requires on-prem path.",
+                selected_inference_location=InferenceLocation.ON_PREM,
+                allowed_tools=["document_read"],
+            )
+        ]
+
+    monkeypatch.setattr(bridge_routes, "get_settings", _settings_override)
+    monkeypatch.setattr(bridge_routes, "_build_and_validate_step_policy_contracts", _force_personal_contracts)
+
+    response = client.post(
+        "/api/v1/bridge/run/eu-ai-act",
+        json={
+            "document_id": "DOC-BRIDGE-FAIL-CLOSED",
+            "domain_info": {
+                "domain": "medical devices",
+                "description": "AI diagnostic support tool",
+                "uses_ai_ml": True,
+                "intended_use": "assist diagnosis",
+                "target_market": "EU",
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["error"]["code"] == "validation_error"
+    assert payload["error"]["reason"] == "bridge_policy_routing_denied"
+    assert any("on-prem" in item.lower() or "on_prem" in item.lower() for item in payload["error"]["details"])
+
+    events = (
+        test_db_session.query(AuditEventORM)
+        .filter(
+            AuditEventORM.subject_id == "DOC-BRIDGE-FAIL-CLOSED",
+            AuditEventORM.event_type == "bridge.run.policy_routing.denied",
+        )
+        .all()
+    )
+    assert len(events) == 1
+    assert events[0].payload.get("reason") == "bridge_policy_routing_denied"
+    assert "fallback_reason_code" in events[0].payload
+    assert events[0].payload.get("fallback_reason_code") is None
 
 
 def test_bridge_run_detects_privacy_violation_and_returns_mitigations(client, test_db_session) -> None:

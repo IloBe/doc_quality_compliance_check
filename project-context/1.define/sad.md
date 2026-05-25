@@ -2,8 +2,8 @@
 # System Architecture Document (SAD) — Doc Quality Compliance Check
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.8.3  
-**Date:** 2026-4-4  
+**Version:** 0.8.4  
+**Date:** 2026-5-25  
 **Author persona:** `@system-arch`  
 **Standard:** ISO/IEC/IEEE 42010:2022 — Architecture Description  
 **AAMAD phase:** 1.define  
@@ -318,6 +318,45 @@ The target architecture improves privacy and control by turning broad business w
 
 - It reduces the blast radius of any one model call.
 - It keeps personal data closer to the application boundary.
+
+### 1.9 Architecture Conformance Review + New Decisions (CR-2026-05-25)
+
+This section reviews SAD/PRD alignment against the current implementation and records new enforceable architecture decisions for data privacy and security.
+
+#### 1.9.1 Conformance Snapshot (as implemented)
+
+- **Implemented and aligned:**
+  - Typed security defaults and production fail-fast checks in `src/doc_quality/core/config.py`.
+  - API-boundary sanitization and file guards in `src/doc_quality/core/security.py`.
+  - Bridge runtime isolation proof (`docker_inspect` or controlled metadata fallback) in `src/doc_quality/services/bridge_orchestrator_service.py`.
+  - Runtime topology evidence surfaced through bridge API contracts in `src/doc_quality/api/routes/bridge.py`.
+- **Partially implemented / pending full architecture closure:**
+  - Step-level mandatory sensitivity contract for all model calls is not yet consistently enforced across all workflow surfaces.
+  - Telemetry retention-class separation is defined in architecture intent but not yet fully implemented as a strict storage policy layer.
+  - GDPR rights execution flows are not yet complete as end-to-end process capabilities.
+
+#### 1.9.2 New Architecture Decisions
+
+| AD-ID | Decision Topic | Selected Decision | Why |
+|------|-----------------|-------------------|-----|
+| **AD-16** | Step privacy contract enforcement | Every model-using workflow step must carry `sensitivity_class`, `policy_rule_id`, and `decision_reason`; execution is denied if these fields are absent. | Converts privacy policy from narrative guidance into enforceable runtime contract. |
+| **AD-17** | Bridge topology proof as release gate | Bridge approval-critical runs require explicit runtime topology evidence when `bridge_topology_proof_required=true`; fallback behavior is controlled by `bridge_runtime_topology_allow_metadata_fallback`. | Aligns deployment isolation claims with auditable, testable runtime proof. |
+| **AD-18** | Retention-class observability split | Persist observability data into separate classes (`audit_evidence`, `operational_metrics`, `debug_trace`) with distinct retention and RBAC scopes. | Limits over-retention of sensitive traces and supports purpose limitation. |
+| **AD-19** | Security-safe configuration baseline | Example env files must use neutral placeholders only; production must fail fast on unsafe defaults (secret/session/security policy). | Reduces credential leakage risk and prevents insecure production startup. |
+
+#### 1.9.3 Detailed Requirements Derived from AD-16..AD-19
+
+1. **REQ-PRIV-ARCH-01:** Model invocation records must persist policy metadata (`sensitivity_class`, `policy_rule_id`, `decision_reason`, `selected_inference_location`).
+2. **REQ-PRIV-ARCH-02:** Personal-data-possible steps must route to on-prem inference or fail closed.
+3. **REQ-SEC-ARCH-03:** Approval-critical bridge workflows must include runtime topology proof payload in audit evidence.
+4. **REQ-OBS-ARCH-04:** Audit evidence and debug traces must not share the same default retention policy.
+5. **REQ-CONFIG-ARCH-05:** Environment examples must remain placeholder-only and synchronized with `Settings` fields.
+
+#### 1.9.4 Verification Requirements
+
+- Add architecture conformance tests that fail when required policy metadata is missing from model invocation evidence.
+- Add bridge runtime tests that verify strict failure behavior when topology proof cannot be established and fallback is disabled.
+- Add configuration/documentation checks that compare env examples to `src/doc_quality/core/config.py` and reject non-placeholder secrets.
 
 #### 1.8.6 Bridge Startup Runtime Self-Check Gate (Implemented)
 

@@ -8,7 +8,9 @@ import {
   deriveRunControlItems,
   deriveAutomaticRecommendation,
   inferBridgeDomainInfo,
+  mapBridgeFailureGuidance,
 } from '../lib/bridgeRunViewModel';
+import { BridgeApiError } from '../lib/bridgeClient';
 
 describe('bridgeRunViewModel inferBridgeDomainInfo', () => {
   it('returns backend-compatible payload with required fields', () => {
@@ -231,5 +233,48 @@ describe('bridgeRunViewModel inferBridgeDomainInfo', () => {
     expect(items[0].topic).toMatch(/redaction/i);
     expect(items[0].implementationStatus).toBe('implemented');
     expect(items[0].implementationNote).toMatch(/runtime guardrails/i);
+  });
+
+  it('maps fail-closed routing deny errors to actionable frontend guidance', () => {
+    const guidance = mapBridgeFailureGuidance(
+      new BridgeApiError({
+        status: 422,
+        code: 'validation_error',
+        errorCode: 'validation_error',
+        reason: 'bridge_policy_routing_denied',
+        message: 'Bridge fail-closed routing denied this workflow run.',
+        details: [],
+        actionPoints: [
+          'Set active model provider to on-prem ollama.',
+        ],
+        correlationId: 'corr-psc-routing',
+      }),
+    );
+
+    expect(guidance.title).toMatch(/fail-closed routing/i);
+    expect(guidance.reasonCode).toBe('bridge_policy_routing_denied');
+    expect(guidance.actionPoints).toEqual(
+      expect.arrayContaining(['Set active model provider to on-prem ollama.']),
+    );
+    expect(guidance.correlationId).toBe('corr-psc-routing');
+  });
+
+  it('maps policy contract validation errors to actionable frontend guidance', () => {
+    const guidance = mapBridgeFailureGuidance(
+      new BridgeApiError({
+        status: 422,
+        code: 'validation_error',
+        errorCode: 'validation_error',
+        reason: 'bridge_step_policy_invalid',
+        message: 'Bridge step policy contract validation failed.',
+        details: [],
+        actionPoints: [],
+        correlationId: 'corr-psc-contract',
+      }),
+    );
+
+    expect(guidance.title).toMatch(/policy contract/i);
+    expect(guidance.reasonCode).toBe('bridge_step_policy_invalid');
+    expect(guidance.actionPoints.length).toBeGreaterThan(0);
   });
 });

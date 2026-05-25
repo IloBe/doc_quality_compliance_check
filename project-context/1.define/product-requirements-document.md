@@ -2,8 +2,8 @@
 # Product Requirements Document (PRD) — Doc Quality Compliance Check
 
 **Product:** Document Quality & Compliance Check System  
-**Version:** 0.8.3  
-**Date:** 2026-4-4  
+**Version:** 0.8.4  
+**Date:** 2026-5-25  
 **Author persona:** `@product-mgr`  
 **AAMAD phase:** 1.define  
 
@@ -441,6 +441,45 @@ The product must enforce GDPR-focused protections for both standard PII and spec
 3. Output leakage checks block persistence of non-compliant payloads.
 4. Retention and deletion controls are automatically enforced and auditable.
 5. All six GDPR rights workflows are testable and traceable end-to-end.
+
+#### 3.4.9 Architecture Conformance Review (PRD vs Current Codebase)
+
+This review confirms where PRD intent already fits the current implementation and where explicit delivery work remains.
+
+**Conformance areas already implemented**
+
+- Security and auth controls are implemented in configuration and route guards (`src/doc_quality/core/config.py`, `src/doc_quality/core/session_auth.py`, `src/doc_quality/api/routes/auth.py`).
+- Input sanitization and upload guardrails are implemented (`src/doc_quality/core/security.py`).
+- Bridge runtime topology proof and isolation evidence are implemented and exposed via API (`src/doc_quality/services/bridge_orchestrator_service.py`, `src/doc_quality/api/routes/bridge.py`).
+- The bridge runtime contract already persists auditable proof fields (runtime source, container evidence, issues) suitable for governance review.
+
+**Conformance gaps to close in next increment**
+
+- The PRD-defined step sensitivity class (`personal_data_possible`, `non_personal`, `scrubbed_fallback`) is not yet a first-class required field across all model-using steps.
+- Policy-rule identifiers and decision reasons are not yet enforced as mandatory persisted metadata for every model invocation beyond bridge-specific proof payloads.
+- Retention separation between long-lived audit evidence and short-lived operational telemetry is partially documented but not yet fully codified end-to-end.
+- GDPR rights workflows (Art. 15/16/17/18/20/21) are not yet implemented as complete API-visible process flows.
+
+#### 3.4.10 New Detailed Requirements — Data Privacy and Security (CR-2026-05-25)
+
+The following requirements are added as mandatory architecture-level requirements for the next delivery increment.
+
+| Requirement ID | Requirement | Scope | Priority |
+|----------------|-------------|-------|----------|
+| DPS-01 | Every model-using step must declare `sensitivity_class`, `policy_rule_id`, and `decision_reason` before execution. | Orchestrator, model routing, audit events | P0 |
+| DPS-02 | Requests with `sensitivity_class=personal_data_possible` must be denied if on-prem execution is unavailable. | Bridge workflow, provider adapters | P0 |
+| DPS-03 | Runtime topology proof must be checked before compliance run approval and recorded in run evidence. | Bridge runtime, compliance gate | P0 |
+| DPS-04 | External fallback requires explicit scrubbed mode plus recorded exception reason code. | Provider routing, policy engine | P0 |
+| DPS-05 | Telemetry must be separated into retention classes (`audit_evidence`, `operational_metrics`, `debug_trace`). | Observability, storage policy | P1 |
+| DPS-06 | Security-sensitive environment defaults must remain placeholder-safe in example files and fail-safe in production config. | Configuration, deployment docs | P0 |
+
+**Acceptance criteria for the new requirements**
+
+1. A bridge run is rejected when strict topology proof is required and container evidence is missing.
+2. Audit events for model steps include `sensitivity_class`, `policy_rule_id`, and `decision_reason`.
+3. External model usage cannot occur for personal-data-possible steps unless policy explicitly allows scrubbed fallback and records a reason code.
+4. Release checks verify that env example files contain no real credentials and only neutral/demo placeholders.
+5. Telemetry and audit retention classes are documented and testable with role-scoped read access.
 
 ### Security Requirements
 

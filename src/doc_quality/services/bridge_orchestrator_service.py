@@ -13,9 +13,45 @@ import os
 
 from ..core.config import Settings
 from ..core.logging_config import get_logger
+from ..models.compliance import StepPolicyContract
+from ..models.model_policy import ActiveModelInfo
 from .bridge_privacy_service import BridgeAgentId, SandboxStepResult
+from .bridge_privacy_service import build_step_policy_contracts_for_sandbox_steps
+from .model_policy_service import enforce_fail_closed_step_routing
+from .policy_contract_service import PolicyContractValidationError, validate_step_policy_contract
 
 logger = get_logger(__name__)
+
+
+def build_and_validate_step_policy_contracts(*, sandbox_steps: list[SandboxStepResult]) -> list[StepPolicyContract]:
+    """Build and validate mandatory policy metadata for each bridge step.
+
+    Kept in orchestrator service to ensure non-HTTP execution paths still enforce
+    policy contract boundaries before workflow/model routing decisions.
+    """
+    try:
+        contracts = build_step_policy_contracts_for_sandbox_steps(sandbox_steps)
+        validated = [validate_step_policy_contract(contract) for contract in contracts]
+    except PolicyContractValidationError:
+        logger.warning("bridge_step_policy_validation_failed", reason="bridge_step_policy_invalid")
+        raise
+
+    logger.info("bridge_step_policy_validation_passed", contracts=len(validated))
+    return validated
+
+
+def enforce_bridge_policy_routing(
+    *,
+    active_model: ActiveModelInfo,
+    step_policy_contracts: list[StepPolicyContract],
+    allow_external_fallback: bool,
+) -> None:
+    """Apply fail-closed routing guardrails for bridge policy contracts."""
+    enforce_fail_closed_step_routing(
+        active_model=active_model,
+        step_policy_contracts=step_policy_contracts,
+        allow_external_fallback=allow_external_fallback,
+    )
 
 
 @dataclass(frozen=True)

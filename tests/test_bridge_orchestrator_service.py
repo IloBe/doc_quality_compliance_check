@@ -1,7 +1,12 @@
 """Unit tests for bridge runtime topology orchestration proof."""
 from src.doc_quality.core.config import Settings
 from src.doc_quality.services.bridge_orchestrator_service import build_runtime_topology_assessment
-from src.doc_quality.services.bridge_privacy_service import BridgeAgentId, SandboxStepResult
+from src.doc_quality.models.compliance import DataPrivacyClass, InferenceLocation
+from src.doc_quality.services.bridge_privacy_service import (
+    BridgeAgentId,
+    SandboxStepResult,
+    build_step_policy_contracts_for_sandbox_steps,
+)
 
 
 def _build_sandbox_steps() -> list[SandboxStepResult]:
@@ -100,3 +105,13 @@ def test_runtime_topology_docker_inspect_can_fallback_when_explicitly_enabled(mo
     assert assessment.isolated_deployments is True
     assert all(item.proof_source == "metadata" for item in assessment.agents)
     assert assessment.issues == []
+
+
+def test_bridge_policy_contracts_are_generated_for_each_sandbox_step() -> None:
+    steps = _build_sandbox_steps()
+    contracts = build_step_policy_contracts_for_sandbox_steps(steps)
+
+    assert len(contracts) == len(steps)
+    assert all(contract.policy_rule_id.startswith("policy.") for contract in contracts)
+    assert all(contract.selected_inference_location == InferenceLocation.ON_PREM for contract in contracts)
+    assert all(contract.sensitivity_class == DataPrivacyClass.PERSONAL_DATA_POSSIBLE for contract in contracts)
