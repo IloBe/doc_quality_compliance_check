@@ -505,7 +505,7 @@ doc_quality_compliance_check/
 │   ├── .env.postgresql.example                     ← PostgreSQL-focused env template
 │   └── src/doc_quality/core/config.py              ← Pydantic Settings source for bridge privacy/topology controls
 │
-├── 🔧 Backend Privacy & Bridge Runtime Enforcement
+├── Backend Privacy & Bridge Runtime Enforcement
 │   ├── src/doc_quality/api/routes/bridge.py        ← Runtime self-check, topology endpoint, bridge run gating, HITL enforcement
 │   ├── src/doc_quality/services/bridge_privacy_service.py
 │   │                                               ← Privacy signal detection, mitigation proposals (dp-001..dp-004), local sandbox plan
