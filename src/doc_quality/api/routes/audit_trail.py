@@ -6,13 +6,13 @@ from sqlalchemy.orm import Session
 
 from ...core.database import get_db
 from ...core.session_auth import AuthenticatedUser, require_roles
-from ...models.skills import AuditEventListResponse, AuditEventRecord, AuditScheduleRecord, UpsertAuditScheduleRequest
+from ...models.skills import AuditEventListResponse, AuditEventRecord, AuditEventSummaryListResponse, AuditScheduleRecord, UpsertAuditScheduleRequest
 from ...services.skills_service import get_audit_event_by_id, get_audit_schedule, list_audit_events, upsert_audit_schedule
 
 router = APIRouter(prefix="/audit-trail", tags=["audit-trail"])
 
 
-@router.get("/events", response_model=AuditEventListResponse)
+@router.get("/events", response_model=AuditEventSummaryListResponse)
 async def get_audit_trail_events(
     window_hours: int = Query(default=24 * 30, ge=1, le=24 * 365),
     limit: int = Query(default=200, ge=1, le=1000),
@@ -22,8 +22,13 @@ async def get_audit_trail_events(
     subject_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
     _user=Depends(require_roles("qm_lead", "auditor", "riskmanager", "architect")),
-) -> AuditEventListResponse:
-    """Return audit-event timeline entries for governance and compliance review."""
+) -> AuditEventSummaryListResponse:
+    """Return payload-safe audit-event summaries for governance and compliance review.
+
+    Full ``payload`` blobs are omitted from list items.  Use
+    ``GET /audit-trail/events/{event_id}`` to access the full payload for a
+    specific event.
+    """
     return list_audit_events(
         db,
         window_hours=window_hours,

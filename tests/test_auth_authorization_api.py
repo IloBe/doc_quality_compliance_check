@@ -171,6 +171,7 @@ def test_risk_templates_list_role_matrix(test_db_session, monkeypatch, role: str
     [
         ("qm_lead", 200),
         ("riskmanager", 200),
+        ("app_admin", 200),
         ("auditor", 403),
         ("architect", 403),
         ("viewer", 403),

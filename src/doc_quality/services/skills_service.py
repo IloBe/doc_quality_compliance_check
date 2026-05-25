@@ -24,6 +24,8 @@ from ..models.orm import AuditEventORM, AuditScheduleORM, FindingORM, SkillDocum
 from ..models.skills import (
     AuditEventRecord,
     AuditEventListResponse,
+    AuditEventSummaryRecord,
+    AuditEventSummaryListResponse,
     AuditScheduleRecord,
     ExtractTextRequest,
     ExtractTextResponse,
@@ -32,9 +34,11 @@ from ..models.skills import (
     SearchDocumentsRequest,
     SearchDocumentsResponse,
     SkillDocumentRecord,
+    SkillDocumentSearchRecord,
     UpsertAuditScheduleRequest,
     WriteFindingRequest,
 )
+from .bridge_privacy_service import assess_privacy_violation
 from .ocr_fallback import extract_text_with_fallback
 
 logger = get_logger(__name__)
@@ -54,6 +58,15 @@ _VALID_WORKFLOW_STATUSES = {
     WORKFLOW_STATUS_REWORK_AFTER_REVIEW,
 }
 
+_EXTRACTED_TEXT_PREVIEW_CHARS = 280
+
+
+def _make_text_preview(value: str, max_chars: int = _EXTRACTED_TEXT_PREVIEW_CHARS) -> str:
+    compact = " ".join(value.split())
+    if len(compact) <= max_chars:
+        return compact
+    return f"{compact[:max_chars].rstrip()}..."
+
 
 def _detect_content_type(filename: str) -> str:
     extension = Path(filename).suffix.lower()
@@ -63,6 +76,82 @@ def _detect_content_type(filename: str) -> str:
         ".md": "text/markdown",
         ".txt": "text/plain",
     }.get(extension, "application/octet-stream")
+
+
+def _persist_privacy_violation_artifacts(
+    db: Session,
+    *,
+    document_id: str,
+    source: str,
+    extracted_text: str,
+) -> None:
+    """Persist privacy finding and audit event if deterministic signals are detected."""
+    privacy_assessment = assess_privacy_violation(extracted_text)
+    if not privacy_assessment.violation_detected:
+        return
+
+    existing_finding = (
+        db.query(FindingORM)
+        .filter(
+            FindingORM.document_id == document_id,
+            FindingORM.finding_type == "data_privacy_violation",
+        )
+        .first()
+    )
+
+    proposals_payload = [
+        {
+            "proposal_id": proposal.proposal_id,
+            "title": proposal.title,
+            "details": proposal.details,
+        }
+        for proposal in privacy_assessment.proposals
+    ]
+
+    evidence_payload = {
+        "source": source,
+        "violation_summary": privacy_assessment.violation_summary,
+        "matched_signals": privacy_assessment.matched_signals,
+        "proposals": proposals_payload,
+    }
+
+    if existing_finding is None:
+        db.add(
+            FindingORM(
+                finding_id=str(uuid.uuid4()),
+                document_id=document_id,
+                finding_type="data_privacy_violation",
+                title="Data privacy violation risk detected",
+                description=privacy_assessment.violation_summary,
+                severity="high",
+                evidence=evidence_payload,
+            )
+        )
+
+    db.add(
+        AuditEventORM(
+            event_id=str(uuid.uuid4()),
+            tenant_id="default",
+            org_id=None,
+            project_id=None,
+            event_time=datetime.now(timezone.utc),
+            event_type="document.privacy_violation.detected",
+            actor_type="system",
+            actor_id="skills_service",
+            subject_type="document",
+            subject_id=document_id,
+            trace_id=None,
+            correlation_id=document_id,
+            payload=evidence_payload,
+        )
+    )
+    db.commit()
+    logger.info(
+        "document_privacy_violation_artifacts_persisted",
+        document_id=document_id,
+        source=source,
+        signals=len(privacy_assessment.matched_signals),
+    )
 
 
 def _extract_text_from_bytes(content_bytes: bytes, filename: str) -> str:
@@ -88,14 +177,33 @@ def _extract_text_from_bytes(content_bytes: bytes, filename: str) -> str:
     raise ValueError(f"Unsupported file type: {extension!r}")
 
 
-def _to_document_record(record: SkillDocumentORM) -> SkillDocumentRecord:
+def _to_document_record(record: SkillDocumentORM, *, include_extracted_text: bool = False) -> SkillDocumentRecord:
+    extracted_text = record.extracted_text or ""
     return SkillDocumentRecord(
         document_id=record.document_id,
         filename=record.filename,
         content_type=record.content_type,
         document_type=DocumentType(record.document_type),
         workflow_status=(record.workflow_status or WORKFLOW_STATUS_DRAFT),
-        extracted_text=record.extracted_text,
+        extracted_text=(extracted_text if include_extracted_text else None),
+        extracted_text_preview=_make_text_preview(extracted_text) if extracted_text else None,
+        extracted_text_chars=len(extracted_text),
+        source=record.source,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _to_search_record(record: SkillDocumentORM) -> SkillDocumentSearchRecord:
+    extracted_text = record.extracted_text or ""
+    return SkillDocumentSearchRecord(
+        document_id=record.document_id,
+        filename=record.filename,
+        content_type=record.content_type,
+        document_type=DocumentType(record.document_type),
+        workflow_status=(record.workflow_status or WORKFLOW_STATUS_DRAFT),
+        extracted_text_preview=_make_text_preview(extracted_text) if extracted_text else None,
+        extracted_text_chars=len(extracted_text),
         source=record.source,
         created_at=record.created_at,
         updated_at=record.updated_at,
@@ -119,6 +227,17 @@ def persist_document(
 
     existing = db.query(SkillDocumentORM).filter(SkillDocumentORM.document_id == resolved_document_id).first()
     if existing is None:
+        # Canonicalize by filename to avoid duplicate cards for repeated work on the same file.
+        existing = (
+            db.query(SkillDocumentORM)
+            .filter(SkillDocumentORM.filename == sanitized_filename)
+            .order_by(desc(SkillDocumentORM.updated_at), desc(SkillDocumentORM.created_at))
+            .first()
+        )
+        if existing is not None:
+            resolved_document_id = existing.document_id
+
+    if existing is None:
         existing = SkillDocumentORM(
             document_id=resolved_document_id,
             filename=sanitized_filename,
@@ -138,8 +257,16 @@ def persist_document(
 
     db.commit()
     db.refresh(existing)
+
+    _persist_privacy_violation_artifacts(
+        db,
+        document_id=existing.document_id,
+        source=source,
+        extracted_text=sanitized_text,
+    )
+
     logger.info("skill_document_persisted", document_id=existing.document_id, source=source)
-    return _to_document_record(existing)
+    return _to_document_record(existing, include_extracted_text=True)
 
 
 def set_document_workflow_status(db: Session, document_id: str, workflow_status: str) -> SkillDocumentRecord:
@@ -156,15 +283,15 @@ def set_document_workflow_status(db: Session, document_id: str, workflow_status:
     db.flush()
     db.refresh(record)
     logger.info("skill_document_workflow_status_updated", document_id=document_id, workflow_status=normalized)
-    return _to_document_record(record)
+    return _to_document_record(record, include_extracted_text=True)
 
 
-def get_document(db: Session, document_id: str) -> SkillDocumentRecord | None:
+def get_document(db: Session, document_id: str, *, include_extracted_text: bool = False) -> SkillDocumentRecord | None:
     """Retrieve a stored document by id."""
     record = db.query(SkillDocumentORM).filter(SkillDocumentORM.document_id == document_id).first()
     if record is None:
         return None
-    return _to_document_record(record)
+    return _to_document_record(record, include_extracted_text=include_extracted_text)
 
 
 def search_documents(db: Session, request: SearchDocumentsRequest) -> SearchDocumentsResponse:
@@ -181,13 +308,13 @@ def search_documents(db: Session, request: SearchDocumentsRequest) -> SearchDocu
             )
         )
     results = query.order_by(SkillDocumentORM.created_at.desc()).limit(request.limit).all()
-    return SearchDocumentsResponse(results=[_to_document_record(item) for item in results])
+    return SearchDocumentsResponse(results=[_to_search_record(item) for item in results])
 
 
 def extract_text(db: Session, request: ExtractTextRequest, max_file_size_mb: int) -> ExtractTextResponse:
     """Extract text from stored or inline document content."""
     if request.document_id is not None:
-        document = get_document(db, request.document_id)
+        document = get_document(db, request.document_id, include_extracted_text=True)
         if document is None:
             raise ValueError(f"Document not found: {request.document_id}")
         return ExtractTextResponse(
@@ -308,8 +435,13 @@ def list_audit_events(
     actor_id: str | None = None,
     subject_type: str | None = None,
     subject_id: str | None = None,
-) -> AuditEventListResponse:
-    """Return recent audit events for governance and compliance review pages."""
+) -> AuditEventSummaryListResponse:
+    """Return recent audit events for governance and compliance review pages.
+
+    Full ``payload`` blobs are suppressed in list responses to prevent bulk
+    exposure of LLM prompts, routing decisions, or other sensitive content.
+    Use ``GET /audit-trail/events/{event_id}`` for the full record.
+    """
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(hours=window_hours)
 
@@ -326,9 +458,9 @@ def list_audit_events(
 
     rows = query.order_by(desc(AuditEventORM.event_time)).limit(limit).all()
 
-    return AuditEventListResponse(
+    return AuditEventSummaryListResponse(
         items=[
-            AuditEventRecord(
+            AuditEventSummaryRecord(
                 event_id=row.event_id,
                 event_type=row.event_type,
                 actor_type=row.actor_type,
@@ -341,7 +473,7 @@ def list_audit_events(
                 org_id=row.org_id,
                 project_id=row.project_id,
                 event_time=row.event_time,
-                payload=row.payload,
+                payload_keys=sorted(row.payload.keys()) if row.payload else [],
                 created_at=row.created_at,
             )
             for row in rows

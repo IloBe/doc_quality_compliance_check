@@ -1,0 +1,35 @@
+NEGATIVE TEMPLATE FIXTURE: AI Risk Management SOP
+
+Fixture metadata:
+- Path: failure path
+- Template style: negative-template v1
+- Intent: intentionally non-compliant AI risk SOP for rejection-path testing
+
+1) Purpose (intentionally wrong)
+Release AI features as quickly as possible with minimal process overhead.
+
+2) Scope (intentionally wrong)
+Only model engineers participate; product, privacy, security, and operations are excluded.
+
+3) Governance gaps
+- No owner for residual risk acceptance.
+- Engineers self-approve releases without independent review.
+- Human oversight may be disabled under schedule pressure.
+
+4) Unsafe instructions
+- Use any available workforce data, including scraped personal data.
+- Retain prompts, outputs, and records indefinitely.
+- Run security testing only after incidents occur.
+
+5) Missing required controls
+- No mandatory risk register updates.
+- No pre-release adversarial testing requirement.
+- No documented monitoring thresholds and escalation criteria.
+
+6) Incorrect claims (intentionally included)
+- ISO/IEC 23894 certification automatically proves legal compliance everywhere.
+- Personal data can always be reused for unrelated experiments.
+
+Expected review outcome:
+- reject or rework
+- findings for absent governance, unsafe data practices, missing human oversight, and false compliance assertions

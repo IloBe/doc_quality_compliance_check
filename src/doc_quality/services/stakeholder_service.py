@@ -1,6 +1,7 @@
 """Services for persistent stakeholder profile governance."""
 from __future__ import annotations
 
+import logging
 from typing import Any
 import uuid
 
@@ -43,12 +44,20 @@ _DEFAULT_STAKEHOLDER_PROFILES: list[dict[str, Any]] = [
         "permissions": ["doc.edit", "export.create", "audit.write"],
     },
     {
+        "profile_id": "app_admin",
+        "title": "App Admin",
+        "description": "Maintains user-role mapping and model/runtime policy configuration.",
+        "permissions": ["doc.edit", "bridge.run", "export.create", "review.approve", "audit.write", "model.policy.write"],
+    },
+    {
         "profile_id": "service",
         "title": "Service Client",
         "description": "Machine profile for backend skills and observability data ingestion.",
         "permissions": ["doc.edit", "bridge.run", "export.create", "review.approve", "audit.write"],
     },
 ]
+
+logger = logging.getLogger(__name__)
 
 
 def _to_record(row: StakeholderProfileORM) -> StakeholderProfileRecord:
@@ -96,11 +105,22 @@ def _employee_name_key(value: str) -> str:
 
 
 def ensure_default_stakeholder_profiles(db: Session) -> None:
-    """Seed default profiles only when table is empty."""
-    if db.query(StakeholderProfileORM).count() > 0:
+    """Ensure canonical default profiles exist in persistent storage.
+
+    The service intentionally reconciles missing default profiles instead of
+    seeding only when the table is empty. This keeps legacy partial datasets
+    usable while still preserving any existing profile-level edits.
+    """
+    existing_profile_ids = {
+        profile_id for (profile_id,) in db.query(StakeholderProfileORM.profile_id).all()
+    }
+
+    missing_profiles = [item for item in _DEFAULT_STAKEHOLDER_PROFILES if item["profile_id"] not in existing_profile_ids]
+    if not missing_profiles:
         return
 
-    for item in _DEFAULT_STAKEHOLDER_PROFILES:
+    logger.info("Seeding %d missing stakeholder profile(s)", len(missing_profiles))
+    for item in missing_profiles:
         db.add(
             StakeholderProfileORM(
                 profile_id=item["profile_id"],

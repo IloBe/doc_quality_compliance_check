@@ -191,14 +191,74 @@ def test_list_standard_mapping_requests_response_contract(client) -> None:
 
     if payload["items"]:
         row = payload["items"][0]
+        # list view must NOT expose the full business_justification
+        assert "business_justification" not in row
+        # but must expose the preview fields
         assert set(row.keys()) == {
             "request_id",
             "status",
             "submitted_at",
             "standard_name",
             "sop_reference",
-            "business_justification",
+            "justification_preview",
+            "justification_chars",
             "requester_email",
             "tenant_id",
             "project_id",
         }
+
+
+def test_list_standard_mapping_requests_justification_preview(client) -> None:
+    """List items carry a ≤280-char preview; full text stays in the create response."""
+    long_justification = "A" * 500 + " detailed analysis of regulatory mapping obligations."
+    create_resp = client.post(
+        "/api/v1/compliance/standard-mapping-requests",
+        json={
+            "standard_name": "ISO 27001",
+            "sop_reference": "SOP-SEC-001",
+            "business_justification": long_justification,
+            "requester_email": "preview.test@example.com",
+            "tenant_id": "tenant-quality",
+        },
+    )
+    assert create_resp.status_code == 200
+    # create response must return full justification
+    assert create_resp.json()["business_justification"] == long_justification
+
+    list_resp = client.get("/api/v1/compliance/standard-mapping-requests?limit=5")
+    assert list_resp.status_code == 200
+    items = list_resp.json()["items"]
+    matching = [i for i in items if i["standard_name"] == "ISO 27001"]
+    assert matching, "created record not found in list"
+
+    row = matching[0]
+    assert "business_justification" not in row
+    assert len(row["justification_preview"]) <= 280 + len("...")
+    assert row["justification_chars"] == len(long_justification)
+
+
+def test_standard_mapping_request_audit_event_contains_ai_runtime(client, test_db_session) -> None:
+    response = client.post(
+        "/api/v1/compliance/standard-mapping-requests",
+        json={
+            "standard_name": "ISO 9001",
+            "sop_reference": "SOP-QMS-001",
+            "business_justification": "Need traceable quality-management standard mapping for evidence and recurring external audits.",
+            "requester_email": "runtime.audit@example.com",
+            "tenant_id": "tenant-quality",
+        },
+    )
+    assert response.status_code == 200
+    request_id = response.json()["request_id"]
+
+    row = (
+        test_db_session.query(AuditEventORM)
+        .filter(
+            AuditEventORM.event_type == "compliance.standard_mapping.requested",
+            AuditEventORM.subject_id == request_id,
+        )
+        .first()
+    )
+    assert row is not None
+    payload = row.payload or {}
+    assert payload.get("ai_runtime", {}).get("model_id") == "llama3.1:8b"

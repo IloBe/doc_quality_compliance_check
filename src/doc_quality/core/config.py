@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     auth_mvp_password: str = "CHANGE_ME_BEFORE_USE"  # nosec B105 — placeholder, not a real credential
     auth_mvp_roles: str = "qm_lead"
     auth_mvp_org: str = "QM-CORE-STATION"
+    auth_admin_email: str = "admin@example.invalid"  # nosec B105 — placeholder, not a real credential
+    auth_admin_password: str = "CHANGE_ME_ADMIN_BEFORE_USE"  # nosec B105 — placeholder, not a real credential
+    auth_admin_roles: str = "app_admin,qm_lead"
+    auth_admin_org: str = "QM-ADMIN-STATION"
     auth_auto_provision_mvp_user: bool = True
     auth_recovery_ttl_minutes: int = 15
     auth_recovery_rate_limit_count: int = 5
@@ -70,6 +74,21 @@ class Settings(BaseSettings):
     tracing_otlp_endpoint: str = ""
     tracing_sampling_ratio: float = 1.0
     telemetry_service_name: str = "doc-quality-api"
+
+    # Bridge sandbox hardening
+    bridge_local_only_enforced: bool = True
+    bridge_egress_policy: Literal["deny_external", "allow_controlled"] = "deny_external"
+    bridge_topology_proof_required: bool = True
+    bridge_runtime_topology_source: Literal["metadata", "docker_inspect"] = "metadata"
+    bridge_runtime_topology_allow_metadata_fallback: bool = False
+    bridge_container_runtime_bin: str = "docker"
+    bridge_orchestrator_name: str = "bridge-workflow-orchestrator"
+    bridge_orchestrator_mode: str = "containerized-sandbox"
+    bridge_agent_network_id: str = "bridge-sandbox-network"
+    bridge_agent_container_inspection: str = "bridge-agent-inspection"
+    bridge_agent_container_compliance: str = "bridge-agent-compliance"
+    bridge_agent_container_research: str = "bridge-agent-research"
+    bridge_agent_container_quality_gate: str = "bridge-agent-quality-gate"
 
     # Templates directory
     templates_dir: str = "templates"

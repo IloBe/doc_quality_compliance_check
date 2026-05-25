@@ -24,8 +24,8 @@ from ...services.stakeholder_service import (
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-_STAKEHOLDER_READ_ROLES = ("qm_lead", "auditor", "riskmanager", "architect")
-_STAKEHOLDER_WRITE_ROLES = ("qm_lead", "riskmanager")
+_STAKEHOLDER_READ_ROLES = ("qm_lead", "auditor", "riskmanager", "architect", "app_admin")
+_STAKEHOLDER_WRITE_ROLES = ("qm_lead", "riskmanager", "app_admin")
 
 
 @router.get("/stakeholder-profiles", response_model=StakeholderProfileListResponse)

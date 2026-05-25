@@ -74,6 +74,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("application_stopping")
 ```
 
+### 1.4 Privacy boundary for model traces
+
+Model-related prompts and outputs must be treated differently from ordinary operational logs:
+
+- the backend/orchestrator-to-model-provider hop is the privacy boundary for AI workflows
+- full prompt context and full model output are the highest-risk payloads and should be minimized before any persistence
+- redaction should happen before observability persistence, CSV export, or long-retention audit storage whenever possible
+- observability helps governance, but raw traces should only be retained in exceptional, access-controlled cases such as migration shadow runs or formal investigations
+
+The long-term target architecture is an internal on-prem model gateway for personal-data-bearing workflows. Until that migration is complete, any external-provider traces must be redacted, access-controlled, and retained under the shortest practical policy.
+
 **Orchestrator Service** ([services/orchestrator/main.py](services/orchestrator/src/doc_quality_orchestrator/main.py#L40-L45)):
 ```python
 @asynccontextmanager

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from statistics import mean
+import re
 import uuid
 
 from sqlalchemy.orm import Session
@@ -20,6 +21,28 @@ from ..models.quality import (
     WorkflowComponentBreakdownResponse,
     WorkflowComponentSummary,
 )
+
+
+_TRACE_PREVIEW_CHARS = 280
+_SECRET_PATTERNS = [
+    re.compile(r"(api[_-]?key\s*[=:]\s*)([^\s,;]+)", re.IGNORECASE),
+    re.compile(r"(authorization\s*:\s*bearer\s+)([^\s,;]+)", re.IGNORECASE),
+    re.compile(r"(token\s*[=:]\s*)([^\s,;]+)", re.IGNORECASE),
+]
+
+
+def _redact_secrets(value: str) -> str:
+    redacted = value
+    for pattern in _SECRET_PATTERNS:
+        redacted = pattern.sub(r"\1[REDACTED]", redacted)
+    return redacted
+
+
+def _compact_preview(value: str, max_chars: int = _TRACE_PREVIEW_CHARS) -> tuple[str, bool]:
+    compact = " ".join(value.split())
+    if len(compact) <= max_chars:
+        return compact, False
+    return f"{compact[:max_chars].rstrip()}...", True
 
 
 def _to_record(record: QualityObservationORM) -> QualityObservationRecord:
@@ -174,6 +197,7 @@ def get_recent_llm_prompt_output_pairs(
     limit: int = 20,
     window_hours: int = 24,
     source_component: str | None = None,
+    include_content: bool = False,
 ) -> LlmPromptOutputListResponse:
     """Return recent prompt/output pairs captured in quality telemetry payloads."""
     lookup_limit = max(100, limit * 10)
@@ -201,11 +225,17 @@ def get_recent_llm_prompt_output_pairs(
         if not isinstance(prompt, str) or not isinstance(output, str):
             continue
 
-        rich_payload = {
-            key: value
-            for key, value in payload.items()
+        prompt_clean = _redact_secrets(prompt)
+        output_clean = _redact_secrets(output)
+
+        prompt_preview, prompt_truncated = _compact_preview(prompt_clean)
+        output_preview, output_truncated = _compact_preview(output_clean)
+
+        rich_payload_keys = sorted(
+            key
+            for key in payload.keys()
             if key not in {"llm_prompt", "llm_output", "prompt", "output", "answer", "provider", "model_used"}
-        }
+        )
 
         items.append(
             LlmPromptOutputPair(
@@ -213,13 +243,18 @@ def get_recent_llm_prompt_output_pairs(
                 source_component=row.source_component,
                 provider=payload.get("provider") if isinstance(payload.get("provider"), str) else None,
                 model_used=payload.get("model_used") if isinstance(payload.get("model_used"), str) else None,
-                prompt=prompt,
-                output=output,
+                prompt=prompt_clean if include_content else prompt_preview,
+                output=output_clean if include_content else output_preview,
+                prompt_chars=len(prompt_clean),
+                output_chars=len(output_clean),
+                prompt_truncated=(prompt_truncated and not include_content),
+                output_truncated=(output_truncated and not include_content),
                 trace_id=row.trace_id,
                 correlation_id=row.correlation_id,
                 subject_type=row.subject_type,
                 subject_id=row.subject_id,
-                rich_payload=rich_payload,
+                rich_payload={},
+                rich_payload_keys=rich_payload_keys,
             )
         )
 

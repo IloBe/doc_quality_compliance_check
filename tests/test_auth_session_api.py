@@ -230,3 +230,75 @@ def test_me_rejects_expired_session_cookie(test_db_session) -> None:
         assert me.json()["error"]["message"] == "Authentication required"
     finally:
         app.dependency_overrides.clear()
+
+
+def test_admin_login_returns_app_admin_role(test_db_session, monkeypatch) -> None:
+    monkeypatch.setenv("AUTH_ADMIN_EMAIL", "admin-local@example.invalid")
+    monkeypatch.setenv("AUTH_ADMIN_PASSWORD", "AdminPass_12345")
+    monkeypatch.setenv("AUTH_ADMIN_ROLES", "app_admin,qm_lead")
+
+    client = _client_with_db(test_db_session)
+    try:
+        login = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": "admin-local@example.invalid",
+                "password": "AdminPass_12345",
+            },
+        )
+        assert login.status_code == 200
+
+        me = client.get("/api/v1/auth/me")
+        assert me.status_code == 200
+        payload = me.json()
+        assert payload["email"] == "admin-local@example.invalid"
+        assert "app_admin" in payload["roles"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bootstrap_self_check_requires_admin_or_qm_lead(test_db_session, monkeypatch) -> None:
+    monkeypatch.setenv("AUTH_MVP_ROLES", "viewer")
+
+    client = _client_with_db(test_db_session)
+    try:
+        login = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": os.environ.get("AUTH_MVP_EMAIL", "mvp-user@example.invalid"),
+                "password": os.environ.get("AUTH_MVP_PASSWORD", "CHANGE_ME_BEFORE_USE"),
+            },
+        )
+        assert login.status_code == 200
+
+        response = client.get("/api/v1/auth/bootstrap-self-check")
+        assert response.status_code == 403
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bootstrap_self_check_returns_sanitized_account_metadata(test_db_session, monkeypatch) -> None:
+    monkeypatch.setenv("AUTH_ADMIN_EMAIL", "admin-selfcheck@example.invalid")
+    monkeypatch.setenv("AUTH_ADMIN_PASSWORD", "AdminPass_12345")
+    monkeypatch.setenv("AUTH_ADMIN_ROLES", "app_admin,qm_lead")
+
+    client = _client_with_db(test_db_session)
+    try:
+        login = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": "admin-selfcheck@example.invalid",
+                "password": "AdminPass_12345",
+            },
+        )
+        assert login.status_code == 200
+
+        response = client.get("/api/v1/auth/bootstrap-self-check")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["auto_provision_enabled"] is True
+        assert payload["account_count"] >= 1
+        assert any(item["email"] == "admin-selfcheck@example.invalid" for item in payload["accounts"])
+        assert all("password" not in item for item in payload["accounts"])
+    finally:
+        app.dependency_overrides.clear()

@@ -1,6 +1,7 @@
 // Audit Trail ViewModel - Models and utilities for audit trails
 
 import { AuditTrailEvent } from './auditTrailClient';
+import { formatDateTime } from './dateTime';
 
 export interface AuditTrailKpis {
   total: number;
@@ -28,7 +29,7 @@ export const AUDIT_WINDOWS = [
 ];
 
 export function formatTs(ts: string): string {
-  return new Date(ts).toLocaleString();
+  return formatDateTime(ts, ts);
 }
 
 export function formatDateInputValue(date: Date): string {

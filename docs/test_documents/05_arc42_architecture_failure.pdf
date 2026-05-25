@@ -1,0 +1,158 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 2 /Kids [4 0 R 6 0 R] >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 1954 >>
+stream
+BT
+/F1 10 Tf
+50 760 Td
+12 TL
+(# arc42 Architecture Documentation: SmartShift Planner - Negative Test Document) Tj
+T*
+() Tj
+T*
+(## Test intent) Tj
+T*
+() Tj
+T*
+(- Path: failure path) Tj
+T*
+(- Intended workflow outcome: the app should report structural gaps and high-severity) Tj
+T*
+(architecture concerns.) Tj
+T*
+() Tj
+T*
+(## introduction and goals) Tj
+T*
+() Tj
+T*
+(The system should generate work schedules quickly. Security, privacy, and auditability are) Tj
+T*
+(secondary concerns because the main goal is speed.) Tj
+T*
+() Tj
+T*
+(## context and scope) Tj
+T*
+() Tj
+T*
+(The browser talks directly to every backend service and can also reach the production) Tj
+T*
+(database if needed for faster debugging.) Tj
+T*
+() Tj
+T*
+(## solution strategy) Tj
+T*
+() Tj
+T*
+(- hardcode integration tokens in the frontend to avoid authentication delays) Tj
+T*
+(- let users share admin accounts during peak operations) Tj
+T*
+(- allow direct edits in production without review so planners can move faster) Tj
+T*
+() Tj
+T*
+(## building block view) Tj
+T*
+() Tj
+T*
+(Frontend, AI service, database, and calendar integration are all tightly coupled.) Tj
+T*
+() Tj
+T*
+(## runtime view) Tj
+T*
+() Tj
+T*
+(The user clicks approve and the browser writes schedule data directly to the production) Tj
+T*
+(database, then pushes events to calendars and logs the entire payload, including private) Tj
+T*
+(notes and access tokens.) Tj
+T*
+() Tj
+T*
+(## architecture decisions) Tj
+T*
+() Tj
+T*
+(- choose convenience over access control) Tj
+T*
+(- skip tenant isolation because all customers are trusted business users) Tj
+T*
+(- keep verbose logs with prompts, employee medical restrictions, and raw tokens for) Tj
+T*
+(troubleshooting) Tj
+T*
+() Tj
+T*
+(## risks and technical debt) Tj
+T*
+() Tj
+T*
+(- no formal list maintained) Tj
+T*
+(- if a breach happens, the team will fix it later) Tj
+T*
+() Tj
+T*
+(Negative-test note:) Tj
+T*
+(- several mandatory template sections are intentionally omitted) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 358 >>
+stream
+BT
+/F1 10 Tf
+50 760 Td
+12 TL
+(- diagram evidence and reviewable architecture views are intentionally absent) Tj
+T*
+() Tj
+T*
+(Expected review outcome:) Tj
+T*
+(- reject or rework) Tj
+T*
+(- findings for missing required arc42 sections, missing UML evidence, unsafe trust) Tj
+T*
+(assumptions, direct database access, token exposure, and privacy violations) Tj
+ET
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000127 00000 n 
+0000000197 00000 n 
+0000000323 00000 n 
+0000002329 00000 n 
+0000002455 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+2864
+%%EOF

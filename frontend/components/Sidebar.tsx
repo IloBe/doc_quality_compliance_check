@@ -1,7 +1,8 @@
 import Link from 'next/link';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useMockStore } from '../lib/mockStore';
+import { fetchActiveModelStatus } from '../lib/modelPolicyClient';
 import { 
   LuHouse,
   LuShieldCheck,
@@ -23,6 +24,7 @@ import {
   LuFileQuestion,
   LuBookOpen
 } from 'react-icons/lu';
+import { formatDateTime } from '../lib/dateTime';
 import { useRouter } from 'next/router';
 
 const NavItem = ({ href, icon: Icon, label, active }) => (
@@ -64,6 +66,28 @@ const Sidebar = ({ className }) => {
   const currentPath = router.pathname;
   const adminActive = currentPath.startsWith('/admin');
   const helpActive = currentPath.startsWith('/help');
+  const [activeModelLabel, setActiveModelLabel] = useState('Llama 3.1 8B');
+  const [activeModelProvider, setActiveModelProvider] = useState('OLLAMA');
+  const [activeModelParams, setActiveModelParams] = useState('T=0.2 P=0.9 K=40');
+
+  useEffect(() => {
+    let mounted = true;
+    const loadActiveModel = async () => {
+      const status = await fetchActiveModelStatus();
+      if (!mounted) {
+        return;
+      }
+      const model = status.active_model;
+      setActiveModelLabel(model.display_name || model.model_id || 'Llama 3.1 8B');
+      setActiveModelProvider((model.provider || 'ollama').toUpperCase());
+      setActiveModelParams(`T=${model.params?.temperature ?? 0.2} P=${model.params?.top_p ?? 0.9} K=${model.params?.top_k ?? 40}`);
+    };
+
+    loadActiveModel();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <aside className={`${className} flex flex-col pt-6 pb-4 overflow-y-auto`}>
@@ -126,6 +150,7 @@ const Sidebar = ({ className }) => {
             <NavItem href="/admin" icon={LuSettings} label="Admin" active={adminActive} />
             <SubNavItem href="/admin/observability" icon={LuActivity} label="Observability" active={currentPath === '/admin/observability'} />
             <SubNavItem href="/admin/stakeholders" icon={LuUsers} label="Stakeholders & Rights" active={currentPath === '/admin/stakeholders'} />
+            <SubNavItem href="/admin/governance" icon={LuShieldCheck} label="Compliance Controls" active={currentPath === '/admin/governance'} />
           </div>
         </div>
       </nav>
@@ -138,14 +163,13 @@ const Sidebar = ({ className }) => {
             <strong> Results should be verified by qualified human experts.</strong> AI systems have limitations 
             and may produce errors. Users remain fully responsible for all decisions and outputs.
           </p>
+          <p className="leading-tight border-t border-amber-200 pt-1 text-[11px] text-amber-900">
+            AI model disclaimer: {activeModelLabel} ({activeModelProvider}) {activeModelParams}
+          </p>
         </div>
 
         <div className="px-3 py-1.5 text-xs text-neutral-500 border-t border-neutral-200 pt-2">
-          <p className="text-center">Last accessed: <strong>{new Date().toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric' 
-          })}</strong></p>
+          <p className="text-center">Last accessed: <strong>{formatDateTime(new Date())}</strong></p>
         </div>
       </div>
     </aside>

@@ -31,7 +31,7 @@ async def get_document_skill(
     _user=Depends(require_roles("qm_lead", "auditor", "riskmanager", "architect", allow_service=True)),
 ) -> SkillDocumentRecord:
     """Return a stored document by id."""
-    result = get_document(db, request.document_id)
+    result = get_document(db, request.document_id, include_extracted_text=request.include_extracted_text)
     if result is None:
         raise HTTPException(status_code=404, detail=f"Document not found: {request.document_id}")
     return result

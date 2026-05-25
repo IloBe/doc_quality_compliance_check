@@ -33,6 +33,7 @@ The system implements a CrewAI-style multi-agent pattern with two specialised ag
 - add a dedicated **CrewAI orchestrator service** for complex multi-step workflows,
 - keep all production-system access in the backend **Skills API / service layer**,
 - route model access through a **provider adapter interface** so workflow code does not depend on a specific SDK.
+- treat the backend/orchestrator-to-model-provider hop as a privacy boundary; model prompts and outputs must be minimized and redacted before persistence or review views whenever possible.
 
 **Phase 0 status:** Wrapper-based path is production-ready and the standalone CrewAI orchestrator service already exists. It extends (not rewrites) the existing Skills API service layer.
 
@@ -57,9 +58,11 @@ Initial adapters (current repo state):
 
 - `AnthropicAdapter` (scaffold-backed provider contract implementation)
 - `OpenAICompatibleAdapter` (scaffold-backed provider contract implementation)
-- `NemotronAdapter` (scaffold-backed provider contract implementation)
+- `NemotronAdapter` (on-prem OpenAI-compatible gateway-backed provider implementation)
 
-**Important current-state note:** The adapter contract and orchestration wiring are implemented and tested, but provider adapters are intentionally scaffold-backed in the current codebase. Manual live-model smoke tests stay gated and skipped by default until real provider calls are enabled.
+**Important current-state note:** The adapter contract and orchestration wiring are implemented and tested. The Nemotron on-prem path is now live through an OpenAI-compatible gateway, while the Anthropic and OpenAI-compatible fallback adapters remain scaffold-backed in the current codebase. Manual live-model smoke tests stay gated and skipped by default unless the on-prem gateway is configured and approval flags are set.
+
+**Privacy migration direction:** the long-term production target is an internal on-prem model gateway for any workflow that can carry direct or indirect personal data. External providers should remain a controlled fallback path for scrubbed inputs, non-production validation, or temporary shadow comparison during migration.
 
 ### DocumentCheckAgent (`src/doc_quality/agents/doc_check_agent.py`)
 
@@ -108,7 +111,7 @@ Initial adapters (current repo state):
 |---------|---------|
 | `AnthropicAdapter` | Provider-contract adapter (currently scaffold-backed) |
 | `OpenAICompatibleAdapter` | Provider-contract adapter (currently scaffold-backed) |
-| `NemotronAdapter` | Provider-contract adapter (currently scaffold-backed) |
+| `NemotronAdapter` | On-prem gateway-backed adapter for production-sensitive workflows |
 
 ### CrewAI Runtime Controls & Observability (Phase 0, defined in CrewAI DoD)
 
@@ -144,6 +147,12 @@ Every CrewAI step is fully observable and persisted to PostgreSQL:
 - `token_usage` / `cost_metadata`: Token and cost tracking where available
 - **Replay links:** All step artifacts (prompts, I/O, redaction metadata) are persisted to enable deterministic replay for audit and debugging
 - **Verifier gate:** A Verifier Agent validates every step's output against JSON schema, presence of citations/evidence, and absence of hallucinated markers
+
+**Privacy guardrails for model traces:**
+
+- full prompt context and full model output are the highest-risk payloads and should not be retained longer than required for the approved retention class
+- observability should be split into operational telemetry, redacted review artifacts, and audit evidence so the same payload is not copied into multiple long-retention stores
+- raw model traces are acceptable only when explicitly justified, access-controlled, and tied to a migration or audit exception
 
 All audit events are stored in the `audit_events` append-only table with provenance fields (`tenant_id`, `org_id`, `project_id`, `actor_id`, `correlation_id`) for full compliance audit trail.
 

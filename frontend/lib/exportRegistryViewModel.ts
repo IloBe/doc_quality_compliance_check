@@ -1,3 +1,5 @@
+import { formatDateTime } from './dateTime';
+
 export interface ExportRegistryStats {
   total: number;
   ready: number;
@@ -57,7 +59,7 @@ export function getSourceStatusBadgeClass(_status?: string): string {
 
 export function formatExportTimestamp(value?: string): string {
   if (!value) return '—';
-  return new Date(value).toLocaleString();
+  return formatDateTime(value, value);
 }
 
 export function formatExportDuration(start?: string, end?: string): string {

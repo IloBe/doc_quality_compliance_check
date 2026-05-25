@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.exc import OperationalError
 
 from src.doc_quality.api.main import app
+from src.doc_quality.api.main import _build_error_payload
 from src.doc_quality.api.routes import auth as auth_routes
 from src.doc_quality.core.database import get_db
 from src.doc_quality.models.orm import SkillDocumentORM
@@ -117,3 +118,20 @@ def test_conflict_http_exception_with_detail_dict_preserves_envelope_shape(clien
     assert payload["error"]["code"] == "conflict"
     assert isinstance(payload["error"]["message"], str)
     assert payload["error"]["locked_by"] == "alice@example.invalid"
+
+
+def test_error_payload_filters_untrusted_detail_keys() -> None:
+    payload = _build_error_payload(
+        400,
+        {
+            "message": "Request failed",
+            "locked_by": "reviewer@example.invalid",
+            "internal_debug": "stack details",
+            "secret_token": "abc123",
+        },
+    )
+
+    assert payload["message"] == "Request failed"
+    assert payload["locked_by"] == "reviewer@example.invalid"
+    assert "internal_debug" not in payload
+    assert "secret_token" not in payload

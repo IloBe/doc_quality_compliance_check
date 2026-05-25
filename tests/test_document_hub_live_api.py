@@ -7,6 +7,7 @@ Covers:
 """
 
 from io import BytesIO
+from pathlib import Path
 
 
 def test_document_hub_live_core_path_upload_list_lock_release(client) -> None:
@@ -57,3 +58,24 @@ def test_document_hub_live_core_path_upload_list_lock_release(client) -> None:
     lock_state_after_release = client.get(f"/api/v1/documents/{document_id}/lock")
     assert lock_state_after_release.status_code == 200
     assert lock_state_after_release.json()["locked_by"] is None
+
+
+def test_document_hub_upload_accepts_real_doc07_pdf(client) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    pdf_path = repo_root / "docs" / "test_documents" / "07_bridge_gdpr_security_violation_xray_complaint.pdf"
+    assert pdf_path.exists()
+
+    upload = client.post(
+        "/api/v1/documents/upload",
+        files={"file": (pdf_path.name, BytesIO(pdf_path.read_bytes()), "application/pdf")},
+    )
+
+    assert upload.status_code == 200
+    payload = upload.json()
+    assert payload["document_id"]
+    assert payload["filename"] == pdf_path.name
+
+    listed = client.get("/api/v1/documents")
+    assert listed.status_code == 200
+    docs = listed.json()["documents"]
+    assert any(doc["document_id"] == payload["document_id"] for doc in docs)

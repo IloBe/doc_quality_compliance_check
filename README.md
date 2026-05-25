@@ -15,28 +15,6 @@ Current implementation baseline:
 - **Authentication:** backend-issued HTTP-only session cookies with role-based authorization
 - **Orchestration:** optional standalone CrewAI orchestrator in `services/orchestrator/`
 
-## Frontend architecture note: why `frontend/lib/` is necessary
-
-The browser app uses `frontend/lib/` as a shared service and domain layer between UI pages/components and backend or mock data sources. This keeps feature behavior deterministic and avoids duplicating rules across many screens.
-
-### What `frontend/lib/` provides
-
-- **API/service clients** for backend communication (for example audit trail, dashboard, observability, exports, artifact operations).
-- **View-model logic** for filtering, KPI calculations, formatting, selection fallback rules, and domain mapping.
-- **Cross-cutting infrastructure** such as auth context/RBAC helpers and shared mock store state used in demo and fallback modes.
-- **Shared UI behavior helpers** such as selection style utilities and reusable filtering hooks.
-- **URL query-state synchronization** via shared query utilities to keep deep links and selected list/detail state stable and cleanup stale params.
-
-### Why this separation is important
-
-- **Consistency:** one implementation of business rules is reused across pages instead of copy/paste variants.
-- **Maintainability:** API contract changes are isolated to service files rather than scattered in many components.
-- **Testability:** logic can be unit-tested directly from lib modules without rendering full pages.
-- **Deterministic routing behavior:** shared query sync logic enforces consistent selection/deep-link handling across routed surfaces.
-- **Incremental delivery:** stubs in lib modules allow frontend flows to compile and run while backend integrations are completed.
-
-Without `frontend/lib/`, page and component files would absorb API logic, domain transforms, routing normalization, and reusable UX rules, resulting in higher coupling, duplicated logic, and faster behavioral drift.
-
 ## Business context summary
 
 Software teams in regulated or audit-heavy environments (healthcare, fintech, enterprise SaaS or critical infrastructure) often lose significant time during releases because documentation quality and compliance checks are manual, inconsistent and late in the delivery cycle.
@@ -50,9 +28,9 @@ The **Doc Quality Compliance Checker** addresses this by introducing a structure
 - provides better traceability for approvals and governance decisions.
 
 ### Data privacy
-As an additional feature **data privacy** topics of this MVP software itself are handled as a team of 3 people. Requirements and status are handled via github repository [compliance-checker](https://github.com/willingc/compliance-checker/tree/main) by Carol Willing. Insights mentioned on that repo documentation are used for software improvement of this product. Because of short timeframe we can handle only few aspects.
+As an additional feature, **data privacy** topics of this MVP are handled by a team of three people (Wiebke Meyer, Carol Willing, and me). Requirements and status are documented in the GitHub repository [compliance-checker](https://github.com/willingc/compliance-checker/tree/main) by Carol Willing. Insights from that documentation are used to improve this product. Due to the short timeframe, only selected aspects can be covered in this iteration.
 
-Data privacy is a complex topic in its own, which we are addressing with the inspiration and support of expert [Katharine Jarmul](https://probablyprivate.com/).
+Data privacy is a complex topic in its own right, and we are addressing it with inspiration and support from expert [Katharine Jarmul](https://probablyprivate.com/).
 
 ### Primary business value
 
@@ -94,11 +72,35 @@ Attached browser-page view of the Document Hub:
 
 ---
 
+## Frontend architecture note: why `frontend/lib/` is necessary
+
+The browser app uses `frontend/lib/` as a shared service and domain layer between UI pages/components and backend or mock data sources. This keeps feature behavior deterministic and avoids duplicating rules across many screens.
+
+### What `frontend/lib/` provides
+
+- **API/service clients** for backend communication (for example audit trail, dashboard, observability, exports, artifact operations).
+- **View-model logic** for filtering, KPI calculations, formatting, selection fallback rules, and domain mapping.
+- **Cross-cutting infrastructure** such as auth context/RBAC helpers and shared mock store state used in demo and fallback modes.
+- **Shared UI behavior helpers** such as selection style utilities and reusable filtering hooks.
+- **URL query-state synchronization** via shared query utilities to keep deep links and selected list/detail state stable and cleanup stale params.
+
+### Why this separation is important
+
+- **Consistency:** one implementation of business rules is reused across pages instead of copy/paste variants.
+- **Maintainability:** API contract changes are isolated to service files rather than scattered in many components.
+- **Testability:** logic can be unit-tested directly from lib modules without rendering full pages.
+- **Deterministic routing behavior:** shared query sync logic enforces consistent selection/deep-link handling across routed surfaces.
+- **Incremental delivery:** stubs in lib modules allow frontend flows to compile and run while backend integrations are completed.
+
+Without `frontend/lib/`, page and component files would absorb API logic, domain transforms, routing normalization, and reusable UX rules, resulting in higher coupling, duplicated logic, and faster behavioral drift.
+
+---
+
 ## Getting Started
 
 ### Testing
 
-Short testing entrypoint from project root dir with .venv setting:
+Quick testing entry points from the project root with an active `.venv`:
 
 - Run all backend tests: `python -m pytest`
 - Run one module quickly: `python -m pytest tests/test_auth_session_api.py -v`
@@ -114,7 +116,7 @@ Phase 0 requires **PostgreSQL 16** for session authentication, HITL reviews, and
 
 **Quick Start (4 steps):**
 
-1. Start PostgreSQL (Docker: `docker-compose up -d` | Local: Install PostgreSQL 16 + start service)
+1. Start PostgreSQL (Docker: `docker compose up -d` | Local: install PostgreSQL 16 and start the service)
 2. Initialize database: `.\.venv\Scripts\python.exe init_postgres.py`
 3. Verify with login test (use `AUTH_MVP_EMAIL` / `AUTH_MVP_PASSWORD` from your `.env`)
 4. Run tests: `pytest tests/test_auth_session_api.py -v`
@@ -129,75 +131,139 @@ Phase 0 requires **PostgreSQL 16** for session authentication, HITL reviews, and
 - [Application User Handbook](APP_USER_HANDBOOK.md) — Operational guidance for stakeholders, including top menu controls and compliance relevance
 - [Authentication and Authorization Guide](AUTHENTICATION_AUTHORIZATION_README.md) — Implemented login, session, RBAC, throttling, recovery, and security-test concepts
 - [Observability and Logging Guide](OBSERVABILITY_LOGGING_README.md) — Structured logging, OpenTelemetry tracing, Prometheus metrics, quality evaluation telemetry, and compliance monitoring
+- [Admin Dashboard Guide](ADMIN_README.md) — Role governance, model policy management, admin UI components, and configuration tasks
 - [Project Structure Guide](PROJECT_STRUCTURE.md) — Complete tree-style overview of codebase layout with inline component descriptions
 
-### Start the application (database + backend + frontend)
+### Start the application (regular workflow: database + backend + frontend)
 
-Use separate terminals so PostgreSQL, the API, and the UI run at the same time.
+Before using the app (login, dashboard, admin modules, or document workflows), complete this startup block first.
+Use three separate terminals so PostgreSQL, the API, and the UI run at the same time. Ensure Docker Engine is running before Step 1.
 
-1. **Database terminal** (from `doc_quality_compliance_check/`):
+#### Step 1: Start the database
 
-   Start PostgreSQL database:
+In a terminal opened at `doc_quality_compliance_check/`, run:
 
-   ```powershell
-   docker compose up -d
-   .\.venv\Scripts\python.exe init_postgres.py
-   ```
+```powershell
+docker compose up -d
+.\.venv\Scripts\python.exe init_postgres.py
+```
 
-   Expected outcome:
-   - PostgreSQL listens on `localhost:5432`
-   - schema initialization completes without errors
-   - `.env` contains `DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality`
+Expected outcome:
+- PostgreSQL listens on `localhost:5432`
+- Schema initialization completes without errors
+- `.env` contains `DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/doc_quality`
 
-2. **Backend terminal** (from `doc_quality_compliance_check/`):
+#### Step 2: Start the backend API
 
-   Start backend server (idempotent launcher, recommended):
+In a second terminal opened at `doc_quality_compliance_check/`, run the recommended launcher:
 
-    ```powershell
-    .\scripts\start_backend.ps1 -Reload
-   ```
+```powershell
+.\scripts\start_backend.ps1 -Reload
+```
 
-   Behavior:
-   - Starts Uvicorn on `127.0.0.1:8000` if the port is free.
-   - Returns success when a healthy backend is already running on `8000`.
-   - Fails fast if the port is occupied but `/health` is not responding.
+Expected backend behavior:
+- Starts Uvicorn on `127.0.0.1:8000` if the port is free
+- Returns success when a healthy backend is already running on `8000`
+- Fails fast if the port is occupied but `/health` is not responding
 
-   Manual fallback (direct Uvicorn):
+Expected output includes either:
+- `Uvicorn running on http://127.0.0.1:8000`
+- `Backend already running and healthy on http://127.0.0.1:8000`
 
-   ```powershell
-   .\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
-   ```
+#### Step 3: Start the frontend UI
 
-   Expected output includes either:
-   - `Uvicorn running on http://127.0.0.1:8000`
-   - `Backend already running and healthy on http://127.0.0.1:8000`
+In a third terminal, from the project root, run the recommended launcher:
 
-3. **Frontend terminal** (from `doc_quality_compliance_check/frontend/`):
+```powershell
+.\scripts\start_frontend.ps1
+```
 
-   Start frontend of browser application:
+Expected frontend behavior:
+- Starts `npm run dev` on `localhost:3000` if the port is free
+- Returns success when a healthy frontend is already running on `3000`
+- Fails fast if the port is occupied but the app is not responding
+- Always changes into `frontend/` regardless of where the script is invoked from, preventing wrong-working-directory startup errors
 
-   ```powershell
-   npm run dev
-   ```
+Then open:
+- `http://localhost:3000/login`
 
-   Open:
-   - `http://localhost:3000/login`
+Configure login credentials in `.env` for both regular and admin sessions:
 
-   > **Cookie note:** `NEXT_PUBLIC_API_ORIGIN` must be **empty** (the default in `frontend/.env.local`) for local
-   > development. The frontend proxies all `/api/*` and `/health` calls through Next.js to `127.0.0.1:8000`,
-   > so the session cookie stays same-origin (`localhost:3000`). Setting a direct cross-origin URL breaks
-   > `SameSite=lax` cookie delivery and makes the login button appear unresponsive after a successful
-   > authentication (silent redirect loop back to `/login`).
+```env
+AUTH_MVP_EMAIL=mvp-user@example.invalid
+AUTH_MVP_PASSWORD=CHANGE_ME_BEFORE_USE
+AUTH_MVP_ROLES=qm_lead
 
-   > **Auth API badge note:** the login page can show a live Auth API status badge. For stable local demos, keep
-   > `NEXT_PUBLIC_ENABLE_AUTH_HEALTH_CHECK=true` and point `NEXT_PUBLIC_HEALTH_ORIGIN=http://127.0.0.1:8000` so the
-   > badge checks backend health directly without relying on the Next.js proxy path.
+AUTH_ADMIN_EMAIL=admin@example.invalid
+AUTH_ADMIN_PASSWORD=CHANGE_ME_ADMIN_BEFORE_USE
+AUTH_ADMIN_ROLES=app_admin,qm_lead
+```
 
-4. **Quick verification**
-   - Database is running on `localhost:5432`
-   - Backend health (via proxy): `http://localhost:3000/health`
-   - Backend health (direct): `http://127.0.0.1:8000/health`
-   - `frontend/.env.local` → `NEXT_PUBLIC_API_ORIGIN=` (empty = proxy mode, required for local dev)
+Role notes:
+- `AUTH_ADMIN_*` credentials are bootstrapped by backend auth and can sign in through the same `/login` page
+- `app_admin` role grants access to admin policy and stakeholder governance write operations
+- `qm_lead` role additionally covers observability and broader governance surfaces
+
+#### Step 4: Verify the full stack
+
+- Database is running on `localhost:5432`
+- Backend health (via proxy): `http://localhost:3000/health`
+- Backend health (direct): `http://127.0.0.1:8000/health`
+- `frontend/.env.local` has `NEXT_PUBLIC_API_ORIGIN=` (empty value, required for local proxy mode)
+- Admin auth bootstrap self-check (requires admin or qm_lead session): `GET /api/v1/auth/bootstrap-self-check`
+
+### Application start limitations and Q&A (after regular workflow)
+
+This section captures startup limitations, fallback paths, and troubleshooting without changing the regular startup steps above.
+
+**Q: What is the backend fallback if the launcher script is not available or fails?**  
+Use direct Uvicorn startup from `doc_quality_compliance_check/`:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn src.doc_quality.api.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+**Q: What is the frontend fallback if I do not use the launcher script?**  
+Run from `doc_quality_compliance_check/frontend/`:
+
+```powershell
+npm run dev
+```
+
+**Q: Why can local login appear to succeed but immediately return to `/login`?**  
+`NEXT_PUBLIC_API_ORIGIN` must stay empty in `frontend/.env.local` for local development. The frontend proxies `/api/*` and `/health` through Next.js to `127.0.0.1:8000`, which keeps the session cookie same-origin (`localhost:3000`). Setting a direct cross-origin URL breaks `SameSite=lax` cookie delivery and can cause a silent redirect loop back to `/login`.
+
+**Q: How should I configure the Auth API status badge for local demos?**  
+Keep `NEXT_PUBLIC_ENABLE_AUTH_HEALTH_CHECK=true` and set `NEXT_PUBLIC_HEALTH_ORIGIN=http://127.0.0.1:8000` so the badge checks backend health directly instead of depending on the Next.js proxy path.
+
+**Q: The frontend shows blank pages or `MODULE_NOT_FOUND` after dependency/type changes. What should I do?**  
+Clear the Next.js build cache and restart:
+
+```powershell
+Remove-Item -Recurse -Force frontend\.next
+.\scripts\start_frontend.ps1
+```
+
+**Q: Port 3000 is occupied by a stuck dev server. How do I recover?**  
+Stop the stale process and restart frontend:
+
+```powershell
+Stop-Process -Id 2424 -Force
+.\scripts\start_frontend.ps1
+```
+
+**Q: Bridge run is blocked by runtime topology proof errors on local machines. What should I configure?**  
+If you are running locally without dedicated deployed bridge-agent containers, set:
+
+```env
+BRIDGE_RUNTIME_TOPOLOGY_SOURCE=docker_inspect
+BRIDGE_RUNTIME_TOPOLOGY_ALLOW_METADATA_FALLBACK=true
+```
+
+This keeps docker inspect as the primary source but allows metadata fallback when probe data is unavailable. For production-grade strict attestation, set `BRIDGE_RUNTIME_TOPOLOGY_ALLOW_METADATA_FALLBACK=false` and ensure all four bridge-agent containers are deployed and healthy.
+
+Full bridge runtime env reference checklist:
+- [Bridge runtime .env checklist](DATA_PRIVACY_VIOLATION_MITIGATION_README.md#bridge-runtime-env-reference-checklist)
 
 ### Optional: start the orchestrator service
 
@@ -240,6 +306,9 @@ Security behavior includes hashed recovery tokens, TTL + single-use validation, 
 | `AUTH_RECOVERY_DEBUG_EXPOSE_TOKEN` | `false` | Token/reset URL stays hidden unless explicitly enabled in development |
 | `GLOBAL_RATE_LIMIT_ENABLED` | `true` | Global `/api/v1/*` request limiting enforced |
 | `AUTH_LOGIN_RATE_LIMIT_COUNT` | `8` | Login throttling + lockout policy enabled |
+| `BRIDGE_RUNTIME_TOPOLOGY_ALLOW_METADATA_FALLBACK` | `true` (local), `false` (recommended production) | Controls whether bridge runtime can fall back to metadata proof if docker inspect topology probes fail |
+| `AUTH_ADMIN_EMAIL` | `admin@example.invalid` | Bootstrap admin identity for controlled admin login |
+| `AUTH_ADMIN_ROLES` | `app_admin,qm_lead` | Grants admin module access and governance privileges |
 
 ### Authorization matrix (browser users vs service clients)
 

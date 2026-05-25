@@ -182,10 +182,13 @@ class PostgreSQLInitializer:
         required_tables = {
             "hitl_reviews": ["review_id", "document_id", "status"],
             "skill_documents": ["document_id", "filename", "workflow_status"],
+            "document_locks": ["document_id", "locked_by", "locked_at", "expires_at"],
             "skill_findings": ["finding_id", "document_id"],
             "audit_events": ["event_id", "event_type"],
             "user_sessions": ["session_id", "session_token_hash", "user_email"],
             "quality_observations": ["observation_id", "aspect", "outcome", "source_component"],
+            "governance_controls": ["control_id", "framework_id", "activation_mode", "is_active"],
+            "model_policy_configs": ["config_id", "default_model_id", "items", "updated_at"],
             "stakeholder_profiles": ["profile_id", "title", "permissions", "is_active"],
             "stakeholder_employee_assignments": ["assignment_id", "profile_id", "employee_name"],
         }

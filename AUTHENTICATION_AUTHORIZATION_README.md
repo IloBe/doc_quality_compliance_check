@@ -275,7 +275,25 @@ The following hardening defaults are now part of the auth/authz baseline.
 | Secure session cookies | `session_cookie_secure=True` outside development | [src/doc_quality/core/config.py](src/doc_quality/core/config.py), [src/doc_quality/core/session_auth.py](src/doc_quality/core/session_auth.py) |
 | Configurable cookie name | Session dependencies resolve cookie name from config | [src/doc_quality/core/session_auth.py](src/doc_quality/core/session_auth.py), [src/doc_quality/api/routes/auth.py](src/doc_quality/api/routes/auth.py) |
 | Generic recovery responses | No account enumeration via recovery response text | [src/doc_quality/api/routes/auth.py](src/doc_quality/api/routes/auth.py) |
+| Bridge topology fallback control | `BRIDGE_RUNTIME_TOPOLOGY_ALLOW_METADATA_FALLBACK` decides whether runtime topology probe failures are strict-blocking (`false`) or can fallback to metadata proof (`true`) | [src/doc_quality/core/config.py](src/doc_quality/core/config.py), [src/doc_quality/services/bridge_orchestrator_service.py](src/doc_quality/services/bridge_orchestrator_service.py), [src/doc_quality/api/routes/bridge.py](src/doc_quality/api/routes/bridge.py) |
 | Standard error envelope | Controlled 4xx/5xx structure, including framework-level 404s | [src/doc_quality/api/main.py](src/doc_quality/api/main.py) |
+
+### 6.1 Bridge runtime topology fallback and security posture
+
+The bridge runtime self-check validates whether each bridge agent is deployed and healthy in an orchestrated container topology.
+
+When `BRIDGE_RUNTIME_TOPOLOGY_SOURCE=docker_inspect`, backend tries to verify runtime state directly using container inspection.
+
+`BRIDGE_RUNTIME_TOPOLOGY_ALLOW_METADATA_FALLBACK` changes the enforcement posture:
+
+- `false` (strict mode): inspection failures block bridge readiness and bridge runs.
+- `true` (transitional mode): inspection failures can fallback to metadata proof, allowing bridge runs if all other readiness checks pass.
+
+Security recommendation:
+
+- Local development: use `true` while container topology is being bootstrapped.
+- Staging rollout: temporary `true`, then return to `false`.
+- Production: `false` for stronger runtime attestation confidence.
 
 ---
 

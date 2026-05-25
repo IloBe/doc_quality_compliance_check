@@ -1,3 +1,5 @@
+import { formatDateTime } from './dateTime';
+
 export interface AuditorQueueKpis {
   pendingCount: number;
   reviewedCount: number;
@@ -41,7 +43,7 @@ export interface DecisionDraft {
 }
 
 export function formatTs(ts: string): string {
-  return new Date(ts).toLocaleString();
+  return formatDateTime(ts, ts);
 }
 
 export const AUDITOR_WINDOWS = [

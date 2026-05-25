@@ -5,6 +5,7 @@ import PageHeaderWithWhy from '../components/PageHeaderWithWhy';
 import AlertsPanel from '../components/compliance/AlertsPanel';
 import ShortcutCards from '../components/compliance/ShortcutCards';
 import StandardsGroup from '../components/compliance/StandardsGroup';
+import StandardCard from '../components/compliance/StandardCard';
 import {
   categoryMetadata,
   complianceAlerts,
@@ -31,7 +32,7 @@ const ComplianceStandards = () => {
       <PageHeaderWithWhy
         eyebrow="Governance & Standards"
         title="Compliance Standards"
-        subtitle="This page lists the regulatory standards and mappings used for governance checks. The framework-agnostic bridge execution layer supports 18 compliance frameworks with intelligent domain-based conditional activation."
+        subtitle="This page lists the regulatory standards and mappings used for governance checks. The framework-agnostic bridge execution layer supports compliance frameworks with intelligent domain-based conditional activation."
         whyDescription="The Compliance page defines which standards and regulatory mappings are active for checks. It helps governance teams align validation rules with current obligations and gives reviewers a clear basis for pass/fail interpretation."
       />
 
@@ -42,12 +43,11 @@ const ComplianceStandards = () => {
           <StandardsGroup
             title="Always-On Frameworks"
             description="Baseline governance applied across all product domains and business contexts."
-            isAlwaysOn={true}
             standards={alwaysOn}
           />
 
           {/* Conditionally Activated Frameworks by Domain */}
-          <div className="space-y-12">
+          <div className="space-y-8">
             <div className="border-t-2 border-neutral-200 pt-8">
               <h2 className="text-2xl font-black text-neutral-900 mb-2">Conditionally Activated Frameworks</h2>
               <p className="text-sm font-medium text-neutral-700">
@@ -58,13 +58,23 @@ const ComplianceStandards = () => {
             {sortedCategories.map(([category, standards]) => {
               const metadata = categoryMetadata[category];
               return (
-                <StandardsGroup
-                  key={category}
-                  title={metadata?.label || category}
-                  description={metadata?.description}
-                  isAlwaysOn={false}
-                  standards={standards}
-                />
+                <div key={category}>
+                  {/* Category subtitle */}
+                  <div className="mb-4 pl-2">
+                    <h3 className="text-sm font-bold text-neutral-600 uppercase tracking-widest mb-1">
+                      {metadata?.label || category}
+                    </h3>
+                    {metadata?.description && (
+                      <p className="text-xs text-neutral-500 font-medium">{metadata.description}</p>
+                    )}
+                  </div>
+                  {/* Standards cards grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {standards.map((standard) => (
+                      <StandardCard key={standard.id} standard={standard} />
+                    ))}
+                  </div>
+                </div>
               );
             })}
           </div>

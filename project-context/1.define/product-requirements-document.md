@@ -194,10 +194,11 @@ FastAPI Backend / Skills API (Python 3.12)
   │       ├── retries / branching / verifier gates
   │       └── run + step events (`trace_id` / `correlation_id`)
   │
-  └── Model Provider Adapter Layer
-          ├── AnthropicAdapter
-          ├── OpenAICompatibleAdapter
-          └── NemotronAdapter
+    └── Model Provider Adapter Layer
+      ├── Internal on-prem model gateway / runtime (production target for personal-data prompts)
+      ├── AnthropicAdapter (controlled fallback / migration path)
+      ├── OpenAICompatibleAdapter (controlled fallback / migration path)
+      └── NemotronAdapter (controlled fallback / ingestion support)
   │ 
   Persistence: PostgreSQL (audit history, decision snapshots, model/provider versions)
   │ 
@@ -220,13 +221,226 @@ FastAPI Backend / Skills API (Python 3.12)
 | **Input length limits** | Pydantic field validators | Injection prevention |
 | **CORS restriction** | Explicit allowed origins list | Browser security |
 | **Traceable Audit trail** | Unified audit logging for system actions and user decisions. | German Compliance Laws |
+| **Privacy boundary for AI models** | Minimize prompt context before model calls, treat backend/orchestrator-to-provider traffic as the privacy boundary, and prefer the internal on-prem gateway for personal-data prompts. | GDPR Art. 5, Art. 25, Art. 32 |
 
 **Model Adapter Interface (required capabilities):**
 
 - structured output with schema validation and bounded repair/retry,
 - tool-calling envelope with allowlisted tool access,
 - provider capability declaration (`tool_calls`, `json_schema`, `streaming`),
-- optional streaming for UX paths, while orchestration workflows may run non-streaming for reliability.
+- optional streaming for UX paths, while orchestration workflows may run non-streaming for reliability,
+- prompt minimization and redaction hooks before persistence or observability export,
+- a routing policy that prefers internal/on-prem inference for any workflow that may contain direct or indirect personal data.
+
+### 3.4 Change Request — Data Privacy CR-2026-05-16 (Risk 1 Mitigation)
+
+**Change trigger:** Risk 1: External model transfer of potentially personal prompt/output data.
+
+**Decision:** Migrate production inference for personal-data-bearing workflows from external providers to internal on-prem models, and keep external providers only as controlled fallback for scrubbed/non-personal data paths.
+
+**Risk treatment objective:** Reduce sensitive data exposure to third parties by substituting external model calls with local model execution for affected workflows.
+
+**Sensitive data in scope**
+
+| Sensitive Data | Category | Examples | Why Sensitive | Current Protection | Risk if Exposed |
+|----------------|----------|----------|---------------|--------------------|-----------------|
+| Prompt context and model output content | Input/output content containing direct or inferred personal data | Names, emails, stakeholder assignments, reviewer identifiers, document passages copied into prompts, generated summaries that restate personal data | Leaves the primary application context during model inference on the current external-provider path | Session auth, RBAC, TLS, audit events, optional graceful fallback without external model key | Unauthorized disclosure, GDPR purpose-limitation/data-minimization non-compliance, reputational harm |
+| Provider/model telemetry and rich trace payload | Metadata linked to actors, workflows, and potentially sensitive content fingerprints | `provider`, `model_used`, `trace_id`, `correlation_id`, latency/tokens, rich payload entries, prompt/output snapshots | Can reconstruct who triggered which model action and when; may become re-identifiable when joined with audit tables | Backend-protected endpoints, role checks, PostgreSQL persistence | Excessive internal visibility, inference attacks, unauthorized profiling of users/reviewers |
+| Model credentials and routing configuration | Secrets and control-plane configuration | API keys, adapter routing flags, provider selection settings | Compromise enables data exfiltration or unauthorized model usage | Environment-based secret configuration and backend auth controls | Account abuse, data leakage, loss of integrity of compliance decisions |
+
+**PRD requirement updates (effective immediately)**
+
+- Personal-data-bearing workflows must route to internal on-prem models by default in production.
+- External provider usage must be restricted to approved fallback cases with scrubbed inputs and explicit policy controls.
+- Prompt/output storage must enforce minimization, redaction, and retention class separation (operational telemetry vs audit evidence).
+- Telemetry visibility must follow least-privilege RBAC and purpose limitation.
+- Secrets and routing configuration must be managed through hardened secret stores, rotation policy, and audited access.
+
+**Acceptance criteria for this change request**
+
+1. Routing policy enforces on-prem-first inference for workflows marked as potentially personal-data-bearing.
+2. External-provider fallback is blocked unless scrubbed mode and policy gates are satisfied.
+3. Audit evidence records the selected model location (`on_prem` vs `external_fallback`) and policy decision reason.
+4. Trace payload retention and access controls are documented and validated in release checks.
+5. Credential and routing configuration access is restricted, rotated, and auditable.
+
+#### 3.4.5 Step Contract + Sandbox Pattern
+
+The architecture shall decompose business workflows into discrete, policy-scoped steps instead of sending one large prompt to a model. Each step becomes an independently governed execution unit with a strict contract.
+
+**Required step contract**
+
+| Contract Field | Requirement |
+|---------------|-------------|
+| Step name | Stable, human-readable workflow step identifier |
+| Business purpose | Why the step exists and which governance outcome it supports |
+| Sensitivity class | `personal_data_possible`, `non_personal`, or `scrubbed_fallback` |
+| Input schema | Versioned schema with explicit allowed fields only |
+| Output schema | Structured output with bounded allowed values |
+| Tool access | Allowlisted tools only; no implicit tool discovery |
+| Model zone | `on_prem_only`, `on_prem_preferred`, or `external_fallback_allowed` |
+| Time/token budget | Step-level limits to prevent runaway execution |
+| Validation gate | Deterministic validator, schema check, and policy check |
+| Audit fields | `step_id`, `trace_id`, `policy_rule_id`, `selected_model`, `decision_reason` |
+
+**Sandbox execution pattern**
+
+- Each step executes in an isolated sandbox with denied network egress by default.
+- Only approved internal endpoints and local resources may be mounted into the sandbox.
+- File access is restricted to the minimum path set needed for the step.
+- Secrets are injected only when the step policy explicitly allows them and only in memory.
+- Step outputs are passed through a redaction and schema-validation stage before persistence or review.
+- If a step requires a model call, the orchestrator must resolve the target model from the capability registry before execution.
+
+**Architectural improvement rationale**
+
+- reduces prompt leakage by limiting context per step,
+- improves traceability because each subtask has its own evidence trail,
+- enables local model substitution per step instead of per workflow,
+- supports safer fallback because only the failing step is retried or escalated,
+- makes compliance review easier because each step maps to a specific business obligation.
+
+**PRD-level acceptance criteria for the step pattern**
+
+1. Every model-using workflow is expressible as a sequence of named step contracts.
+2. No step may bypass policy checks or sandbox boundaries.
+3. A privacy-sensitive workflow must be splittable into smaller steps without exposing the full prompt to a third party.
+4. Step execution artifacts must be auditable per step, not only per workflow.
+
+#### 3.4.6 On-Prem Model Capability Registry + Migration KPIs
+
+The system shall maintain a capability registry for all approved local models so the orchestrator can route each step to the smallest acceptable model for the task.
+
+**Registry fields**
+
+| Field | Purpose |
+|------|---------|
+| `model_id` | Stable internal identifier |
+| `provider_type` | Local, on-prem, or external fallback |
+| `approved_tasks` | Allowed step types and use cases |
+| `sensitivity_support` | Which data classes the model may process |
+| `context_limit` | Safe maximum context size |
+| `structured_output_quality` | Measured JSON/schema reliability |
+| `latency_p95` | Route-selection performance bound |
+| `hardware_profile` | Expected CPU/GPU/memory footprint |
+| `release_status` | Experimental, approved, deprecated |
+| `last_benchmark_date` | Freshness of capability assessment |
+
+**Migration KPIs**
+
+| KPI | Target | Meaning |
+|----|--------|---------|
+| On-prem routing coverage | Majority of personal-data-capable steps on local models | Privacy-by-default posture is active |
+| External fallback rate | Exceptional and decreasing over time | External exposure is being reduced |
+| Step-level validation pass rate | High and stable | Local model quality is fit for purpose |
+| Reviewer override rate | Low and explainable | Outputs are reliable enough for governance work |
+| Privacy incident count | Zero for production model traffic | Sensitive data is not leaving the boundary |
+| Capability registry freshness | Current within defined review cycle | Routing decisions rely on valid model data |
+
+**Migration governance requirements**
+
+- Every model must be benchmarked against the exact step contracts it is allowed to serve.
+- New local models may only be promoted after privacy, quality, and latency gates pass.
+- External providers remain allowed only as exception paths with explicit reason codes and audit evidence.
+- The registry must be versioned and tied to release approvals so routing behavior is reproducible.
+
+#### 3.4.7 SOLID-Oriented Privacy Architecture
+
+The PRD requires the implementation to follow SOLID principles so the on-prem privacy migration remains maintainable, testable, and extensible.
+
+**SOLID mapping**
+
+| Principle | PRD requirement |
+|----------|------------------|
+| Single Responsibility | Routing, policy evaluation, sandbox execution, redaction, audit writing, and persistence must remain separate concerns |
+| Open/Closed | New local models must be addable through registry updates and adapters without changing orchestration logic |
+| Liskov Substitution | All model adapters and step executors must implement the same contract so implementations are swappable |
+| Interface Segregation | Routing, inference, validation, sandboxing, and audit interfaces must remain separate and minimal |
+| Dependency Inversion | Workflow code must depend on abstract policy/model interfaces rather than concrete providers |
+
+**Required component model**
+
+| Component | Required behavior |
+|-----------|------------------|
+| Privacy Policy Engine | Classifies sensitivity and returns the allowed execution zone |
+| Step Router | Chooses the approved model path for each workflow step |
+| Step Contract Validator | Enforces schema, allowed tools, and output contract before execution |
+| Sandboxed Step Executor | Runs each step in isolated runtime conditions with denied egress by default |
+| On-Prem Local Model Gateway | Serves privacy-sensitive steps on internal models |
+| Controlled External Fallback Adapter | Supports scrubbed, exception-only external inference |
+| Model Capability Registry | Holds approved models, tasks, and benchmark metadata |
+| Redaction / Normalization Service | Removes or minimizes sensitive prompt/output content before storage |
+| Audit Event Writer | Persists routing, policy, and model evidence for traceability |
+
+**PRD-level design requirements**
+
+- Business workflows must be decomposed into named step contracts.
+- Privacy-sensitive steps must default to on-prem execution.
+- External fallback must remain exception-only and policy-controlled.
+- No model may execute without step validation and audit recording.
+- The smallest capable approved model should be selected for each step whenever possible.
+- Step outputs must be redacted and normalized before long-retention persistence.
+
+**PRD acceptance criteria for the architecture pattern**
+
+1. The architecture supports local-model substitution per workflow step, not only per whole workflow.
+2. The system can execute privacy-sensitive steps without exposing the full prompt to a third party.
+3. All model invocations produce auditable policy and routing evidence.
+4. Approved local models can be introduced by registry update without modifying orchestrator control flow.
+5. Sandbox enforcement and step validation are mandatory for all model-using steps.
+
+#### 3.4.8 GDPR Guardrails, Dictionaries, and Rights Handling
+
+The product must enforce GDPR-focused protections for both standard PII and special category personal data before, during, and after model processing.
+
+**Required data dictionaries / lookup tables**
+
+| Dictionary / Lookup Table | Product requirement |
+|---------------------------|---------------------|
+| `pii_type_catalog` | Classify direct identifiers (name, home/email address, SSN, driver license, account, passport, biometric identifiers) |
+| `special_category_catalog` | Classify GDPR Art. 9 categories (ethnicity, political views, religion/philosophy, trade union, genetic, biometric ID, health, sex life, sexual orientation) |
+| `pattern_rule_catalog` | Store regex/checksum and token-pattern rules for high-confidence detection |
+| `entity_detector_catalog` | Configure NER and semantic detectors for inferred personal data |
+| `policy_action_matrix` | Map sensitivity class + purpose + legal basis to allow/deny/route actions |
+| `retention_policy_catalog` | Define storage limitation rules (TTL, tier, deletion mode, legal-hold) |
+| `dsr_action_catalog` | Define workflows and SLA controls for GDPR data-subject rights |
+
+**Mandatory guardrails for model workflows**
+
+1. Detect and classify personal data against lookup tables before model invocation.
+2. Enforce lawful-purpose and purpose-limitation checks per workflow step.
+3. Minimize context and redact/tokenize non-essential personal data.
+4. Route restricted classes to on-prem models only; deny unauthorized external transfer.
+5. Validate model outputs for leakage and policy non-compliance before persistence.
+6. Persist only approved redacted classes with retention and deletion controls.
+7. Audit all policy decisions and controls applied at step level.
+
+**GDPR principles implementation requirements**
+
+- Lawfulness/Fairness/Transparency: policy decisions include legal-basis and processing-explanation metadata.
+- Purpose Limitation: processing denied when purpose tag does not match approved policy matrix entries.
+- Data Minimization: step contracts must include field allowlists and maximum context budgets.
+- Accuracy: uncertain detection/classification must trigger HITL review.
+- Storage Limitation: retention policies must enforce automatic deletion and legal-hold rules.
+- Integrity/Confidentiality: encryption, RBAC, sandboxing, egress controls, and secret rotation are mandatory.
+- Accountability: immutable audit evidence and periodic conformance reporting are mandatory.
+
+**Data subject rights requirements**
+
+- Access (Art. 15): export subject-linked data and processing traces.
+- Rectification (Art. 16): support corrected data and reprocessing trace updates.
+- Erasure (Art. 17): remove data from governed stores and derived indexes where legally required.
+- Restrict Processing (Art. 18): enforce per-subject processing lock checked by routing/policy components.
+- Data Portability (Art. 20): provide structured export with field dictionary/provenance.
+- Object (Art. 21): register objections and block non-exempt processing.
+
+**Acceptance criteria (GDPR guardrails)**
+
+1. Detection coverage includes direct identifiers and special category data examples listed above.
+2. External transfer is denied for restricted classes unless explicit legal and policy exceptions are met.
+3. Output leakage checks block persistence of non-compliant payloads.
+4. Retention and deletion controls are automatically enforced and auditable.
+5. All six GDPR rights workflows are testable and traceable end-to-end.
 
 ### Security Requirements
 

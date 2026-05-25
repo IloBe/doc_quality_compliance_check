@@ -1,0 +1,89 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 2833 >>
+stream
+BT
+/F1 10 Tf
+50 790 Td
+14 TL
+(STOCKHOLM CENTRAL DIAGNOSTIC HOSPITAL) Tj
+T* (Department of Radiology and Imaging Services) Tj
+T* (Skeppsbron 44, 111 30 Stockholm, Sweden) Tj
+T* (Telephone: +46 8 555 0100 | Internal Ref: SCR-2026-05-24-047) Tj
+T* () Tj
+T* (OFFICIAL PATIENT SAFETY COMPLAINT RECORD) Tj
+T* (Date of Record: 2026-05-24 UTC) Tj
+T* () Tj
+T* (Patient Information) Tj
+T* (- Name: Lars Nilsson \(synthetic test identity\)) Tj
+T* (- Sex: Male) Tj
+T* (- Age: 47) Tj
+T* (- Body condition: High body mass condition noted in imaging prerequisites) Tj
+T* (- Address: Hantverkargatan 22, 112 21 Stockholm, Sweden) Tj
+T* (- Hospital Unit: Thoracic Imaging, Stockholm Central Diagnostic Hospital) Tj
+T* () Tj
+T* (Complaint Symptom) Tj
+T* (A chest X-ray examination produced insufficient image quality for diagnostic use.) Tj
+T* (Clinical staff initiated additional chest X-ray exposures during the same encounter) Tj
+T* (to recover an interpretable study.) Tj
+T* () Tj
+T* (Incident Description) Tj
+T* (1\) Initial chest X-ray series did not meet expected diagnostic quality thresholds.) Tj
+T* (2\) Additional X-ray acquisitions were required, increasing patient radiation exposure.) Tj
+T* (3\) The event impacted workflow, delayed interpretation, and reduced confidence) Tj
+T* (   in image acquisition stability for this patient profile.) Tj
+T* () Tj
+T* (Attempted Mitigation) Tj
+T* (- Mitigation action: Image quality configuration changes were applied in the) Tj
+T* (  imaging configuration system for chest protocol optimization.) Tj
+T* (- Outcome: No success. The same image quality issue recurred in a follow-up run.) Tj
+T* () Tj
+T* (GDPR and Security Violation Statement \(LLM/GenAI Context\)) Tj
+T* (This incident record is intentionally flagged as a GDPR and security violation) Tj
+T* (test scenario for bridge-workflow validation.) Tj
+T* () Tj
+T* (Violation rationale for test purposes:) Tj
+T* (- Patient-identifying fields and health context were processed in an LLM/GenAI) Tj
+T* (  flow without proven lawful basis, data-minimization controls, and explicit) Tj
+T* (  purpose limitation enforcement.) Tj
+T* (- The workflow lacked confirmed technical controls for sensitive data handling) Tj
+T* (  \(for example deterministic redaction, strict retention limits, and) Tj
+T* (  model-provider boundary guarantees\).) Tj
+T* (- Repeated issue handling indicates ineffective mitigation and unresolved) Tj
+T* (  safety and privacy risk.) Tj
+T* () Tj
+T* (Bridge Workflow Test Intent) Tj
+T* (This document is a synthetic compliance test artifact. It should be detected by) Tj
+T* (bridge agents as containing explicit GDPR and security violation indicators) Tj
+T* (related to LLM/GenAI handling of patient-related information.) Tj
+T* () Tj
+T* (Prepared by: QA Compliance Simulation Team) Tj
+T* (Signature: ______________________) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+3196
+%%EOF

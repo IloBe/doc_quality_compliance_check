@@ -1,6 +1,8 @@
 // Auth Context - Provides user authentication state
 import React, { createContext, useContext } from 'react';
 
+import { hasPermission } from './rbac';
+
 export interface User {
   id: string;
   name: string;
@@ -22,36 +24,29 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function useAuth(): AuthContextType {
-  const context = useContext(AuthContext);
-  if (!context) {
-    return {
-      currentUser: {
-        id: 'user_default',
-        name: 'Default User',
-        email: 'user@example.com',
-        role: 'admin',
-      },
-      isLoading: false,
-    };
-  }
-  return context;
+  return useContext(AuthContext);
 }
 
-export function useCan(_permission: string): boolean {
-  return true;
+export function useCan(permission: string): boolean {
+  const { currentUser } = useAuth();
+  const rawRoles = currentUser?.roles || (currentUser?.role ? [currentUser.role] : []);
+  const roles = rawRoles.map((role) => role.trim().toLowerCase()).filter(Boolean);
+  const normalizedRoles = roles.map((role) => (role === 'app_admin' ? 'admin' : role));
+
+  if (normalizedRoles.includes('admin')) {
+    return true;
+  }
+
+  if (permission.startsWith('admin.')) {
+    return normalizedRoles.includes('qm_lead') || normalizedRoles.includes('riskmanager');
+  }
+
+  return hasPermission({ roles: normalizedRoles }, permission);
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode; currentUser?: User | null }> = ({ children, currentUser = null }) => {
-  const fallbackUser: User = {
-    id: 'user_default',
-    name: 'Default User',
-    email: 'user@example.com',
-    role: 'admin',
-    roles: ['admin'],
-  };
-
   const value: AuthContextType = {
-    currentUser: currentUser ?? fallbackUser,
+    currentUser,
     isLoading: false,
   };
 

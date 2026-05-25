@@ -13,6 +13,7 @@ from sqlalchemy.exc import OperationalError
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from ..core.auth_bootstrap import bootstrap_accounts_public_view
 from ..core.config import get_settings
 from ..core.logging_config import configure_logging
 from ..core.observability import (
@@ -24,9 +25,17 @@ from ..core.observability import (
 )
 from ..core.rate_limit import api_global_limiter
 from ..core.session_auth import require_authenticated_user
-from .routes import audit_trail, auth, bridge, compliance, dashboard, documents, observability, reports, research, risk_templates, skills, stakeholders, templates
+from .routes import audit_trail, auth, bridge, compliance, dashboard, documents, governance, model_policy, observability, reports, research, risk_templates, skills, stakeholders, templates
 
 logger = structlog.get_logger(__name__)
+
+_SAFE_ERROR_DETAIL_KEYS = {
+    "details",
+    "field",
+    "locked_by",
+    "reason",
+    "retry_after",
+}
 
 
 def _status_to_error_code(status_code: int) -> str:
@@ -59,7 +68,7 @@ def _build_error_payload(status_code: int, detail: object) -> dict:
         message = detail.get("message")
         payload["message"] = message if isinstance(message, str) else str(detail)
         for key, value in detail.items():
-            if key != "message":
+            if key in _SAFE_ERROR_DETAIL_KEYS and key != "message":
                 payload[key] = value
     elif isinstance(detail, list):
         payload["details"] = detail
@@ -82,6 +91,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging(settings.log_level, settings.log_format)
     configure_observability(settings)
     logger.info("application_starting", version=settings.app_version, env=settings.environment)
+    logger.info(
+        "auth_bootstrap_self_check",
+        auto_provision_enabled=settings.auth_auto_provision_mvp_user,
+        bootstrap_accounts=bootstrap_accounts_public_view(settings),
+    )
     yield
     logger.info("application_stopping")
 
@@ -226,6 +240,8 @@ def create_app() -> FastAPI:
     app.include_router(observability.router, prefix=prefix, dependencies=auth_dependencies)
     app.include_router(audit_trail.router, prefix=prefix, dependencies=auth_dependencies)
     app.include_router(stakeholders.router, prefix=prefix, dependencies=auth_dependencies)
+    app.include_router(model_policy.router, prefix=prefix, dependencies=auth_dependencies)
+    app.include_router(governance.router, prefix=prefix, dependencies=auth_dependencies)
     app.include_router(dashboard.router, prefix=prefix, dependencies=auth_dependencies)
 
     @app.get("/health")

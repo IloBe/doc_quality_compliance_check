@@ -227,6 +227,30 @@ class QualityObservationORM(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
 
 
+class GovernanceControlORM(Base):
+    """Persistent governance control catalog managed by admin governance workflows."""
+
+    __tablename__ = "governance_controls"
+
+    control_id = Column(String(64), primary_key=True, index=True)
+    name = Column(String(240), nullable=False)
+    framework_id = Column(String(160), nullable=False, index=True)
+    framework_label = Column(String(240), nullable=False)
+    control_type = Column(String(32), nullable=False, default="directive", index=True)
+    activation_mode = Column(String(32), nullable=False, default="baseline", index=True)
+    domain_tags = Column(JSON, nullable=False, default=list)
+    market_tags = Column(JSON, nullable=False, default=list)
+    objective = Column(String(2000), nullable=False)
+    implementation = Column(String(2000), nullable=False)
+    evidence = Column(String(1000), nullable=False)
+    status = Column(String(20), nullable=False, default="draft", index=True)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+    created_by = Column(String(255), nullable=True)
+    updated_by = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), index=True)
+
+
 class StakeholderProfileORM(Base):
     """Persistent stakeholder role template and rights matrix profile."""
 
@@ -282,3 +306,16 @@ class RiskTemplateRowORM(Base):
     row_order = Column(Integer, nullable=False, index=True)
     row_data = Column(JSON, nullable=False, default=dict)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
+class ModelPolicyConfigORM(Base):
+    """Persistent admin-configured model selection and generation policy."""
+
+    __tablename__ = "model_policy_configs"
+
+    config_id = Column(String(64), primary_key=True, index=True)
+    default_model_id = Column(String(120), nullable=False)
+    items = Column(JSON, nullable=False, default=list)
+    updated_by = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), index=True)

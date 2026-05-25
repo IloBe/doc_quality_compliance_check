@@ -23,9 +23,6 @@ export function syncQueryParam(
   }
 
   const currentValue = readFirstQueryValue(router.query[key]);
-  if (currentValue === desiredValue) {
-    return;
-  }
 
   const nextQuery: Record<string, string> = {};
   Object.entries(router.query).forEach(([entryKey, rawValue]) => {
@@ -41,6 +38,11 @@ export function syncQueryParam(
   const omitWhenEmpty = options?.omitWhenEmpty ?? true;
   const omitWhen = options?.omitWhen;
   const shouldOmit = (omitWhenEmpty && !desiredValue) || (omitWhen ? omitWhen(desiredValue) : false);
+  const effectiveDesiredValue = shouldOmit ? '' : desiredValue;
+
+  if (currentValue === effectiveDesiredValue) {
+    return;
+  }
 
   if (!shouldOmit) {
     nextQuery[key] = desiredValue;

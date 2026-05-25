@@ -3,6 +3,8 @@ from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
 
+from .model_policy import ActiveModelInfo
+
 
 class ComplianceFramework(str, Enum):
     EU_AI_ACT = "eu_ai_act"
@@ -46,7 +48,7 @@ class ComplianceRequirement(BaseModel):
     description: str
     mandatory: bool = True
     met: Optional[bool] = None
-    evidence: Optional[str] = None
+    evidence: Optional[str] = Field(default=None, max_length=2000)
     gap_description: Optional[str] = None
 
 
@@ -55,6 +57,7 @@ class ComplianceCheckResult(BaseModel):
     framework: ComplianceFramework
     risk_level: Optional[RiskLevel] = None
     ai_act_role: Optional[AIActRole] = None
+    active_model: ActiveModelInfo | None = None
     requirements: list[ComplianceRequirement] = Field(default_factory=list)
     mandatory_gaps: list[str] = Field(default_factory=list)
     optional_gaps: list[str] = Field(default_factory=list)
@@ -92,5 +95,26 @@ class StandardMappingRequestRecord(BaseModel):
     project_id: Optional[str] = None
 
 
+class StandardMappingRequestSummaryRecord(BaseModel):
+    """Justification-truncated record for bulk list responses.
+
+    ``business_justification`` (up to 4 000 chars of free text) is replaced with
+    a 280-character preview to prevent bulk exposure of potentially sensitive
+    business context.  Use ``POST /standard-mapping-requests`` create response
+    (caller owns the data) for the full text.
+    """
+
+    request_id: str
+    status: str
+    submitted_at: str
+    standard_name: str
+    sop_reference: str
+    justification_preview: str
+    justification_chars: int
+    requester_email: str
+    tenant_id: str
+    project_id: Optional[str] = None
+
+
 class StandardMappingRequestListResponse(BaseModel):
-    items: list[StandardMappingRequestRecord] = Field(default_factory=list)
+    items: list[StandardMappingRequestSummaryRecord] = Field(default_factory=list)

@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { LuArrowUpRight, LuClock, LuEllipsisVertical, LuLock, LuLockOpen } from 'react-icons/lu';
 import { Document } from '../../lib/mockStore';
 import { getDocumentStatusBadgeClass } from '../../lib/documentHub';
+import { formatDateTime } from '../../lib/dateTime';
 
 type DocumentCardProps = {
   document: Document;
@@ -122,14 +123,14 @@ const DocumentCard = ({ document, canEditDocuments, canRunBridge, currentUserId,
         </div>
       </div>
 
-      <h3 className="text-xl font-black text-neutral-800 tracking-tight mb-2 group-hover:text-blue-600 transition">{document.title}</h3>
+      <h3 className="text-xl font-black text-neutral-800 tracking-tight mb-2 leading-snug [overflow-wrap:anywhere] group-hover:text-blue-600 transition">{document.title}</h3>
 
       {quickActionInfo ? <p className="mb-2 text-[11px] font-semibold text-blue-700">{quickActionInfo}</p> : null}
 
       <div className="flex items-center gap-4 text-neutral-400 text-[11px] font-bold uppercase tracking-tighter mb-6">
         <span className="flex items-center gap-1.5 bg-neutral-50 px-2 py-0.5 rounded">ID: {document.id}</span>
         <span className="flex items-center gap-1.5">
-          <LuClock className="w-3 h-3" /> Updated: {document.updatedAt}
+          <LuClock className="w-3 h-3" /> Updated: {formatDateTime(document.updatedAt, document.updatedAt)}
         </span>
       </div>
 

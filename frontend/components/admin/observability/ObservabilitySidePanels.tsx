@@ -1,6 +1,7 @@
 import React from 'react';
 import { LuActivity, LuGauge, LuTimer, LuTriangleAlert, LuWandSparkles } from 'react-icons/lu';
 import { MetricsSnapshot, QualitySummary } from '../../../lib/observabilityClient';
+import { formatDateTime } from '../../../lib/dateTime';
 
 type ObservabilitySidePanelsProps = {
   metrics: MetricsSnapshot | null;
@@ -31,8 +32,8 @@ const ObservabilitySidePanels = ({ metrics, summary }: ObservabilitySidePanelsPr
       <div className="bg-white border border-neutral-200 rounded-2xl p-5 text-sm text-neutral-700">
         <h2 className="text-sm font-black uppercase tracking-widest text-neutral-400 mb-3">Window details</h2>
         <div className="space-y-2">
-          <div className="flex items-center gap-2"><LuTimer className="w-4 h-4 text-neutral-400" /> Start: {new Date(summary.window_start).toLocaleString()}</div>
-          <div className="flex items-center gap-2"><LuActivity className="w-4 h-4 text-neutral-400" /> End: {new Date(summary.window_end).toLocaleString()}</div>
+          <div className="flex items-center gap-2"><LuTimer className="w-4 h-4 text-neutral-400" /> Start: {formatDateTime(summary.window_start, 'n/a')}</div>
+          <div className="flex items-center gap-2"><LuActivity className="w-4 h-4 text-neutral-400" /> End: {formatDateTime(summary.window_end, 'n/a')}</div>
         </div>
       </div>
     </div>

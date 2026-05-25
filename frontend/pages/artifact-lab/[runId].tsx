@@ -33,6 +33,7 @@ import {
 import { useMockStore } from '../../lib/mockStore';
 import { syncQueryParam } from '../../lib/queryState';
 import { getSelectionStyles } from '../../lib/selectionStyles';
+import { formatDateTime } from '../../lib/dateTime';
 
 function readQueryValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) {
@@ -76,7 +77,7 @@ const ArtifactLabRunPage = () => {
       id: 'msg-1',
       role: 'assistant',
       text: 'I can refine sections, add missing controls, or convert findings into audit-ready wording. What should be improved?',
-      at: new Date().toLocaleTimeString(),
+      at: formatDateTime(new Date()),
     },
   ]);
 
@@ -157,7 +158,7 @@ const ArtifactLabRunPage = () => {
 
     try {
       await new Promise((resolve) => setTimeout(resolve, 450));
-      setSaveInfo(`Saved ${selectedArtifact.title} at ${new Date().toLocaleTimeString()}`);
+      setSaveInfo(`Saved ${selectedArtifact.title} at ${formatDateTime(new Date())}`);
     } catch {
       setErrorInfo('Saving failed. Please retry.');
     } finally {
@@ -260,13 +261,13 @@ const ArtifactLabRunPage = () => {
       id: `u-${Date.now()}`,
       role: 'user',
       text,
-      at: new Date().toLocaleTimeString(),
+      at: formatDateTime(new Date()),
     };
     const assistantMsg: ArtifactChatMsg = {
       id: `a-${Date.now()}`,
       role: 'assistant',
       text: createAskAuthorAssistantReply(selectedArtifact.title),
-      at: new Date().toLocaleTimeString(),
+      at: formatDateTime(new Date()),
     };
 
     setChat((prev) => [...prev, userMsg, assistantMsg]);
@@ -282,7 +283,7 @@ const ArtifactLabRunPage = () => {
   };
 
   const applyLatestProposal = () => {
-    const stamp = new Date().toLocaleTimeString();
+    const stamp = formatDateTime(new Date());
     setArtifactDrafts((prev) => applyLatestProposalToDrafts(prev, selectedArtifact.id, stamp));
 
     setIsProposalApplied(true);
@@ -409,7 +410,7 @@ const ArtifactLabRunPage = () => {
                   className="block rounded-lg border border-neutral-200 px-3 py-2 hover:bg-neutral-50 transition"
                 >
                   <div className="text-xs font-semibold text-neutral-800 line-clamp-1">{doc.title}</div>
-                  <div className="text-[11px] text-neutral-500">{doc.id} · {doc.updatedAt}</div>
+                  <div className="text-[11px] text-neutral-500">{doc.id} · {formatDateTime(doc.updatedAt, doc.updatedAt)}</div>
                 </Link>
               ))}
             </div>

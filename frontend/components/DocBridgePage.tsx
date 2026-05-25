@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { Document } from '../lib/mockStore';
 import { useMockStore } from '../lib/mockStore';
 import { useCan } from '../lib/authContext';
+import { getDocumentSummaryById } from '../lib/documentRetrievalClient';
 import WhyThisPageMatters from './WhyThisPageMatters';
 import {
   BridgeHumanReviewResponse,
@@ -17,9 +18,13 @@ import {
   buildLogMessage,
   buildQualityGateSummary,
   createLocalHumanReviewRecord,
+  deriveFindingGroups,
   deriveAutomaticRecommendation,
   deriveComplianceChecks,
+  deriveMitigationItems,
+  derivePrivacyMitigationItems,
   deriveResearchChecks,
+  deriveRunControlItems,
   formatBridgeDateTime,
   inferBridgeDomainInfo,
 } from '../lib/bridgeRunViewModel';
@@ -44,7 +49,9 @@ const DocBridgePage = () => {
   const router = useRouter();
   const { docId } = router.query;
 
-  const { getDocById, updateDocStatus, currentUserId } = useMockStore();
+  const getDocById = useMockStore((state) => state.getDocById as (id: string) => Document | null);
+  const updateDocStatus = useMockStore((state) => state.updateDocStatus as (id: string, status: string) => void);
+  const currentUserId = useMockStore((state) => state.currentUserId as string);
   const canRunBridge = useCan('bridge.run');
 
   const [doc, setDoc] = useState<Pick<Document, 'id' | 'title' | 'type'> | null>(null);
@@ -62,46 +69,113 @@ const DocBridgePage = () => {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [bridgeError, setBridgeError] = useState<string | null>(null);
+  const [runStatusMessage, setRunStatusMessage] = useState<string | null>(null);
+  const [runStatusTone, setRunStatusTone] = useState<'info' | 'success' | 'error'>('info');
+  const [showRunIssuePopup, setShowRunIssuePopup] = useState(false);
+  const [documentLoadError, setDocumentLoadError] = useState<string | null>(null);
+  const [isResolvingDocument, setIsResolvingDocument] = useState(true);
   const [showRegulatoryPopup, setShowRegulatoryPopup] = useState(false);
   const [runStartedAtLeastOnce, setRunStartedAtLeastOnce] = useState(false);
   const autoRunStarted = useRef(false);
 
-  const useBackendBridge = process.env.NEXT_PUBLIC_BRIDGE_SOURCE === 'backend';
+  const useBackendBridge = String(process.env.NEXT_PUBLIC_BRIDGE_SOURCE || 'backend').trim().toLowerCase() !== 'demo';
+  const isRuntimeSelfCheckBlocked = Boolean(
+    bridgeError &&
+      (bridgeError.toLowerCase().includes('bridge_runtime_not_ready') ||
+        bridgeError.toLowerCase().includes('runtime self-check failed')),
+  );
 
   useEffect(() => {
-    if (docId) {
-      const timeoutId = setTimeout(() => {
-        autoRunStarted.current = false;
-        setRunStartedAtLeastOnce(false);
-        setBackendRun(null);
-        setHumanReview(null);
-        setReviewDecision('approved');
-        setReviewReason('');
-        setReviewError(null);
-        setNextTaskType('rerun_bridge');
-        setNextTaskAssignee('');
-        setNextTaskInstructions('');
-        setActiveStep(0);
-        setLogs([]);
+    let mounted = true;
 
-        const resolved = getDocById(docId as string);
-        if (resolved) {
-          setDoc(resolved);
-          return;
+    const resolveDocument = async () => {
+      const resolvedDocId = typeof docId === 'string' ? docId : '';
+      if (!resolvedDocId) {
+        setIsResolvingDocument(false);
+        setDocumentLoadError('No document selected for this bridge run.');
+        setDoc(null);
+        return;
+      }
+
+      autoRunStarted.current = false;
+      setRunStartedAtLeastOnce(false);
+      setBackendRun(null);
+      setHumanReview(null);
+      setReviewDecision('approved');
+      setReviewReason('');
+      setReviewError(null);
+      setNextTaskType('rerun_bridge');
+      setNextTaskAssignee('');
+      setNextTaskInstructions('');
+      setActiveStep(0);
+      setLogs([]);
+      setDocumentLoadError(null);
+      setBridgeError(null);
+      setRunStatusMessage(null);
+      setIsResolvingDocument(true);
+
+      const localDoc = getDocById(resolvedDocId);
+      if (localDoc) {
+        if (mounted) {
+          setDoc(localDoc);
+          setIsResolvingDocument(false);
         }
+        return;
+      }
 
-        if (useBackendBridge) {
+      const queryTitle = typeof router.query.title === 'string' ? router.query.title : '';
+      const queryType = typeof router.query.type === 'string' ? router.query.type : '';
+      if (queryTitle) {
+        if (mounted) {
           setDoc({
-            id: docId as string,
-            title: `Document ${docId as string}`,
-            type: 'Generic',
+            id: resolvedDocId,
+            title: queryTitle,
+            type: queryType || 'generic',
           });
+          setIsResolvingDocument(false);
         }
-      }, 0);
+        return;
+      }
 
-      return () => clearTimeout(timeoutId);
-    }
-  }, [docId, getDocById, useBackendBridge]);
+      const summary = await getDocumentSummaryById(resolvedDocId);
+      if (summary.ok && summary.document) {
+        if (mounted) {
+          setDoc({
+            id: summary.document.id,
+            title: summary.document.title,
+            type: summary.document.type,
+          });
+          setIsResolvingDocument(false);
+        }
+        return;
+      }
+
+      if (useBackendBridge) {
+        if (mounted) {
+          setDoc({
+            id: resolvedDocId,
+            title: `Document ${resolvedDocId}`,
+            type: 'generic',
+          });
+          setDocumentLoadError(summary.message || 'Selected document could not be fully resolved. Using fallback metadata.');
+          setIsResolvingDocument(false);
+        }
+        return;
+      }
+
+      if (mounted) {
+        setDoc(null);
+        setDocumentLoadError(summary.message || 'Unable to load selected document for workflow orchestration.');
+        setIsResolvingDocument(false);
+      }
+    };
+
+    void resolveDocument();
+
+    return () => {
+      mounted = false;
+    };
+  }, [docId, getDocById, router.query.title, router.query.type, useBackendBridge]);
 
   useEffect(() => {
     if (!doc || !useBackendBridge) {
@@ -156,18 +230,21 @@ const DocBridgePage = () => {
   }, []);
 
   const complianceChecks = useMemo(() => deriveComplianceChecks(doc, backendRun), [backendRun, doc]);
-  const researchChecks = useMemo(() => deriveResearchChecks(doc), [doc]);
+  const controlItems = useMemo(() => deriveRunControlItems(backendRun), [backendRun]);
+  const researchChecks = useMemo(() => deriveResearchChecks(backendRun), [backendRun]);
+  const findingGroups = useMemo(() => deriveFindingGroups(backendRun), [backendRun]);
+  const mitigationItems = useMemo(() => deriveMitigationItems(backendRun), [backendRun]);
+  const privacyMitigationItems = useMemo(() => derivePrivacyMitigationItems(backendRun), [backendRun]);
+  const privacyViolation = backendRun?.privacy_violation;
 
   const qualityGateSummary = useMemo(
     () =>
       buildQualityGateSummary({
-        activeStep,
-        isProcessing,
         backendRun,
         complianceChecks,
         researchChecks,
       }),
-    [activeStep, backendRun, complianceChecks, isProcessing, researchChecks],
+    [backendRun, complianceChecks, researchChecks],
   );
 
   const activeAutomaticRecommendation = useMemo(
@@ -283,6 +360,9 @@ const DocBridgePage = () => {
     setActiveStep(0);
     setLogs([]);
     setBridgeError(null);
+    setRunStatusMessage('Bridge run started. Processing pipeline steps...');
+    setRunStatusTone('info');
+    setShowRunIssuePopup(false);
     setReviewError(null);
     setBackendRun(null);
     setHumanReview(null);
@@ -321,17 +401,49 @@ const DocBridgePage = () => {
 
       if (runResult?.human_review_required) {
         addLog('Bridge Run completed. Human HITL approval/rejection is now required.');
+        setRunStatusMessage('Bridge run completed. Human HITL review is required.');
+        setRunStatusTone('success');
       } else {
         addLog('Bridge Run successfully completed. Generating Report.');
+        setRunStatusMessage('Bridge run completed successfully.');
+        setRunStatusTone('success');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Bridge run failed';
       setBridgeError(message);
+      setRunStatusMessage(`Bridge run failed: ${message}`);
+      setRunStatusTone('error');
+      setShowRunIssuePopup(true);
       addLog(`Bridge Run failed: ${message}`);
     } finally {
       setIsProcessing(false);
     }
   }, [addLog, complianceChecks, doc, researchChecks, useBackendBridge]);
+
+  const openRuntimeSelfCheck = useCallback(() => {
+    const base = String(process.env.NEXT_PUBLIC_API_ORIGIN || '').trim();
+    const target = `${base}/api/v1/bridge/runtime/self-check`;
+    window.open(target, '_blank', 'noopener,noreferrer');
+    setRunStatusMessage('Opened runtime self-check in a new tab. Review status and action points before retrying.');
+    setRunStatusTone('info');
+    addLog('Opened runtime self-check endpoint for readiness diagnostics.');
+  }, [addLog]);
+
+  const openModelPolicyAdmin = useCallback(async () => {
+    setRunStatusMessage('Opening Model Policy admin page to verify local ollama configuration.');
+    setRunStatusTone('info');
+    addLog('Navigating to Model Policy admin page.');
+    setShowRunIssuePopup(false);
+    await router.push('/admin/model-policy');
+  }, [addLog, router]);
+
+  const retryBridgeRunFromPopup = useCallback(async () => {
+    setShowRunIssuePopup(false);
+    setRunStatusMessage('Retrying bridge run after selected remediation action.');
+    setRunStatusTone('info');
+    addLog('Retrying bridge run from runtime self-check guidance popup.');
+    await handleStartRun();
+  }, [addLog, handleStartRun]);
 
   useEffect(() => {
     if (!useBackendBridge || !doc || isProcessing || !canRunBridge || autoRunStarted.current) {
@@ -342,8 +454,27 @@ const DocBridgePage = () => {
     void handleStartRun();
   }, [canRunBridge, doc, handleStartRun, isProcessing, useBackendBridge]);
 
-  if (!doc) {
+  if (isResolvingDocument) {
     return <div className="p-20 text-center animate-pulse text-neutral-400">Loading Document...</div>;
+  }
+
+  if (!doc) {
+    return (
+      <div className="max-w-3xl mx-auto mt-16">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700 font-semibold">
+          {documentLoadError || 'The selected document is not available for bridge run.'}
+        </div>
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => void router.push('/bridge')}
+            className="px-5 py-2 rounded-xl bg-neutral-900 text-white text-xs font-bold uppercase tracking-widest hover:bg-blue-700 transition"
+          >
+            Back to Workflow Orchestration
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -411,9 +542,35 @@ const DocBridgePage = () => {
 
       {bridgeError && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{bridgeError}</div>}
 
+      {runStatusMessage && (
+        <div
+          className={`rounded-xl px-4 py-3 text-sm font-semibold border ${
+            runStatusTone === 'success'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              : runStatusTone === 'error'
+                ? 'border-rose-200 bg-rose-50 text-rose-700'
+                : 'border-blue-200 bg-blue-50 text-blue-700'
+          }`}
+        >
+          {runStatusMessage}
+        </div>
+      )}
+
+      {documentLoadError && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700 font-semibold">
+          {documentLoadError}
+        </div>
+      )}
+
       {useBackendBridge && (
         <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-semibold text-blue-700">
           Backend mode: multi-framework compliance checks are executed via API and persisted with run evidence.
+        </div>
+      )}
+
+      {!useBackendBridge && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
+          Demo mode is active. Bridge cards use fallback control data; switch to backend mode for live persisted governance controls and full findings.
         </div>
       )}
 
@@ -616,29 +773,77 @@ const DocBridgePage = () => {
                       </h3>
                       <p className="text-sm font-medium text-neutral-400 group-hover:text-neutral-500 transition line-clamp-1 italic">{step.desc}</p>
 
+                      {step.id === 'ingest' && doc && runStartedAtLeastOnce && (
+                        <div className="mt-3 rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                          <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-1">Active document under investigation</div>
+                          <div className="text-sm font-semibold text-neutral-800 break-all">{doc.title}</div>
+                          <div className="text-[11px] text-neutral-500 font-mono mt-1">{doc.id}</div>
+                        </div>
+                      )}
+
                       {step.id === 'compliance' && hasComplianceOutput && (
                         <div className="mt-3 space-y-2">
-                          <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Checked ISO/SOP controls</div>
-                          {complianceChecks.map((check) => (
-                            <div key={check.name} className="flex items-center justify-between gap-3 rounded-lg border border-neutral-100 bg-white/80 px-3 py-2">
-                              <span className="text-xs font-medium text-neutral-700 leading-tight">{check.name}</span>
+                          <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Applicable controls for this run</div>
+                          {controlItems.map((item) => (
+                            <div key={item.frameworkId} className="flex items-center justify-between gap-3 rounded-lg border border-neutral-100 bg-white/80 px-3 py-2">
+                              <div className="space-y-1">
+                                <div className="text-xs font-medium text-neutral-700 leading-tight">{item.label}</div>
+                                <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                                  {item.activationType === 'baseline' ? 'Mandatory baseline' : 'Context-activated'}
+                                </div>
+                              </div>
                               <span
                                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${
-                                  check.passed ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                                  item.status === 'passed' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
                                 }`}
                               >
-                                {check.passed ? <LuCheck className="w-3 h-3" /> : <LuX className="w-3 h-3" />}
-                                {check.passed ? 'Passed' : 'Failed'}
+                                {item.status === 'passed' ? <LuCheck className="w-3 h-3" /> : <LuX className="w-3 h-3" />}
+                                {item.status === 'passed' ? 'Passed' : 'Findings'}
                               </span>
                             </div>
                           ))}
+
+                          {controlItems.length === 0 && (
+                            <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-2 text-xs text-neutral-600">
+                              No applicable controls were returned for this run context.
+                            </div>
+                          )}
+
+                          {privacyViolation?.detected && privacyViolation.proposals.length > 0 && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-3">
+                              <div className="text-[10px] font-black uppercase tracking-widest text-amber-700 mb-2">
+                                Data privacy risk status
+                              </div>
+                              <p className="text-xs text-amber-900 mb-2 leading-relaxed">
+                                {privacyViolation.summary}
+                              </p>
+                              <p className="text-xs text-amber-800 leading-relaxed">
+                                Detailed data privacy mitigation actions are provided in Step 4 (Produce Recommendation).
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
 
                       {step.id === 'research' && hasResearchOutput && (
                         <div className="mt-3 space-y-2">
-                          <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Cross-referenced regulations</div>
-                          {researchChecks.map((check) => (
+                          <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Findings by control item</div>
+                          {findingGroups.map((group) => (
+                            <div key={group.frameworkId} className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3 space-y-2">
+                              <div className="text-xs font-black uppercase tracking-widest text-neutral-600">{group.label}</div>
+                              {group.findings.map((finding) => (
+                                <div key={`${group.frameworkId}-${finding.requirementId}`} className="rounded-md border border-neutral-100 bg-neutral-50/60 px-3 py-2">
+                                  <div className="text-xs font-semibold text-neutral-800">{finding.subtitle}</div>
+                                  <div className="mt-1 text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                                    {finding.articleOrClause} · {finding.paragraph}
+                                  </div>
+                                  <div className="mt-1 text-xs text-neutral-700 leading-relaxed">{finding.description}</div>
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+
+                          {findingGroups.length === 0 && researchChecks.map((check) => (
                             <div key={check.name} className="flex items-center justify-between gap-3 rounded-lg border border-neutral-100 bg-white/80 px-3 py-2">
                               <span className="text-xs font-medium text-neutral-700 leading-tight">{check.name}</span>
                               <span
@@ -651,6 +856,12 @@ const DocBridgePage = () => {
                               </span>
                             </div>
                           ))}
+
+                          {findingGroups.length === 0 && researchChecks.length === 0 && (
+                            <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-2 text-xs text-neutral-600">
+                              No findings were produced for this run yet.
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -661,6 +872,54 @@ const DocBridgePage = () => {
                             <div className="text-xs font-black uppercase tracking-widest text-neutral-500 mb-1">{qualityGateSummary.heading}</div>
                             <p className="text-xs text-neutral-700 leading-relaxed">{qualityGateSummary.text}</p>
                           </div>
+
+                          {mitigationItems.length > 0 && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-3">
+                              <div className="text-[10px] font-black uppercase tracking-widest text-amber-700 mb-2">
+                                Mitigations for found control issues
+                              </div>
+                              <ul className="space-y-2">
+                                {mitigationItems.map((item) => (
+                                  <li key={`${item.topic}-${item.proposal}`} className="rounded-md border border-amber-100 bg-white/70 px-3 py-2">
+                                    <div className="text-xs font-semibold text-amber-900">{item.topic}</div>
+                                    <div className="mt-1 text-xs text-amber-900 leading-relaxed">{item.proposal}</div>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {privacyMitigationItems.length > 0 && (
+                            <div className="rounded-lg border border-rose-200 bg-rose-50/70 px-3 py-3">
+                              <div className="text-[10px] font-black uppercase tracking-widest text-rose-700 mb-2">
+                                Data privacy risk mitigation actions
+                              </div>
+                              <ul className="space-y-2">
+                                {privacyMitigationItems.map((item) => (
+                                  <li key={`${item.topic}-${item.proposal}`} className="rounded-md border border-rose-100 bg-white/70 px-3 py-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="text-xs font-semibold text-rose-900">{item.topic}</div>
+                                      <span
+                                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${
+                                          item.implementationStatus === 'implemented'
+                                            ? 'bg-emerald-100 text-emerald-700'
+                                            : 'bg-amber-100 text-amber-700'
+                                        }`}
+                                      >
+                                        {item.implementationStatus === 'implemented' ? 'Implemented' : 'Proposed'}
+                                      </span>
+                                    </div>
+                                    <div className="mt-1 text-xs text-rose-900 leading-relaxed">{item.proposal}</div>
+                                    {item.implementationNote && (
+                                      <div className="mt-1 text-[11px] text-rose-700 leading-relaxed">
+                                        {item.implementationNote}
+                                      </div>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -751,6 +1010,107 @@ const DocBridgePage = () => {
                 className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-widest"
               >
                 Acknowledge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRunIssuePopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/45 px-4">
+          <div className="w-full max-w-xl rounded-2xl bg-white border border-rose-200 shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+              <div className="flex items-center gap-2 text-rose-700">
+                <LuTriangle className="w-5 h-5" />
+                <h3 className="text-sm font-black uppercase tracking-widest">Bridge run interrupted</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRunIssuePopup(false)}
+                className="p-1.5 rounded-full text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100"
+                title="Close"
+              >
+                <LuX className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 text-sm text-neutral-700 space-y-3">
+              {isRuntimeSelfCheckBlocked ? (
+                <p>
+                  Bridge execution is currently blocked by runtime readiness checks. Review the status details below,
+                  resolve the listed action points, and then retry the run.
+                </p>
+              ) : (
+                <p>
+                  The bridge workflow could not continue after starting. Please verify the selected document context and
+                  backend availability, then run again.
+                </p>
+              )}
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 font-semibold break-words">
+                {bridgeError || 'Unknown bridge execution error.'}
+              </div>
+              {isRuntimeSelfCheckBlocked ? (
+                <p className="text-xs text-neutral-600">
+                  Recommended: open the runtime self-check endpoint, run migration initialization with py313_venv, and
+                  confirm every bridge agent uses a local ollama model provider.
+                </p>
+              ) : (
+                <p className="text-xs text-neutral-600">
+                  If this persists, re-open the workflow from Bridge Orchestration and confirm the active document card before executing.
+                </p>
+              )}
+
+              {isRuntimeSelfCheckBlocked && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-3 space-y-2">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-blue-700">Recommended next steps</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={openRuntimeSelfCheck}
+                      className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest"
+                    >
+                      Open Self-Check
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void openModelPolicyAdmin()}
+                      className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-900 text-white text-[10px] font-black uppercase tracking-widest"
+                    >
+                      Open Model Policy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void retryBridgeRunFromPopup()}
+                      disabled={isProcessing || !canRunBridge}
+                      className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-white ${
+                        isProcessing || !canRunBridge ? 'bg-neutral-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
+                      }`}
+                    >
+                      Retry Bridge Run
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 pb-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRunIssuePopup(false);
+                  void router.push('/bridge');
+                }}
+                className="px-4 py-2 rounded-xl bg-neutral-200 hover:bg-neutral-300 text-neutral-700 text-xs font-black uppercase tracking-widest"
+              >
+                Back to orchestration
+              </button>
+              <button
+                type="button"
+                onClick={() => void retryBridgeRunFromPopup()}
+                disabled={isProcessing || !canRunBridge}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-widest"
+              >
+                Retry from this page
               </button>
             </div>
           </div>

@@ -1,0 +1,36 @@
+NEGATIVE TEMPLATE FIXTURE: Risk Management Plan
+
+Fixture metadata:
+- Path: failure path
+- Template style: negative-template v1
+- Intent: intentionally non-compliant risk plan for rejection-path testing
+
+1) Purpose (intentionally wrong)
+Proceed with releases quickly, even when risk treatment is incomplete.
+
+2) Scope (intentionally wrong)
+Scope is undefined and excludes post-release monitoring.
+
+3) Governance gaps
+- No explicit release-blocking authority.
+- One person may accept all residual risks without review.
+- No required cross-functional sign-off.
+
+4) Unsafe instructions
+- Discuss risks informally in chat without controlled records.
+- Skip supplier risk checks if vendor reputation looks good.
+- Accept privacy/security risks when no public incident is known.
+
+5) Missing required controls
+- No defined acceptance matrix for severity and probability.
+- No mandatory verification evidence before closure.
+- No trigger-based reassessment process after incidents/changes.
+
+6) Incorrect claims (intentionally included)
+- A general SOP is always enough; product-specific planning is unnecessary.
+- Residual risk does not require named ownership.
+- Human oversight is not needed when model accuracy appears high.
+
+Expected review outcome:
+- reject or rework
+- findings for missing governance authority, weak acceptance criteria, absent verification discipline, and missing post-production controls

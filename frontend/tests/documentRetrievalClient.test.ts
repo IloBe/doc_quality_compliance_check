@@ -60,4 +60,32 @@ describe('documentRetrievalClient', () => {
     expect(result.degradedToDemo).toBe(true);
     expect(result.documents).toEqual([]);
   });
+
+  it('loads document summary by id for bridge route resolution', async () => {
+    delete process.env.NEXT_PUBLIC_API_ORIGIN;
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        document_id: 'DOC-707',
+        filename: 'xray-complaint.pdf',
+        document_type: 'risk_assessment',
+        status: 'Draft',
+      }),
+    });
+
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    const { getDocumentSummaryById } = await import('../lib/documentRetrievalClient');
+    const result = await getDocumentSummaryById('DOC-707');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/documents/DOC-707/summary', {
+      method: 'GET',
+      credentials: 'include',
+    });
+    expect(result.ok).toBe(true);
+    expect(result.document?.id).toBe('DOC-707');
+    expect(result.document?.title).toBe('xray-complaint.pdf');
+    expect(result.document?.type).toBe('risk_assessment');
+  });
 });

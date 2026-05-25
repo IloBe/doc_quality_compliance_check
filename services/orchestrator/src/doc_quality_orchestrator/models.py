@@ -61,6 +61,12 @@ class WorkflowRunRequest(BaseModel):
     provider: Literal["anthropic", "openai_compatible", "nemotron"] = "anthropic"
     trace_id: str | None = None
     routing_mode: Literal["auto", "single_agent_wrapper", "crewai_workflow"] = "auto"
+    data_privacy_class: Literal[
+        "personal_data_possible",
+        "non_personal",
+        "scrubbed_fallback",
+    ] | None = None
+    processing_purpose: str = "compliance_review"
     input_payload: dict[str, Any] = Field(default_factory=dict)
 
 

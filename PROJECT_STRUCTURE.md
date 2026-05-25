@@ -1,11 +1,13 @@
 # Project Structure — Doc Quality Compliance Check
 
-Complete tree-style overview of the codebase with inline descriptions of major components.
+## Basic Architecture (Existing Project Structure)
+
+Complete tree-style overview of the current codebase with inline descriptions of major components.
 
 ```
 doc_quality_compliance_check/
 │
-├── 📋 Root Configuration & Documentation Files
+├── Root Configuration & Documentation Files
 │   ├── README.md                                   ← Main project documentation & getting started guide
 │   ├── pyproject.toml                              ← Python project metadata, dependencies (uv-managed)
 │   ├── requirements.txt                            ← Python package dependencies snapshot
@@ -16,7 +18,7 @@ doc_quality_compliance_check/
 │   ├── LICENSE                                     ← MIT License
 │   └── .gitignore                                  ← Git ignore rules
 │
-├── 📚 Design & Planning Documents
+├── Design & Planning Documents
 │   ├── project-context/                            ← System architecture & implementation docs (3-phase model)
 │   │   ├── 1.define/                               ← System Architecture & Requirements Phase
 │   │   │   ├── sad.md                              ← System Architecture Document (ISO 25010, EU AI Act, HITL design)
@@ -37,7 +39,7 @@ doc_quality_compliance_check/
 │   ├── CREWAI_BEST_PRACTICES_ASSESSMENT.md         ← CrewAI pattern evaluation
 │   ├── SEARCH_CONCEPT_README.md                    ← Vector search & retrieval strategy
 │   │
-│   └── 📖 Operational & Compliance Guides
+│   └── Operational & Compliance Guides
 │       ├── DATABASE_README.md                      ← PostgreSQL schema, migrations, setup, troubleshooting
 │       ├── POSTGRES_SETUP_QUICKSTART.md            ← Copy/paste terminal commands for DB init
 │       ├── POSTGRES_SETUP.md                       ← Detailed database configuration & verification
@@ -50,7 +52,7 @@ doc_quality_compliance_check/
 │       ├── HITL_PERSISTENCE_CHANGE_SUMMARY.md      ← Recent HITL changes & decisions
 │       └── HITL_PERSISTENCE_VERIFICATION.md        ← HITL testing & validation
 │
-├── 🔧 Backend Application (FastAPI + SQLAlchemy)
+├── Backend Application (FastAPI + SQLAlchemy)
 │   ├── src/
 │   │   └── doc_quality/                            ← Main backend package
 │   │       │
@@ -185,7 +187,7 @@ doc_quality_compliance_check/
 │   │
 │   └── reports/                                    ← Generated compliance reports (output directory)
 │
-├── 🎨 Frontend Application (Next.js + React + TypeScript)
+├── Frontend Application (Next.js + React + TypeScript)
 │   ├── frontend/
 │   │   ├── pages/                                  ← Next.js page router (server-side & client routes)
 │   │   │   ├── _app.tsx                            ← App wrapper, auth bootstrap, AuthProvider context
@@ -397,7 +399,7 @@ doc_quality_compliance_check/
 │   │
 │   └── next-env.d.ts                               ← Next.js TypeScript declarations
 │
-├── 🤖 Orchestrator Service (CrewAI-based, separate FastAPI)
+├── Orchestrator Service (CrewAI-based, separate FastAPI)
 │   ├── services/
 │   │   └── orchestrator/                           ← Multi-agent orchestration service (port 8010)
 │   │       ├── pyproject.toml                      ← Orchestrator dependencies (crewai, anthropic, fastapi)
@@ -445,7 +447,7 @@ doc_quality_compliance_check/
 │   │
 │   └── [other services]
 │
-├── 📁 Templates & Documentation
+├── Templates & Documentation
 │   ├── templates/                                  ← Governance & compliance templates (loaded at build time)
 │   │   ├── arc42/                                  ← arc42 software architecture template
 │   │   │   └── arc42_template.md                   ← Structured template for system documentation
@@ -467,14 +469,14 @@ doc_quality_compliance_check/
 │   │
 │   └── [other template libraries]
 │
-├── 📊 Documentation & Reports
+├── Documentation & Reports
 │   ├── docs/
 │   │   └── images/
 │   │       └── DocQuality_Compliance-QA-Lab.JPG    ← Product screenshot
 │   │
 │   └── reports/                                    ← Generated compliance & analysis reports (output)
 │
-├── 🔐 Git & Environment
+├── Git & Environment
 │   ├── .git/                                       ← Git repository
 │   ├── .github/                                    ← GitHub workflows & actions
 │   ├── .gitignore                                  ← Git ignore rules
@@ -482,7 +484,7 @@ doc_quality_compliance_check/
 │   ├── .env.example                                ← Env template for developers
 │   └── .venv/                                      ← Python virtual environment
 │
-└── 🛠️ Development Tools & Meta
+└── Development Tools & Meta
     ├── .vscode/                                    ← VS Code workspace settings
     ├── .cursor/                                    ← Cursor IDE configuration
     ├── .pytest_cache/                              ← pytest cache
@@ -490,9 +492,69 @@ doc_quality_compliance_check/
 
 ```
 
+## Project structure including data privacy topics for bridge workflow run
+
+Tree-style view (same UI format) focused on the bridge run privacy-relevant architecture and operational controls.
+
+```
+doc_quality_compliance_check/
+│
+├── Runtime Configuration (Bridge Privacy & Topology)
+│   ├── .env                                        ← Active local runtime flags for bridge policy and topology behavior
+│   ├── .env.example                                ← Shared env template for developers
+│   ├── .env.postgresql.example                     ← PostgreSQL-focused env template
+│   └── src/doc_quality/core/config.py              ← Pydantic Settings source for bridge privacy/topology controls
+│
+├── 🔧 Backend Privacy & Bridge Runtime Enforcement
+│   ├── src/doc_quality/api/routes/bridge.py        ← Runtime self-check, topology endpoint, bridge run gating, HITL enforcement
+│   ├── src/doc_quality/services/bridge_privacy_service.py
+│   │                                               ← Privacy signal detection, mitigation proposals (dp-001..dp-004), local sandbox plan
+│   ├── src/doc_quality/services/bridge_orchestrator_service.py
+│   │                                               ← Container topology proof (docker_inspect/metadata), strict vs fallback runtime behavior
+│   ├── src/doc_quality/services/bridge_mitigation_service.py
+│   │                                               ← Control-focused mitigation recommendation generation
+│   ├── src/doc_quality/services/compliance_checker.py
+│   │                                               ← EU AI Act + mapped framework checks used by bridge run
+│   ├── src/doc_quality/services/model_policy_service.py
+│   │                                               ← Active model resolution and local-provider policy integration
+│   ├── src/doc_quality/services/governance_service.py
+│   │                                               ← Governance controls loaded into bridge evidence package
+│   └── src/doc_quality/models/orm.py               ← Persisted audit/findings/HITL entities for privacy and bridge run traceability
+│
+├── Auditability, Evidence & HITL Persistence
+│   ├── src/doc_quality/models/orm.py               ← AuditEventORM, FindingORM, BridgeHumanReviewORM, SkillDocumentORM
+│   ├── migrations/versions/010_bridge_human_reviews.py
+│   │                                               ← Bridge human review linkage schema
+│   ├── migrations/versions/012_document_workflow_status.py
+│   │                                               ← Workflow status progression used by bridge/HITL lifecycle
+│   └── src/doc_quality/api/routes/audit_trail.py   ← Audit retrieval and schedule endpoints for compliance evidence operations
+│
+├── Bridge Privacy & Topology Verification Tests
+│   ├── tests/test_bridge_run_api.py                ← Bridge runtime/self-check/privacy/HITL integration tests
+│   ├── tests/test_bridge_orchestrator_service.py   ← Strict docker_inspect and metadata fallback behavior tests
+│   ├── tests/test_data_privacy_documents.py        ← Cross-workflow privacy artifact persistence coverage
+│   ├── tests/test_skills_api.py                    ← Skills flow privacy persistence path validation
+│   └── tests/conftest.py                           ← Test env defaults, deterministic runtime topology configuration for pytest
+│
+├── Frontend Bridge UI (Privacy/Runtime Signals)
+│   ├── frontend/pages/bridge.tsx                   ← Bridge orchestration page, topology loading and status surfacing
+│   ├── frontend/components/bridge/BridgeSystemStatusCard.tsx
+│   │                                               ← Topology proof card (live status, issues, source, orchestrator context)
+│   ├── frontend/components/DocBridgePage.tsx       ← Per-document bridge run execution and privacy/HITL user flow
+│   ├── frontend/lib/bridgeClient.ts                ← Bridge API contracts (run, alert, runtime topology, human review)
+│   └── frontend/tests/bridgeClient.test.ts         ← Frontend bridge-client error and runtime topology behavior tests
+│
+└── Privacy & Security Documentation for Operations
+    ├── DATA_PRIVACY_VIOLATION_MITIGATION_README.md ← Privacy mitigation baseline + bridge runtime env checklist
+    ├── AUTHENTICATION_AUTHORIZATION_README.md      ← Security posture and bridge topology fallback control notes
+    ├── OBSERVABILITY_LOGGING_README.md             ← Structured logging, telemetry, and evidence monitoring context
+    └── README.md                                   ← Startup, troubleshooting, and security environment defaults summary
+
+```
+
 ---
 
-## 📍 Key Component Locations
+## Key Component Locations
 
 ### Backend API Endpoints (`/api/v1`)
 
@@ -578,7 +640,7 @@ doc_quality_compliance_check/
 
 ---
 
-## 🔄 Data Flow Architecture
+## Data Flow Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -667,7 +729,7 @@ doc_quality_compliance_check/
 
 ---
 
-## 🚀 Development & Deployment Paths
+## Development & Deployment Paths
 
 ### Local Development (3 terminals)
 
@@ -711,7 +773,7 @@ cd frontend && npm run test:watch
 
 ---
 
-## 📚 Documentation Navigation
+## Documentation Navigation
 
 | Topic | Document | Location |
 | --- | --- | --- |
@@ -728,7 +790,7 @@ cd frontend && npm run test:watch
 
 ---
 
-## 💡 Quick Navigation Tips
+## Quick Navigation Tips
 
 - **Want to add an API endpoint?** → `src/doc_quality/api/routes/`
 - **Want to add business logic?** → `src/doc_quality/services/`
@@ -742,6 +804,6 @@ cd frontend && npm run test:watch
 
 ---
 
-**Document Version**: 0.2.0  
-**Last Updated**: April 3, 2026  
+**Document Version**: 0.3.0  
+**Last Updated**: May 25, 2026  
 **Status**: Phase 0 MVP — full structure documented

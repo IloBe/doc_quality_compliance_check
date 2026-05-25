@@ -1,4 +1,5 @@
 import type { Document } from './mockStore';
+import { formatDateTime } from './dateTime';
 
 export type RiskStatusFilter = 'All' | 'Draft' | 'In Review' | 'Approved' | 'rework after review';
 export type RiskTypeFilter = 'All' | 'RMF' | 'FMEA';
@@ -138,11 +139,7 @@ export function filterRiskRows(
 }
 
 export function formatRiskDate(ts: string): string {
-  const date = new Date(ts);
-  if (Number.isNaN(date.getTime())) {
-    return ts;
-  }
-  return date.toLocaleDateString();
+  return formatDateTime(ts, ts);
 }
 
 export function buildRiskDocId(type: 'RMF' | 'FMEA'): string {

@@ -52,7 +52,7 @@ A blue demo-mode banner is shown in the page when not in backend mode (same patt
 | **Workflow Component Breakdown** | Per-component (research\_agent, document\_analyzer, compliance\_checker) — total, pass/warn/fail/info counts, avg latency, latest-event timestamp |
 | **Prometheus Snapshot** | HTTP requests total, hallucination reports total, AI evaluations total scraped from `/metrics` |
 | **Window details** | Window start / end timestamps for the selected observation window |
-| **Recent GenAI Prompt/Output Pairs** | Per-trace: source component, provider, model, timestamp, prompt text, output text, **Rich GenAI Trace Payload** (tokens, temperature, latency, hallucination flag, risk items, etc.) displayed in an indigo-styled collapsible pre-block |
+| **Recent GenAI Prompt/Output Pairs** | Per-trace: source component, provider, model, timestamp, prompt text, output text, **redaction-aware trace payload** (tokens, temperature, latency, hallucination flag, risk items, etc.) displayed in an indigo-styled collapsible pre-block; raw content should be restricted to least-privilege migration/audit workflows |
 | **Future topic notice** | Product-user chatbot roadmap note |
 
 #### Window selector
@@ -143,7 +143,7 @@ All admin pages use the standardized `PageHeaderWithWhy` pattern:
 
 - Clicking `Admin` reveals navigable subitems (`Observability`, `Stakeholders & Rights`).
 - `/admin/observability` demo mode renders KPI/aspect/workflow/prompt-output sections without backend dependency.
-- `/admin/observability` backend mode fetches summary, traces, workflow breakdown, and metrics snapshot.
+- `/admin/observability` backend mode fetches summary, traces, workflow breakdown, and metrics snapshot, with trace retention and redaction aligned to the privacy policy.
 - `/admin/stakeholders` supports profile save, single assignment add/remove, and bulk assignment add.
 - Assignment rows persist across page refresh (backend persistence).
 - Stakeholder page documentation does not imply a standalone demo mode for assignment persistence.
