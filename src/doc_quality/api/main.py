@@ -25,16 +25,28 @@ from ..core.observability import (
 )
 from ..core.rate_limit import api_global_limiter
 from ..core.session_auth import require_authenticated_user
+from ..services.model_policy_service import (
+    OnPremDependencyUnavailableError,
+    PolicyMetadataPersistenceError,
+    PolicyRoutingDeniedError,
+)
+from ..services.policy_contract_service import (
+    PolicyContractValidationError,
+    PolicyContractViolationError,
+)
 from .routes import audit_trail, auth, bridge, compliance, dashboard, documents, governance, model_policy, observability, reports, research, risk_templates, skills, stakeholders, templates
 
 logger = structlog.get_logger(__name__)
 
 _SAFE_ERROR_DETAIL_KEYS = {
+    "action_points",
+    "error_code",
     "details",
     "field",
     "locked_by",
     "reason",
     "retry_after",
+    "correlation_id",
 }
 
 
@@ -59,8 +71,10 @@ def _status_to_error_code(status_code: int) -> str:
 
 
 def _build_error_payload(status_code: int, detail: object) -> dict:
+    resolved_code = _status_to_error_code(status_code)
     payload: dict = {
-        "code": _status_to_error_code(status_code),
+        "code": resolved_code,
+        "error_code": resolved_code,
         "message": str(detail),
     }
 
@@ -77,11 +91,37 @@ def _build_error_payload(status_code: int, detail: object) -> dict:
 
 
 def _error_response(*, status_code: int, detail: object, headers: dict | None = None) -> JSONResponse:
+    correlation_id = None
+    if headers:
+        correlation_id = headers.get("X-Correlation-ID") or headers.get("x-correlation-id")
+
+    content = {"error": _build_error_payload(status_code, detail)}
+    if correlation_id:
+        content["error"]["correlation_id"] = correlation_id
+
     return JSONResponse(
         status_code=status_code,
-        content={"error": _build_error_payload(status_code, detail)},
+        content=content,
         headers=headers or {},
     )
+
+
+def _request_ids(request: Request) -> tuple[str, str]:
+    request_id = getattr(request.state, "request_id", None) or request.headers.get("x-request-id") or uuid4().hex
+    correlation_id = (
+        getattr(request.state, "correlation_id", None)
+        or request.headers.get("x-correlation-id")
+        or request_id
+    )
+    return request_id, correlation_id
+
+
+def _error_headers_for_request(request: Request) -> dict[str, str]:
+    request_id, correlation_id = _request_ids(request)
+    return {
+        "X-Request-ID": request_id,
+        "X-Correlation-ID": correlation_id,
+    }
 
 
 @asynccontextmanager
@@ -130,6 +170,8 @@ def create_app() -> FastAPI:
         settings = get_settings()
         request_id = request.headers.get("x-request-id") or uuid4().hex
         correlation_id = request.headers.get("x-correlation-id") or request_id
+        request.state.request_id = request_id
+        request.state.correlation_id = correlation_id
 
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(request_id=request_id, correlation_id=correlation_id)
@@ -196,34 +238,93 @@ def create_app() -> FastAPI:
         return response
 
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(_: Request, exc: HTTPException):
-        return _error_response(status_code=exc.status_code, detail=exc.detail, headers=exc.headers)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        headers = {**_error_headers_for_request(request), **(exc.headers or {})}
+        return _error_response(status_code=exc.status_code, detail=exc.detail, headers=headers)
 
     @app.exception_handler(StarletteHTTPException)
-    async def starlette_http_exception_handler(_: Request, exc: StarletteHTTPException):
-        return _error_response(status_code=exc.status_code, detail=exc.detail, headers=exc.headers)
+    async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPException):
+        headers = {**_error_headers_for_request(request), **(exc.headers or {})}
+        return _error_response(status_code=exc.status_code, detail=exc.detail, headers=headers)
+
+    @app.exception_handler(PolicyContractValidationError)
+    @app.exception_handler(PolicyContractViolationError)
+    async def policy_contract_validation_error_handler(request: Request, exc: PolicyContractValidationError):
+        return _error_response(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "message": "Bridge step policy contract validation failed.",
+                "reason": getattr(exc, "reason", "bridge_step_policy_invalid"),
+                "action_points": list(getattr(exc, "action_points", [])),
+                "details": [str(exc), *list(getattr(exc, "action_points", []))],
+            },
+            headers=_error_headers_for_request(request),
+        )
+
+    @app.exception_handler(PolicyRoutingDeniedError)
+    async def policy_routing_denied_error_handler(request: Request, exc: PolicyRoutingDeniedError):
+        return _error_response(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "message": "Bridge fail-closed routing denied this workflow run.",
+                "reason": getattr(exc, "reason", "bridge_policy_routing_denied"),
+                "action_points": list(getattr(exc, "action_points", [])),
+                "details": [str(exc), *list(getattr(exc, "action_points", []))],
+            },
+            headers=_error_headers_for_request(request),
+        )
+
+    @app.exception_handler(OnPremDependencyUnavailableError)
+    async def on_prem_dependency_unavailable_error_handler(request: Request, exc: OnPremDependencyUnavailableError):
+        return _error_response(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "message": str(exc),
+                "reason": getattr(exc, "reason", "bridge_runtime_not_ready"),
+                "action_points": list(getattr(exc, "action_points", [])),
+                "details": [*list(getattr(exc, "action_points", [])), *list(getattr(exc, "details", []))],
+            },
+            headers=_error_headers_for_request(request),
+        )
+
+    @app.exception_handler(PolicyMetadataPersistenceError)
+    async def policy_metadata_persistence_error_handler(request: Request, exc: PolicyMetadataPersistenceError):
+        logger.exception("policy_metadata_persistence_error", reason=getattr(exc, "reason", "unknown"))
+        return _error_response(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "message": "Failed to persist bridge policy metadata evidence.",
+                "reason": getattr(exc, "reason", "bridge_policy_metadata_persistence_failed"),
+                "action_points": list(getattr(exc, "action_points", [])),
+                "details": [str(exc), *list(getattr(exc, "action_points", []))],
+            },
+            headers=_error_headers_for_request(request),
+        )
 
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(_: Request, __: RequestValidationError):
+    async def validation_exception_handler(request: Request, __: RequestValidationError):
         return _error_response(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Request validation failed",
+            headers=_error_headers_for_request(request),
         )
 
     @app.exception_handler(OperationalError)
-    async def database_operational_error_handler(_: Request, exc: OperationalError):
+    async def database_operational_error_handler(request: Request, exc: OperationalError):
         logger.exception("database_unavailable", error_type=type(exc).__name__)
         return _error_response(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database unavailable. Start PostgreSQL and retry.",
+            headers=_error_headers_for_request(request),
         )
 
     @app.exception_handler(Exception)
-    async def unhandled_exception_handler(_: Request, exc: Exception):
+    async def unhandled_exception_handler(request: Request, exc: Exception):
         logger.exception("unhandled_exception", error_type=type(exc).__name__)
         return _error_response(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
+            headers=_error_headers_for_request(request),
         )
 
     prefix = settings.api_prefix

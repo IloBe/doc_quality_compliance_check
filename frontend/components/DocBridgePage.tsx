@@ -14,6 +14,7 @@ import {
   submitBridgeHumanReview,
 } from '../lib/bridgeClient';
 import {
+  BridgeFailureGuidance,
   bridgeSteps,
   buildLogMessage,
   buildQualityGateSummary,
@@ -27,6 +28,7 @@ import {
   deriveRunControlItems,
   formatBridgeDateTime,
   inferBridgeDomainInfo,
+  mapBridgeFailureGuidance,
 } from '../lib/bridgeRunViewModel';
 import {
   LuTriangle,
@@ -69,6 +71,7 @@ const DocBridgePage = () => {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [bridgeError, setBridgeError] = useState<string | null>(null);
+  const [bridgeFailureGuidance, setBridgeFailureGuidance] = useState<BridgeFailureGuidance | null>(null);
   const [runStatusMessage, setRunStatusMessage] = useState<string | null>(null);
   const [runStatusTone, setRunStatusTone] = useState<'info' | 'success' | 'error'>('info');
   const [showRunIssuePopup, setShowRunIssuePopup] = useState(false);
@@ -79,11 +82,7 @@ const DocBridgePage = () => {
   const autoRunStarted = useRef(false);
 
   const useBackendBridge = String(process.env.NEXT_PUBLIC_BRIDGE_SOURCE || 'backend').trim().toLowerCase() !== 'demo';
-  const isRuntimeSelfCheckBlocked = Boolean(
-    bridgeError &&
-      (bridgeError.toLowerCase().includes('bridge_runtime_not_ready') ||
-        bridgeError.toLowerCase().includes('runtime self-check failed')),
-  );
+  const isRuntimeSelfCheckBlocked = bridgeFailureGuidance?.reasonCode === 'bridge_runtime_not_ready';
 
   useEffect(() => {
     let mounted = true;
@@ -111,6 +110,7 @@ const DocBridgePage = () => {
       setLogs([]);
       setDocumentLoadError(null);
       setBridgeError(null);
+      setBridgeFailureGuidance(null);
       setRunStatusMessage(null);
       setIsResolvingDocument(true);
 
@@ -360,6 +360,7 @@ const DocBridgePage = () => {
     setActiveStep(0);
     setLogs([]);
     setBridgeError(null);
+    setBridgeFailureGuidance(null);
     setRunStatusMessage('Bridge run started. Processing pipeline steps...');
     setRunStatusTone('info');
     setShowRunIssuePopup(false);
@@ -409,6 +410,8 @@ const DocBridgePage = () => {
         setRunStatusTone('success');
       }
     } catch (error) {
+      const guidance = mapBridgeFailureGuidance(error);
+      setBridgeFailureGuidance(guidance);
       const message = error instanceof Error ? error.message : 'Bridge run failed';
       setBridgeError(message);
       setRunStatusMessage(`Bridge run failed: ${message}`);
@@ -541,6 +544,21 @@ const DocBridgePage = () => {
       )}
 
       {bridgeError && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{bridgeError}</div>}
+
+      {bridgeFailureGuidance ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 space-y-2">
+          <div className="font-black uppercase tracking-widest">{bridgeFailureGuidance.title}</div>
+          <div>{bridgeFailureGuidance.message}</div>
+          <ul className="list-disc ml-4 space-y-1">
+            {bridgeFailureGuidance.actionPoints.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+          {bridgeFailureGuidance.correlationId ? (
+            <div className="font-mono text-[10px] text-amber-700">Correlation ID: {bridgeFailureGuidance.correlationId}</div>
+          ) : null}
+        </div>
+      ) : null}
 
       {runStatusMessage && (
         <div
@@ -1049,6 +1067,21 @@ const DocBridgePage = () => {
               <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 font-semibold break-words">
                 {bridgeError || 'Unknown bridge execution error.'}
               </div>
+              {bridgeFailureGuidance ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 space-y-2">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-amber-700">Action points</div>
+                  <ul className="list-disc ml-4 space-y-1 text-xs text-amber-900">
+                    {bridgeFailureGuidance.actionPoints.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                  {bridgeFailureGuidance.correlationId ? (
+                    <div className="font-mono text-[10px] text-amber-700">
+                      Correlation ID: {bridgeFailureGuidance.correlationId}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {isRuntimeSelfCheckBlocked ? (
                 <p className="text-xs text-neutral-600">
                   Recommended: open the runtime self-check endpoint, run migration initialization with py313_venv, and

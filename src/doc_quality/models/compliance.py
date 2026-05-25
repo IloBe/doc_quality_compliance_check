@@ -1,7 +1,7 @@
 """Pydantic models for compliance checks."""
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .model_policy import ActiveModelInfo
 
@@ -39,6 +39,53 @@ class AIActRole(str, Enum):
     DEPLOYER = "deployer"
     BOTH = "both"
     NOT_APPLICABLE = "not_applicable"
+
+
+class DataPrivacyClass(str, Enum):
+    """Privacy classification used for policy-controlled model execution."""
+
+    PERSONAL_DATA_POSSIBLE = "personal_data_possible"
+    NON_PERSONAL = "non_personal"
+    SCRUBBED_FALLBACK = "scrubbed_fallback"
+
+
+class InferenceLocation(str, Enum):
+    """Execution location selected by policy routing for one model step."""
+
+    ON_PREM = "on_prem"
+    EXTERNAL_FALLBACK = "external_fallback"
+
+
+class StepPolicyContract(BaseModel):
+    """Mandatory policy metadata for a model-using workflow step.
+
+    This contract turns privacy-routing rules into explicit, auditable data.
+    """
+
+    step_id: str = Field(min_length=3, max_length=120)
+    step_name: str = Field(min_length=3, max_length=120)
+    sensitivity_class: DataPrivacyClass = DataPrivacyClass.NON_PERSONAL
+    policy_rule_id: str = Field(min_length=5, max_length=120)
+    decision_reason: str = Field(min_length=10, max_length=500)
+    selected_inference_location: InferenceLocation
+    allowed_tools: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_contract_consistency(self) -> "StepPolicyContract":
+        """Enforce routing consistency for privacy-sensitive workloads."""
+        clean_tools = [tool.strip() for tool in self.allowed_tools if tool.strip()]
+        if len(set(clean_tools)) != len(clean_tools):
+            raise ValueError("allowed_tools values must be unique")
+        self.allowed_tools = clean_tools
+
+        if (
+            self.sensitivity_class == DataPrivacyClass.PERSONAL_DATA_POSSIBLE
+            and self.selected_inference_location != InferenceLocation.ON_PREM
+        ):
+            raise ValueError(
+                "personal_data_possible steps must use selected_inference_location='on_prem'"
+            )
+        return self
 
 
 class ComplianceRequirement(BaseModel):

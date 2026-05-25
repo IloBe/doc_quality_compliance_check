@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from enum import Enum
 
 from ..core.logging_config import get_logger
+from ..models.compliance import StepPolicyContract
+from .policy_contract_service import build_default_step_policy_contract
 
 logger = get_logger(__name__)
 
@@ -128,6 +130,24 @@ def build_local_sandbox_plan(*, model_provider: str, model_id: str) -> list[Sand
         steps=len(steps),
     )
     return steps
+
+
+def build_step_policy_contracts_for_sandbox_steps(
+    sandbox_steps: list[SandboxStepResult],
+) -> list[StepPolicyContract]:
+    """Build validated policy contracts for each bridge sandbox execution step."""
+    contracts: list[StepPolicyContract] = []
+    for step in sandbox_steps:
+        contract = build_default_step_policy_contract(
+            step_id=step.step_id,
+            step_name=f"bridge_{step.agent_id.value}",
+            processed_locally=step.processed_locally,
+            allowed_tools=["document_read", "compliance_rules", "audit_event_write"],
+        )
+        contracts.append(contract)
+
+    logger.info("bridge_step_policy_contracts_built", contracts=len(contracts))
+    return contracts
 
 
 def assess_privacy_violation(document_content: str) -> PrivacyViolationAssessment:

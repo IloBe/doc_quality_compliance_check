@@ -29,6 +29,39 @@ export interface BridgeRuntimeTopology {
   issues: string[];
 }
 
+export interface BridgeApiErrorShape {
+  status: number;
+  code: string;
+  errorCode: string;
+  reason?: string;
+  message: string;
+  details: string[];
+  actionPoints: string[];
+  correlationId?: string;
+}
+
+export class BridgeApiError extends Error implements BridgeApiErrorShape {
+  status: number;
+  code: string;
+  errorCode: string;
+  reason?: string;
+  details: string[];
+  actionPoints: string[];
+  correlationId?: string;
+
+  constructor(shape: BridgeApiErrorShape) {
+    super(shape.message);
+    this.name = 'BridgeApiError';
+    this.status = shape.status;
+    this.code = shape.code;
+    this.errorCode = shape.errorCode;
+    this.reason = shape.reason;
+    this.details = shape.details;
+    this.actionPoints = shape.actionPoints;
+    this.correlationId = shape.correlationId;
+  }
+}
+
 function isBackendMode(): boolean {
   const mode = String(process.env.NEXT_PUBLIC_BRIDGE_SOURCE || 'backend').trim().toLowerCase();
   return mode !== 'demo';
@@ -43,43 +76,81 @@ function buildApiUrl(path: string): string {
   return base ? `${base}${path}` : path;
 }
 
-async function parseErrorMessage(response: Response, fallback: string): Promise<string> {
+function readCorrelationId(response: Response): string | undefined {
+  const headersLike = (response as Response & { headers?: Headers }).headers;
+  if (!headersLike || typeof headersLike.get !== 'function') {
+    return undefined;
+  }
+  return (
+    headersLike.get('X-Correlation-ID')
+    || headersLike.get('x-correlation-id')
+    || undefined
+  );
+}
+
+async function parseBridgeApiError(response: Response, fallback: string): Promise<BridgeApiErrorShape> {
+  const fallbackStatusText = response.statusText || fallback;
+  const fallbackCode = response.status >= 400 && response.status < 500 ? 'request_error' : 'internal_error';
+  const shape: BridgeApiErrorShape = {
+    status: response.status,
+    code: fallbackCode,
+    errorCode: fallbackCode,
+    message: fallbackStatusText,
+    details: [],
+    actionPoints: [],
+    correlationId: readCorrelationId(response),
+  };
+
   try {
     const payload = await response.json() as {
       error?: {
         code?: string;
+        error_code?: string;
         message?: string;
         details?: string[];
+        action_points?: string[];
         reason?: string;
+        correlation_id?: string;
       };
       detail?: string | Array<{ msg?: string; loc?: Array<string | number> }>;
     };
 
     if (payload.error && typeof payload.error.message === 'string' && payload.error.message.trim().length > 0) {
-      const parts: string[] = [payload.error.message.trim()];
-      if (payload.error.reason) {
-        parts.push(`Reason: ${payload.error.reason}`);
-      }
-      if (Array.isArray(payload.error.details) && payload.error.details.length > 0) {
-        parts.push(payload.error.details.join(' '));
-      }
-      return parts.join(' ');
+      shape.message = payload.error.message.trim();
+      shape.code = String(payload.error.code || shape.code);
+      shape.errorCode = String(payload.error.error_code || payload.error.code || shape.errorCode);
+      shape.reason = payload.error.reason ? String(payload.error.reason) : undefined;
+      shape.details = Array.isArray(payload.error.details) ? payload.error.details.map((item) => String(item)) : [];
+      shape.actionPoints = Array.isArray(payload.error.action_points)
+        ? payload.error.action_points.map((item) => String(item))
+        : [];
+      shape.correlationId = payload.error.correlation_id
+        ? String(payload.error.correlation_id)
+        : shape.correlationId;
+      return shape;
     }
 
     if (typeof payload.detail === 'string' && payload.detail.trim().length > 0) {
-      return payload.detail;
+      shape.message = payload.detail;
+      return shape;
     }
 
     if (Array.isArray(payload.detail) && payload.detail.length > 0) {
       const first = payload.detail[0];
       const location = Array.isArray(first.loc) ? first.loc.join('.') : 'request';
       const reason = first.msg || 'validation error';
-      return `${location}: ${reason}`;
+      shape.message = `${location}: ${reason}`;
+      return shape;
     }
   } catch {
     // Fall back to status text.
   }
-  return response.statusText || fallback;
+  return shape;
+}
+
+async function parseBridgeError(response: Response, fallback: string): Promise<BridgeApiError> {
+  const shape = await parseBridgeApiError(response, fallback);
+  return new BridgeApiError(shape);
 }
 
 export async function reloadBridgeAgents(): Promise<ReloadBridgeAgentsResult> {
@@ -89,8 +160,11 @@ export async function reloadBridgeAgents(): Promise<ReloadBridgeAgentsResult> {
       credentials: 'include',
     });
     if (!response.ok) {
-      const detail = await parseErrorMessage(response, 'Failed to reload bridge agents.');
-      throw new Error(`Failed to reload bridge agents: ${detail}`);
+      const error = await parseBridgeError(response, 'Failed to reload bridge agents.');
+      throw new BridgeApiError({
+        ...error,
+        message: `Failed to reload bridge agents: ${error.message}`,
+      });
     }
 
     const payload = await response.json() as {
@@ -133,8 +207,11 @@ export async function fetchBridgeRuntimeTopology(): Promise<BridgeRuntimeTopolog
     });
 
     if (!response.ok) {
-      const detail = await parseErrorMessage(response, 'Failed to load bridge runtime topology.');
-      throw new Error(`Failed to load bridge runtime topology: ${detail}`);
+      const error = await parseBridgeError(response, 'Failed to load bridge runtime topology.');
+      throw new BridgeApiError({
+        ...error,
+        message: `Failed to load bridge runtime topology: ${error.message}`,
+      });
     }
 
     return await response.json() as BridgeRuntimeTopology;
@@ -299,8 +376,11 @@ export async function fetchBridgeHumanReview(_runId: string): Promise<BridgeHuma
     });
 
     if (!response.ok) {
-      const detail = await parseErrorMessage(response, 'Failed to load bridge human review.');
-      throw new Error(`Failed to load bridge human review: ${detail}`);
+      const error = await parseBridgeError(response, 'Failed to load bridge human review.');
+      throw new BridgeApiError({
+        ...error,
+        message: `Failed to load bridge human review: ${error.message}`,
+      });
     }
 
     return await response.json() as BridgeHumanReviewResponse;
@@ -329,8 +409,11 @@ export async function submitBridgeHumanReview(
     });
 
     if (!response.ok) {
-      const detail = await parseErrorMessage(response, 'Failed to submit bridge human review.');
-      throw new Error(`Failed to submit bridge human review: ${detail}`);
+      const error = await parseBridgeError(response, 'Failed to submit bridge human review.');
+      throw new BridgeApiError({
+        ...error,
+        message: `Failed to submit bridge human review: ${error.message}`,
+      });
     }
 
     return await response.json() as BridgeHumanReviewResponse;
@@ -362,8 +445,11 @@ export async function executeBridgeEuAiActRun(documentId: string, _domainInfo?: 
     });
 
     if (!response.ok) {
-      const detail = await parseErrorMessage(response, 'Failed to execute bridge run.');
-      throw new Error(`Failed to execute bridge run: ${detail}`);
+      const error = await parseBridgeError(response, 'Failed to execute bridge run.');
+      throw new BridgeApiError({
+        ...error,
+        message: `Failed to execute bridge run: ${error.message}`,
+      });
     }
 
     return await response.json() as BridgeRunResponse;
@@ -395,8 +481,11 @@ export async function fetchBridgeEuAiActAlert(_documentId: string): Promise<Brid
     });
 
     if (!response.ok) {
-      const detail = await parseErrorMessage(response, 'Failed to load bridge alert.');
-      throw new Error(`Failed to load bridge alert: ${detail}`);
+      const error = await parseBridgeError(response, 'Failed to load bridge alert.');
+      throw new BridgeApiError({
+        ...error,
+        message: `Failed to load bridge alert: ${error.message}`,
+      });
     }
 
     const payload = await response.json() as {

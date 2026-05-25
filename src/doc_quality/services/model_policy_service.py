@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from ..core.config import get_settings
 from ..core.logging_config import get_logger
 from ..core.security import sanitize_text
+from ..models.compliance import DataPrivacyClass, InferenceLocation, StepPolicyContract
 from ..models.model_policy import (
     ActiveModelInfo,
     ActiveModelResponse,
@@ -22,6 +23,53 @@ from ..models.orm import ModelPolicyConfigORM
 logger = get_logger(__name__)
 
 _POLICY_ROW_ID = "default"
+
+
+class PolicyRoutingDeniedError(RuntimeError):
+    """Raised when fail-closed routing policy denies model execution."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        action_points: list[str] | None = None,
+        reason: str = "bridge_policy_routing_denied",
+    ) -> None:
+        super().__init__(message)
+        self.action_points = action_points or []
+        self.reason = reason
+
+
+class PolicyMetadataPersistenceError(RuntimeError):
+    """Raised when required policy evidence cannot be persisted safely."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        action_points: list[str] | None = None,
+        reason: str = "bridge_policy_metadata_persistence_failed",
+    ) -> None:
+        super().__init__(message)
+        self.action_points = action_points or []
+        self.reason = reason
+
+
+class OnPremDependencyUnavailableError(RuntimeError):
+    """Raised when bridge runtime dependencies are not ready for safe execution."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        action_points: list[str] | None = None,
+        details: list[str] | None = None,
+        reason: str = "bridge_runtime_not_ready",
+    ) -> None:
+        super().__init__(message)
+        self.action_points = action_points or []
+        self.details = details or []
+        self.reason = reason
 
 
 def _ensure_policy_table_exists(db: Session) -> None:
@@ -233,4 +281,58 @@ def get_active_model_response(db: Session) -> ActiveModelResponse:
         active_model=resolve_active_model(db),
         policy_updated_at=policy.updated_at,
         policy_updated_by=policy.updated_by,
+    )
+
+
+def enforce_fail_closed_step_routing(
+    *,
+    active_model: ActiveModelInfo,
+    step_policy_contracts: list[StepPolicyContract],
+    allow_external_fallback: bool,
+) -> None:
+    """Enforce fail-closed model routing for privacy-sensitive step contracts.
+
+    Rules:
+    - personal_data_possible requires on-prem model provider and on-prem route.
+    - external fallback is denied unless explicitly allowed.
+    - external fallback route is valid only for scrubbed_fallback classification.
+    """
+    provider = (active_model.provider or "").strip().lower()
+    on_prem_provider = provider == "ollama"
+
+    for contract in step_policy_contracts:
+        if contract.sensitivity_class == DataPrivacyClass.PERSONAL_DATA_POSSIBLE:
+            if contract.selected_inference_location != InferenceLocation.ON_PREM or not on_prem_provider:
+                raise PolicyRoutingDeniedError(
+                    "Fail-closed routing denied: personal-data-possible step cannot run without on-prem execution.",
+                    action_points=[
+                        "Set active model provider to on-prem ollama.",
+                        "Ensure selected_inference_location is 'on_prem' for all personal-data-possible steps.",
+                        "Do not use external fallback for personal-data-possible workloads.",
+                    ],
+                )
+
+        if contract.selected_inference_location == InferenceLocation.EXTERNAL_FALLBACK:
+            if not allow_external_fallback:
+                raise PolicyRoutingDeniedError(
+                    "Fail-closed routing denied: external fallback is disabled by bridge egress policy.",
+                    action_points=[
+                        "Use on-prem execution for this workflow run.",
+                        "Enable controlled fallback only through approved policy change.",
+                    ],
+                )
+            if contract.sensitivity_class != DataPrivacyClass.SCRUBBED_FALLBACK:
+                raise PolicyRoutingDeniedError(
+                    "Fail-closed routing denied: external fallback requires scrubbed_fallback classification.",
+                    action_points=[
+                        "Reclassify step as scrubbed_fallback only after data scrubbing.",
+                        "Keep non-scrubbed steps on-prem.",
+                    ],
+                )
+
+    logger.info(
+        "step_routing_fail_closed_passed",
+        provider=provider or "unknown",
+        allow_external_fallback=allow_external_fallback,
+        contracts=len(step_policy_contracts),
     )

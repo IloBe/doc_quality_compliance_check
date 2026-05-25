@@ -13,6 +13,7 @@ Status legend: `Not Started` | `In Progress` | `Blocked` | `Done`
 | Sprint 3 | Authorization matrix and route hardening | Backend Eng | Done |
 | Sprint 4 | Error disclosure minimization + recovery controls | Backend Eng | Done |
 | Sprint 5 | Security verification tests and CI gate prep | Backend Eng | Done |
+| Sprint 6 | Privacy step contract enforcement + routing hardening | Backend Eng + QA + Frontend | Not Started |
 
 ## Detailed Checklist
 
@@ -36,3 +37,13 @@ Status legend: `Not Started` | `In Progress` | `Blocked` | `Done`
 | 5.2 | Add rate-limit/lockout tests | Sprint 5 | Backend Eng | Done | `tests/test_auth_rate_limit_api.py` |
 | 5.3 | Add recovery token leakage policy tests | Sprint 5 | Backend Eng | Done | `tests/test_auth_recovery_api.py` |
 | 5.4 | Add standardized error envelope tests | Sprint 5 | Backend Eng | Done | `tests/test_error_envelope_api.py` |
+| 6.1 | Implement mandatory step policy contract for model steps | Sprint 6 | Backend Eng | Not Started | `project-context/2.build/phase1_privacy_step_contract_handoff.md` |
+| 6.2 | Enforce fail-closed routing for personal-data-possible workloads | Sprint 6 | Backend Eng | Not Started | `project-context/2.build/phase1_privacy_step_contract_handoff.md` |
+| 6.3 | Persist policy/routing audit evidence and actionable error codes | Sprint 6 | Backend Eng | Not Started | `project-context/2.build/phase1_privacy_step_contract_handoff.md` |
+| 6.4 | Add backend integration tests for policy/routing conformance | Sprint 6 | Backend Eng + QA | Not Started | `project-context/2.build/phase1_privacy_step_contract_handoff.md` |
+| 6.5 | Add frontend failure UX messages with action points (existing style) | Sprint 6 | Frontend Eng | Not Started | `project-context/2.build/phase1_privacy_step_contract_handoff.md` |
+| 6.6 | Add env-example conformance checks to CI quality gate | Sprint 6 | QA + DevOps | Not Started | `project-context/2.build/phase1_privacy_step_contract_handoff.md` |
+
+## Sprint 6 Handoff Reference
+
+Detailed implementation tickets, SOLID constraints, testing scope, and release criteria are documented in `project-context/2.build/phase1_privacy_step_contract_handoff.md`.

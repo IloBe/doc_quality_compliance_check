@@ -7,7 +7,13 @@ import base64
 from fastapi.testclient import TestClient
 
 from src.doc_quality.api.main import app
+from src.doc_quality.core.config import get_settings
 from src.doc_quality.core.database import get_db
+
+
+def _make_ascii_base64_payload(size_bytes: int) -> str:
+    """Build deterministic base64 payload with exact decoded byte size."""
+    return base64.b64encode(("x" * size_bytes).encode("utf-8")).decode("ascii")
 
 
 def test_protected_route_rejects_invalid_api_key(test_db_session) -> None:
@@ -90,10 +96,51 @@ def test_end_to_end_document_to_finding_to_audit(client, sample_arc42_content: s
     assert payload["trace_id"] == "trace-integration-1"
 
 
+def test_extract_text_allows_payload_below_size_limit(client) -> None:
+    """Skills extract endpoint should accept content just below configured limit."""
+    max_file_size_mb = get_settings().max_file_size_mb
+    max_bytes = max_file_size_mb * 1024 * 1024
+    near_limit_base64 = _make_ascii_base64_payload(max_bytes - 1)
+
+    response = client.post(
+        "/api/v1/skills/extract_text",
+        json={
+            "filename": "near-limit.txt",
+            "content_base64": near_limit_base64,
+            "content_type": "text/plain",
+            "store_document": False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["filename"] == "near-limit.txt"
+
+
+def test_extract_text_allows_payload_at_exact_size_limit(client) -> None:
+    """Skills extract endpoint should accept payload exactly at configured limit."""
+    max_file_size_mb = get_settings().max_file_size_mb
+    max_bytes = max_file_size_mb * 1024 * 1024
+    exact_limit_base64 = _make_ascii_base64_payload(max_bytes)
+
+    response = client.post(
+        "/api/v1/skills/extract_text",
+        json={
+            "filename": "exact-limit.txt",
+            "content_base64": exact_limit_base64,
+            "content_type": "text/plain",
+            "store_document": False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["filename"] == "exact-limit.txt"
+
+
 def test_extract_text_enforces_size_limit(client) -> None:
-    """Skills extract endpoint should enforce configured file-size limit."""
-    oversized_text = "x" * (11 * 1024 * 1024)
-    oversized_base64 = base64.b64encode(oversized_text.encode("utf-8")).decode("ascii")
+    """Skills extract endpoint should reject payload above configured file-size limit."""
+    max_file_size_mb = get_settings().max_file_size_mb
+    max_bytes = max_file_size_mb * 1024 * 1024
+    oversized_base64 = _make_ascii_base64_payload(max_bytes + 1)
 
     response = client.post(
         "/api/v1/skills/extract_text",

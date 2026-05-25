@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # Security
     secret_key: str = "change-me-in-production"
     allowed_file_types: list[str] = [".pdf", ".docx", ".md", ".txt"]
-    max_file_size_mb: int = 10
+    max_file_size_mb: int = 25
     session_cookie_name: str = "dq_session"
     session_cookie_secure: bool = False
     # Global request rate limiting

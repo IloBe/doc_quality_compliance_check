@@ -1,5 +1,6 @@
 import { getGroupedStandards } from './complianceStandards';
 import { formatDateTime } from './dateTime';
+import { BridgeApiError } from './bridgeClient';
 
 export function buildBridgeRunStatusClass(_status: string): string {
   return 'text-neutral-700';
@@ -89,6 +90,103 @@ export type BridgeMitigationItem = {
   implementationStatus?: 'implemented' | 'proposed';
   implementationNote?: string;
 };
+
+export type BridgeFailureGuidance = {
+  title: string;
+  reasonCode?: string;
+  errorCode?: string;
+  correlationId?: string;
+  message: string;
+  actionPoints: string[];
+};
+
+const DEFAULT_FAILURE_ACTION_POINTS: string[] = [
+  'Retry the bridge run after reviewing runtime status and policy settings.',
+  'Escalate to the platform operator if this failure persists.',
+];
+
+const ROUTING_DENIED_ACTION_POINTS: string[] = [
+  'Set active model provider to local ollama for personal-data-possible processing.',
+  "Ensure selected_inference_location is 'on_prem' for sensitive steps.",
+  'Use external fallback only for scrubbed_fallback workloads when policy allows it.',
+];
+
+const CONTRACT_INVALID_ACTION_POINTS: string[] = [
+  'Ensure each step defines sensitivity_class, policy_rule_id, and selected_inference_location.',
+  "Use canonical policy namespace values (for example: 'policy.bridge.*').",
+  'Retry the run after correcting bridge policy metadata inputs.',
+];
+
+const RUNTIME_NOT_READY_ACTION_POINTS: string[] = [
+  'Open runtime self-check and resolve reported readiness issues first.',
+  'Confirm bridge agent topology and required database migrations are healthy.',
+  'Retry the bridge run only after self-check reports ready.',
+];
+
+export function mapBridgeFailureGuidance(error: unknown): BridgeFailureGuidance {
+  const fallback: BridgeFailureGuidance = {
+    title: 'Bridge execution failed',
+    message: error instanceof Error ? error.message : 'Bridge workflow execution failed unexpectedly.',
+    actionPoints: DEFAULT_FAILURE_ACTION_POINTS,
+  };
+
+  if (!(error instanceof BridgeApiError)) {
+    return fallback;
+  }
+
+  const reason = (error.reason || '').trim().toLowerCase();
+  const mappedActionPoints = error.actionPoints.length > 0
+    ? error.actionPoints
+    : reason === 'bridge_policy_routing_denied'
+      ? ROUTING_DENIED_ACTION_POINTS
+      : reason === 'bridge_step_policy_invalid'
+        ? CONTRACT_INVALID_ACTION_POINTS
+        : reason === 'bridge_runtime_not_ready'
+          ? RUNTIME_NOT_READY_ACTION_POINTS
+          : DEFAULT_FAILURE_ACTION_POINTS;
+
+  if (reason === 'bridge_policy_routing_denied') {
+    return {
+      title: 'Fail-closed routing denied this run',
+      reasonCode: error.reason,
+      errorCode: error.errorCode,
+      correlationId: error.correlationId,
+      message: error.message,
+      actionPoints: mappedActionPoints,
+    };
+  }
+
+  if (reason === 'bridge_step_policy_invalid') {
+    return {
+      title: 'Bridge step policy contract is invalid',
+      reasonCode: error.reason,
+      errorCode: error.errorCode,
+      correlationId: error.correlationId,
+      message: error.message,
+      actionPoints: mappedActionPoints,
+    };
+  }
+
+  if (reason === 'bridge_runtime_not_ready') {
+    return {
+      title: 'Bridge runtime is not ready',
+      reasonCode: error.reason,
+      errorCode: error.errorCode,
+      correlationId: error.correlationId,
+      message: error.message,
+      actionPoints: mappedActionPoints,
+    };
+  }
+
+  return {
+    title: 'Bridge execution failed',
+    reasonCode: error.reason,
+    errorCode: error.errorCode,
+    correlationId: error.correlationId,
+    message: error.message,
+    actionPoints: mappedActionPoints,
+  };
+}
 
 const groupedStandards = getGroupedStandards();
 const standardCatalog = [...groupedStandards.alwaysOn, ...Object.values(groupedStandards.conditionalByCategory).flat()];

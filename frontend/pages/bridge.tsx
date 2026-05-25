@@ -7,6 +7,7 @@ import BridgeSystemStatusCard from '../components/bridge/BridgeSystemStatusCard'
 import { useCan } from '../lib/authContext';
 import { bridgeOverviewStats } from '../lib/bridgeOverview';
 import { fetchBridgeRuntimeTopology, BridgeRuntimeTopology, reloadBridgeAgents } from '../lib/bridgeClient';
+import { mapBridgeFailureGuidance, BridgeFailureGuidance } from '../lib/bridgeRunViewModel';
 import { listDocuments } from '../lib/documentRetrievalClient';
 import { ACCEPTED_UPLOAD_TYPES_LABEL, uploadDocument, validateUploadFileType } from '../lib/documentUploadClient';
 import { Document, useMockStore } from '../lib/mockStore';
@@ -32,9 +33,11 @@ const BridgePage = () => {
    const [isReloading, setIsReloading] = useState(false);
    const [reloadInfo, setReloadInfo] = useState<string | null>(null);
    const [reloadError, setReloadError] = useState<string | null>(null);
+   const [reloadFailureGuidance, setReloadFailureGuidance] = useState<BridgeFailureGuidance | null>(null);
    const [runtimeTopology, setRuntimeTopology] = useState<BridgeRuntimeTopology | null>(null);
    const [isLoadingRuntimeTopology, setIsLoadingRuntimeTopology] = useState(false);
    const [runtimeTopologyError, setRuntimeTopologyError] = useState<string | null>(null);
+   const [runtimeFailureGuidance, setRuntimeFailureGuidance] = useState<BridgeFailureGuidance | null>(null);
 
    const useBackendBridge = String(process.env.NEXT_PUBLIC_BRIDGE_SOURCE || 'backend').trim().toLowerCase() !== 'demo';
    const canRunBridge = useCan('bridge.run');
@@ -95,10 +98,12 @@ const BridgePage = () => {
                return;
             }
             setRuntimeTopology(payload);
+            setRuntimeFailureGuidance(null);
          } catch (error) {
             if (!mounted) {
                return;
             }
+            setRuntimeFailureGuidance(mapBridgeFailureGuidance(error));
             const message = error instanceof Error ? error.message : 'Failed to load bridge runtime topology.';
             setRuntimeTopologyError(message);
          } finally {
@@ -123,6 +128,7 @@ const BridgePage = () => {
       setIsReloading(true);
       setReloadInfo(null);
       setReloadError(null);
+      setReloadFailureGuidance(null);
 
       if (!useBackendBridge) {
          setReloadInfo('Demo mode: agent runtime was refreshed from mock bridge topology.');
@@ -139,7 +145,9 @@ const BridgePage = () => {
          const topology = await fetchBridgeRuntimeTopology();
          setRuntimeTopology(topology);
          setRuntimeTopologyError(null);
+         setRuntimeFailureGuidance(null);
       } catch (error) {
+         setReloadFailureGuidance(mapBridgeFailureGuidance(error));
          const message = error instanceof Error ? error.message : 'Failed to reload bridge agents.';
          setReloadError(message);
       } finally {
@@ -336,6 +344,35 @@ const BridgePage = () => {
          {reloadError ? (
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
                {reloadError}
+            </div>
+         ) : null}
+
+         {reloadFailureGuidance ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 space-y-2">
+               <div className="font-black uppercase tracking-widest">{reloadFailureGuidance.title}</div>
+               <div>{reloadFailureGuidance.message}</div>
+               <ul className="list-disc ml-4 space-y-1">
+                  {reloadFailureGuidance.actionPoints.map((item) => (
+                     <li key={item}>{item}</li>
+                  ))}
+               </ul>
+            </div>
+         ) : null}
+
+         {runtimeFailureGuidance ? (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900 space-y-2">
+               <div className="font-black uppercase tracking-widest">{runtimeFailureGuidance.title}</div>
+               <div>{runtimeFailureGuidance.message}</div>
+               <ul className="list-disc ml-4 space-y-1">
+                  {runtimeFailureGuidance.actionPoints.map((item) => (
+                     <li key={item}>{item}</li>
+                  ))}
+               </ul>
+               {runtimeFailureGuidance.correlationId ? (
+                  <div className="font-mono text-[10px] text-blue-700">
+                     Correlation ID: {runtimeFailureGuidance.correlationId}
+                  </div>
+               ) : null}
             </div>
          ) : null}
 

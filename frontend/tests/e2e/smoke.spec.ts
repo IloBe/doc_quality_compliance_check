@@ -120,4 +120,53 @@ test.describe('Critical browser smoke', () => {
     ).toBeVisible();
     await expect(page.getByRole('button', { name: /open bridge run/i })).toBeDisabled();
   });
+
+  test('doc bridge page shows actionable policy denial guidance', async ({ page }) => {
+    await mockAuthenticatedSession(page, [
+      {
+        id: 'DOC-BRIDGE-FAIL-1',
+        title: 'policy-denial.md',
+        type: 'sop',
+      },
+    ]);
+
+    await page.route('**/api/v1/bridge/alerts/eu-ai-act/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          regulatory_update: {
+            requires_document_update: false,
+            message: 'No requirement drift detected.',
+          },
+        }),
+      });
+    });
+
+    await page.route('**/api/v1/bridge/run/eu-ai-act', async (route) => {
+      await route.fulfill({
+        status: 422,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'validation_error',
+            error_code: 'validation_error',
+            reason: 'bridge_policy_routing_denied',
+            message: 'Bridge fail-closed routing denied this workflow run.',
+            action_points: [
+              'Set active model provider to on-prem ollama.',
+              "Ensure selected_inference_location is 'on_prem' for sensitive steps.",
+            ],
+            correlation_id: 'corr-smoke-bridge-denied',
+          },
+        }),
+      });
+    });
+
+    await page.goto('/doc/DOC-BRIDGE-FAIL-1/bridge');
+
+    await expect(page.getByText(/fail-closed routing denied this run/i)).toBeVisible();
+    await expect(page.getByText(/set active model provider to on-prem ollama/i).first()).toBeVisible();
+    await expect(page.getByText(/correlation id: corr-smoke-bridge-denied/i).first()).toBeVisible();
+  });
 });

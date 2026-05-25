@@ -23,6 +23,7 @@ os.environ.setdefault("AUTH_MVP_PASSWORD", "CHANGE_ME_BEFORE_USE")  # nosec B105
 # Keep global API limiter off for deterministic pytest runs.
 # Dedicated rate-limit tests enable it explicitly via monkeypatch.
 os.environ.setdefault("GLOBAL_RATE_LIMIT_ENABLED", "false")
+os.environ.setdefault("MAX_FILE_SIZE_MB", "25")
 os.environ.setdefault("BRIDGE_RUNTIME_TOPOLOGY_SOURCE", "metadata")
 os.environ.setdefault("BRIDGE_RUNTIME_TOPOLOGY_ALLOW_METADATA_FALLBACK", "true")
 

@@ -12,14 +12,21 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from ...core.config import get_settings
 from ...core.database import get_db
+from ...core.logging_config import get_logger
 from ...core.session_auth import AuthenticatedUser, require_roles
-from ...models.compliance import ProductDomainInfo
+from ...models.compliance import InferenceLocation, ProductDomainInfo, StepPolicyContract
 from ...models.model_policy import ActiveModelInfo
 from ...models.orm import AuditEventORM, BridgeHumanReviewORM, FindingORM
 from ...services.model_policy_service import resolve_active_model
+from ...services.model_policy_service import (
+    OnPremDependencyUnavailableError,
+    PolicyMetadataPersistenceError,
+    PolicyRoutingDeniedError,
+)
 from ...services.governance_service import list_applicable_governance_controls_for_bridge
 from ...services.compliance_checker import (
     check_eu_ai_act_compliance,
@@ -36,7 +43,9 @@ from ...services.bridge_privacy_service import (
 from ...services.bridge_mitigation_service import build_bridge_mitigation_recommendations
 from ...services.bridge_orchestrator_service import (
     BridgeRuntimeTopologyAssessment,
+    build_and_validate_step_policy_contracts,
     build_runtime_topology_assessment,
+    enforce_bridge_policy_routing,
 )
 from ...services.skills_service import get_document
 from ...services.skills_service import (
@@ -47,6 +56,7 @@ from ...services.skills_service import (
 )
 
 router = APIRouter(prefix="/bridge", tags=["bridge"])
+logger = get_logger(__name__)
 
 
 class BridgeRunRequest(BaseModel):
@@ -541,6 +551,90 @@ def _enforce_local_sandbox_policy(
             )
 
 
+def _build_and_validate_step_policy_contracts(*, sandbox_steps: list) -> list[StepPolicyContract]:
+    """Build and validate mandatory policy metadata for each bridge model step."""
+    return build_and_validate_step_policy_contracts(sandbox_steps=sandbox_steps)
+
+
+def _derive_fallback_reason_code(*, step_policy_contracts: list[StepPolicyContract]) -> str | None:
+    """Return explicit fallback reason code when external fallback routing is selected."""
+    has_external_fallback = any(
+        item.selected_inference_location == InferenceLocation.EXTERNAL_FALLBACK
+        for item in step_policy_contracts
+    )
+    if not has_external_fallback:
+        return None
+    return "external_fallback_selected"
+
+
+def _enforce_fail_closed_step_routing(
+    *,
+    db: Session,
+    run_id: str,
+    document_id: str,
+    actor_email: str,
+    actor_org: str,
+    active_model: ActiveModelInfo,
+    step_policy_contracts: list[StepPolicyContract],
+) -> None:
+    """Enforce fail-closed routing and persist denied-run evidence when blocked."""
+    settings = get_settings()
+    allow_external_fallback = settings.bridge_egress_policy == "allow_controlled"
+
+    try:
+        enforce_bridge_policy_routing(
+            active_model=active_model,
+            step_policy_contracts=step_policy_contracts,
+            allow_external_fallback=allow_external_fallback,
+        )
+    except PolicyRoutingDeniedError as exc:
+        logger.warning(
+            "bridge_step_routing_denied",
+            reason="bridge_policy_routing_denied",
+            details=str(exc),
+            provider=active_model.provider,
+            run_id=run_id,
+        )
+
+        db.add(
+            AuditEventORM(
+                event_id=str(uuid.uuid4()),
+                tenant_id="default",
+                org_id=actor_org,
+                project_id=None,
+                event_time=_now_utc(),
+                event_type="bridge.run.policy_routing.denied",
+                actor_type="user",
+                actor_id=actor_email,
+                subject_type="document",
+                subject_id=document_id,
+                trace_id=None,
+                correlation_id=run_id,
+                payload={
+                    "run_id": run_id,
+                    "reason": exc.reason,
+                    "fallback_reason_code": _derive_fallback_reason_code(step_policy_contracts=step_policy_contracts),
+                    "message": str(exc),
+                    "action_points": list(exc.action_points),
+                    "active_model": active_model.model_dump(mode="json"),
+                    "step_policy_contracts": [item.model_dump(mode="json") for item in step_policy_contracts],
+                },
+            )
+        )
+        try:
+            db.commit()
+        except SQLAlchemyError as db_exc:
+            db.rollback()
+            raise PolicyMetadataPersistenceError(
+                "Could not persist deny-path bridge policy evidence.",
+                action_points=[
+                    "Retry bridge run after database health is restored.",
+                    "Verify audit_events table write permissions and schema readiness.",
+                ],
+            ) from db_exc
+        raise
+
+
 def _build_regulatory_update_status(db: Session, document_id: str) -> RegulatoryUpdateStatus:
     current_signature = get_eu_ai_act_requirements_signature()
     current_version = get_eu_ai_act_requirements_version()
@@ -625,6 +719,16 @@ async def run_bridge_eu_ai_act(
         model_id=active_model.model_id,
     )
     _enforce_local_sandbox_policy(active_model=active_model, sandbox_steps=sandbox_steps)
+    step_policy_contracts = _build_and_validate_step_policy_contracts(sandbox_steps=sandbox_steps)
+    _enforce_fail_closed_step_routing(
+        db=db,
+        run_id=run_id,
+        document_id=request.document_id,
+        actor_email=user.email,
+        actor_org=user.org,
+        active_model=active_model,
+        step_policy_contracts=step_policy_contracts,
+    )
     runtime_check = _build_bridge_runtime_self_check(
         db=db,
         active_model=active_model,
@@ -638,13 +742,10 @@ async def run_bridge_eu_ai_act(
             "Ensure active model provider is ollama for all bridge agent steps.",
             "Ensure orchestrator topology proof confirms one healthy containerized sandbox per bridge agent.",
         ]
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "message": "Bridge runtime self-check failed. Bridge status is BLOCKED until readiness checks pass.",
-                "details": [*action_points, *runtime_check.issues],
-                "reason": "bridge_runtime_not_ready",
-            },
+        raise OnPremDependencyUnavailableError(
+            "Bridge runtime self-check failed. Bridge status is BLOCKED until readiness checks pass.",
+            action_points=action_points,
+            details=runtime_check.issues,
         )
 
     privacy_assessment = assess_privacy_violation(document.extracted_text)
@@ -844,6 +945,7 @@ async def run_bridge_eu_ai_act(
             }
             for item in sandbox_steps
         ],
+        "step_policy_contracts": [item.model_dump(mode="json") for item in step_policy_contracts],
         "runtime_topology": (
             runtime_check.topology.model_dump(mode="json")
             if runtime_check.topology is not None
@@ -898,6 +1000,8 @@ async def run_bridge_eu_ai_act(
                     }
                     for item in sandbox_steps
                 ],
+                "step_policy_contracts": [item.model_dump(mode="json") for item in step_policy_contracts],
+                "fallback_reason_code": _derive_fallback_reason_code(step_policy_contracts=step_policy_contracts),
                 "privacy_violation": privacy_result.model_dump(mode="json"),
                 "runtime_topology": (
                     runtime_check.topology.model_dump(mode="json")
@@ -946,6 +1050,8 @@ async def run_bridge_eu_ai_act(
                     }
                     for item in sandbox_steps
                 ],
+                "step_policy_contracts": [item.model_dump(mode="json") for item in step_policy_contracts],
+                "fallback_reason_code": _derive_fallback_reason_code(step_policy_contracts=step_policy_contracts),
                 "privacy_violation": privacy_result.model_dump(mode="json"),
                 "runtime_topology": (
                     runtime_check.topology.model_dump(mode="json")
