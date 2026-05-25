@@ -74,17 +74,20 @@ const BridgePage = () => {
       };
    }, [addDocument, documents]);
 
-   useEffect(() => {
-      const queryDocId = typeof router.query.docId === 'string' ? router.query.docId : '';
-      if (queryDocId) {
-         setSelectedDocumentId(queryDocId);
-         return;
-      }
+   const queryDocId = useMemo(
+      () => (typeof router.query.docId === 'string' ? router.query.docId : ''),
+      [router.query.docId],
+   );
 
-      if (!selectedDocumentId && documents.length > 0) {
-         setSelectedDocumentId(documents[0].id);
+   const resolvedSelectedDocumentId = useMemo(() => {
+      if (queryDocId) {
+         return queryDocId;
       }
-   }, [documents, router.query.docId, selectedDocumentId]);
+      if (selectedDocumentId) {
+         return selectedDocumentId;
+      }
+      return documents[0]?.id || '';
+   }, [documents, queryDocId, selectedDocumentId]);
 
    useEffect(() => {
       let mounted = true;
@@ -120,8 +123,8 @@ const BridgePage = () => {
    }, []);
 
    const selectedDocument = useMemo(
-      () => documents.find((item) => item.id === selectedDocumentId) || null,
-      [documents, selectedDocumentId],
+      () => documents.find((item) => item.id === resolvedSelectedDocumentId) || null,
+      [documents, resolvedSelectedDocumentId],
    );
 
    const handleReloadAgents = async () => {
@@ -301,12 +304,12 @@ const BridgePage = () => {
 
             {documents.length === 0 && !isLoadingDocuments ? (
                <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
-                  No documents available. Select a local document with "Select Local File" or upload/analyze a document in Document Hub.
+                  No documents available. Select a local document with &quot;Select Local File&quot; or upload/analyze a document in Document Hub.
                </div>
             ) : (
                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                   {documents.map((item) => {
-                     const isActive = selectedDocumentId === item.id;
+                     const isActive = resolvedSelectedDocumentId === item.id;
                      return (
                         <button
                            key={item.id}
