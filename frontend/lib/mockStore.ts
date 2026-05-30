@@ -30,6 +30,8 @@ export interface ExportJob {
 
 export interface BridgeRun {
   id: string;
+  documentId?: string;
+  documentTitle?: string;
   product?: string;
   status: string;
   startedAt?: string;

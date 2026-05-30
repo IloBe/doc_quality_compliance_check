@@ -71,6 +71,12 @@ const DocumentHubPage = ({ eyebrow = 'Home' }: DocumentHubPageProps) => {
     const loadPersistentDocuments = async () => {
       setIsLoadingPersistent(true);
       const result = await listDocuments();
+      if (!result.ok) {
+        setActionError(result.message || 'Unable to load persisted documents from backend.');
+        setActionInfo(null);
+        setIsLoadingPersistent(false);
+        return;
+      }
       if (result.ok && result.documents.length > 0) {
         // Add persisted documents to the mock store if not already present
         result.documents.forEach((doc) => {

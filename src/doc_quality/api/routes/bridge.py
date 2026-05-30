@@ -1,6 +1,8 @@
 """Bridge run endpoints for production-grade compliance execution."""
 from __future__ import annotations
 
+import base64
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 import uuid
@@ -8,7 +10,7 @@ from typing import Any
 
 from alembic.config import Config as AlembicConfig
 from alembic.script import ScriptDirectory
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
@@ -18,9 +20,10 @@ from ...core.config import get_settings
 from ...core.database import get_db
 from ...core.logging_config import get_logger
 from ...core.session_auth import AuthenticatedUser, require_roles
+from ...core.tenant_scope import DEFAULT_TENANT_ID
 from ...models.compliance import InferenceLocation, ProductDomainInfo, StepPolicyContract
 from ...models.model_policy import ActiveModelInfo
-from ...models.orm import AuditEventORM, BridgeHumanReviewORM, FindingORM
+from ...models.orm import AuditEventORM, BridgeHumanReviewORM, FindingORM, SkillDocumentORM
 from ...services.model_policy_service import resolve_active_model
 from ...services.model_policy_service import (
     OnPremDependencyUnavailableError,
@@ -37,6 +40,7 @@ from ...services.compliance_checker import (
     run_bridge_compliance_checks,
 )
 from ...services.bridge_privacy_service import (
+    assess_output_ip_risk,
     assess_privacy_violation,
     build_local_sandbox_plan,
 )
@@ -121,6 +125,16 @@ class BridgePrivacyViolationResponse(BaseModel):
     proposals: list[BridgeMitigationProposalResponse] = Field(default_factory=list)
 
 
+class BridgeOutputIpRiskResponse(BaseModel):
+    """Bridge output IP-risk classification and escalation payload."""
+
+    risk_level: str
+    summary: str
+    matched_signals: list[str] = Field(default_factory=list)
+    hitl_escalation_required: bool
+    proposals: list[BridgeMitigationProposalResponse] = Field(default_factory=list)
+
+
 class BridgeMitigationRecommendationResponse(BaseModel):
     """Actionable quality-gate mitigation recommendation for failed controls."""
 
@@ -182,6 +196,7 @@ class BridgeRunResponse(BaseModel):
     sandbox_steps: list[BridgeSandboxStepResultResponse] = Field(default_factory=list)
     runtime_topology: BridgeRuntimeTopologyResponse | None = None
     privacy_violation: BridgePrivacyViolationResponse
+    output_ip_risk: BridgeOutputIpRiskResponse
     regulatory_update: RegulatoryUpdateStatus
 
 
@@ -220,6 +235,35 @@ class BridgeHumanReviewResponse(BaseModel):
     next_task_assignee: str | None = None
     next_task_instructions: str | None = None
     assignee_notified: bool
+
+
+class BridgeRunListItemResponse(BaseModel):
+    """List item for persisted bridge runs used by Artifact Lab and audits."""
+
+    run_id: str
+    document_id: str
+    document_name: str
+    document_type: str
+    project_id: str | None = None
+    started_at: datetime
+    completed_at: datetime
+    status: str
+    automatic_recommendation: str
+    human_review_required: bool
+    human_review_status: str
+    compliance_score: float
+    checked_frameworks: list[str] = Field(default_factory=list)
+
+
+class BridgeRunListResponse(BaseModel):
+    """Paginated bridge run list response with cursor metadata."""
+
+    items: list[BridgeRunListItemResponse] = Field(default_factory=list)
+    total: int
+    limit: int
+    next_cursor: str | None = None
+    sort_by: str = "completed_at"
+    sort_order: str = "desc"
 
 
 class BridgeAgentStatus(BaseModel):
@@ -332,6 +376,40 @@ def _review_to_response(review: BridgeHumanReviewORM) -> BridgeHumanReviewRespon
         next_task_instructions=review.next_task_instructions,
         assignee_notified=bool(review.assignee_notified),
     )
+
+
+def _derive_human_review_status(review: BridgeHumanReviewORM | None) -> str:
+    if review is None:
+        return "pending"
+    decision = str(review.decision or "").strip().lower()
+    if decision in {"approved", "rejected"}:
+        return decision
+    return "pending"
+
+
+def _encode_runs_cursor(item: BridgeRunListItemResponse) -> str:
+    payload = {
+        "completed_at": item.completed_at.isoformat(),
+        "run_id": item.run_id,
+    }
+    raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii")
+
+
+def _decode_runs_cursor(cursor: str) -> tuple[datetime, str]:
+    try:
+        padded = cursor + "=" * ((4 - len(cursor) % 4) % 4)
+        decoded = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
+        parsed = json.loads(decoded)
+        completed_at_raw = str(parsed.get("completed_at") or "").strip()
+        run_id = str(parsed.get("run_id") or "").strip()
+        if not completed_at_raw or not run_id:
+            raise ValueError("missing cursor fields")
+        completed_at = datetime.fromisoformat(completed_at_raw)
+        completed_at = _coerce_utc(completed_at) or _now_utc()
+        return completed_at, run_id
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid cursor: {type(exc).__name__}") from exc
 
 
 def _current_bridge_agents_status() -> list[BridgeAgentStatus]:
@@ -599,7 +677,7 @@ def _enforce_fail_closed_step_routing(
         db.add(
             AuditEventORM(
                 event_id=str(uuid.uuid4()),
-                tenant_id="default",
+                tenant_id=DEFAULT_TENANT_ID,
                 org_id=actor_org,
                 project_id=None,
                 event_time=_now_utc(),
@@ -749,6 +827,7 @@ async def run_bridge_eu_ai_act(
         )
 
     privacy_assessment = assess_privacy_violation(document.extracted_text)
+    output_ip_risk_assessment = assess_output_ip_risk(document.extracted_text)
 
     local_processing_enforced = all(step.processed_locally for step in sandbox_steps)
     if not local_processing_enforced:
@@ -796,6 +875,23 @@ async def run_bridge_eu_ai_act(
             ],
         )
 
+    output_ip_risk_result = BridgeOutputIpRiskResponse(
+        risk_level=output_ip_risk_assessment.risk_level,
+        summary=output_ip_risk_assessment.summary,
+        matched_signals=output_ip_risk_assessment.matched_signals,
+        hitl_escalation_required=output_ip_risk_assessment.hitl_escalation_required,
+        proposals=[
+            BridgeMitigationProposalResponse(
+                proposal_id=item.proposal_id,
+                title=item.title,
+                details=item.details,
+                implementation_status=item.implementation_status,
+                implementation_note=item.implementation_note,
+            )
+            for item in output_ip_risk_assessment.proposals
+        ],
+    )
+
     check_results = run_bridge_compliance_checks(
         document.extracted_text,
         request.domain_info,
@@ -816,7 +912,11 @@ async def run_bridge_eu_ai_act(
     all_requirements = [req for result in check_results for req in result.requirements]
     aggregated_mandatory_gaps = [gap for result in check_results for gap in result.mandatory_gaps]
     aggregated_optional_gaps = [gap for result in check_results for gap in result.optional_gaps]
-    approved = len(aggregated_mandatory_gaps) == 0 and not privacy_result.detected
+    approved = (
+        len(aggregated_mandatory_gaps) == 0
+        and not privacy_result.detected
+        and not output_ip_risk_result.hitl_escalation_required
+    )
     total_requirements = len(all_requirements)
     total_met = sum(1 for req in all_requirements if req.met)
     aggregated_score = round((total_met / total_requirements), 2) if total_requirements else 1.0
@@ -843,6 +943,7 @@ async def run_bridge_eu_ai_act(
         severity = "high" if req.mandatory and not passed else ("medium" if not passed else "low")
         finding = FindingORM(
             finding_id=str(uuid.uuid4()),
+            tenant_id=DEFAULT_TENANT_ID,
             document_id=request.document_id,
             finding_type="bridge_compliance_requirement",
             title=f"{req.requirement_id} {req.title}",
@@ -893,6 +994,15 @@ async def run_bridge_eu_ai_act(
                 "description": privacy_result.summary,
             }
         )
+    if output_ip_risk_result.risk_level in {"medium", "high"}:
+        found_issues.append(
+            {
+                "framework": "ip_rights",
+                "requirement_id": "OUTPUT-IP-RISK",
+                "topic": "Bridge output IP-risk",
+                "description": output_ip_risk_result.summary,
+            }
+        )
 
     proposed_mitigations = [
         {
@@ -908,6 +1018,13 @@ async def run_bridge_eu_ai_act(
             "source": "privacy_violation",
         }
         for proposal in privacy_result.proposals
+    ] + [
+        {
+            "topic": proposal.title,
+            "proposal": proposal.details,
+            "source": "output_ip_risk",
+        }
+        for proposal in output_ip_risk_result.proposals
     ]
     if not found_issues:
         proposed_mitigations.append(
@@ -967,7 +1084,7 @@ async def run_bridge_eu_ai_act(
     db.add(
         AuditEventORM(
             event_id=str(uuid.uuid4()),
-            tenant_id="default",
+            tenant_id=DEFAULT_TENANT_ID,
             org_id=user.org,
             project_id=None,
             event_time=_now_utc(),
@@ -1003,6 +1120,7 @@ async def run_bridge_eu_ai_act(
                 "step_policy_contracts": [item.model_dump(mode="json") for item in step_policy_contracts],
                 "fallback_reason_code": _derive_fallback_reason_code(step_policy_contracts=step_policy_contracts),
                 "privacy_violation": privacy_result.model_dump(mode="json"),
+                "output_ip_risk": output_ip_risk_result.model_dump(mode="json"),
                 "runtime_topology": (
                     runtime_check.topology.model_dump(mode="json")
                     if runtime_check.topology is not None
@@ -1016,7 +1134,7 @@ async def run_bridge_eu_ai_act(
     db.add(
         AuditEventORM(
             event_id=str(uuid.uuid4()),
-            tenant_id="default",
+            tenant_id=DEFAULT_TENANT_ID,
             org_id=user.org,
             project_id=None,
             event_time=_now_utc(),
@@ -1053,6 +1171,7 @@ async def run_bridge_eu_ai_act(
                 "step_policy_contracts": [item.model_dump(mode="json") for item in step_policy_contracts],
                 "fallback_reason_code": _derive_fallback_reason_code(step_policy_contracts=step_policy_contracts),
                 "privacy_violation": privacy_result.model_dump(mode="json"),
+                "output_ip_risk": output_ip_risk_result.model_dump(mode="json"),
                 "runtime_topology": (
                     runtime_check.topology.model_dump(mode="json")
                     if runtime_check.topology is not None
@@ -1076,6 +1195,7 @@ async def run_bridge_eu_ai_act(
         db.add(
             FindingORM(
                 finding_id=str(uuid.uuid4()),
+                tenant_id=DEFAULT_TENANT_ID,
                 document_id=request.document_id,
                 finding_type="bridge_data_privacy_violation",
                 title="Bridge privacy violation detected",
@@ -1092,7 +1212,7 @@ async def run_bridge_eu_ai_act(
         db.add(
             AuditEventORM(
                 event_id=str(uuid.uuid4()),
-                tenant_id="default",
+                tenant_id=DEFAULT_TENANT_ID,
                 org_id=None,
                 project_id=None,
                 event_time=_now_utc(),
@@ -1108,6 +1228,51 @@ async def run_bridge_eu_ai_act(
                     "summary": privacy_result.summary,
                     "signals": privacy_result.matched_signals,
                     "proposals": [proposal.model_dump(mode="json") for proposal in privacy_result.proposals],
+                },
+            )
+        )
+
+    if output_ip_risk_result.risk_level in {"medium", "high"}:
+        db.add(
+            FindingORM(
+                finding_id=str(uuid.uuid4()),
+                tenant_id=DEFAULT_TENANT_ID,
+                document_id=request.document_id,
+                finding_type="bridge_output_ip_risk",
+                title="Bridge output IP-risk detected",
+                description=output_ip_risk_result.summary,
+                severity="high" if output_ip_risk_result.risk_level == "high" else "medium",
+                evidence={
+                    "run_id": run_id,
+                    "risk_level": output_ip_risk_result.risk_level,
+                    "signals": output_ip_risk_result.matched_signals,
+                    "hitl_escalation_required": output_ip_risk_result.hitl_escalation_required,
+                    "proposals": [proposal.model_dump(mode="json") for proposal in output_ip_risk_result.proposals],
+                },
+            )
+        )
+
+        db.add(
+            AuditEventORM(
+                event_id=str(uuid.uuid4()),
+                tenant_id=DEFAULT_TENANT_ID,
+                org_id=None,
+                project_id=None,
+                event_time=_now_utc(),
+                event_type="bridge.run.output_ip_risk.detected",
+                actor_type="system",
+                actor_id="bridge",
+                subject_type="document",
+                subject_id=request.document_id,
+                trace_id=None,
+                correlation_id=run_id,
+                payload={
+                    "run_id": run_id,
+                    "risk_level": output_ip_risk_result.risk_level,
+                    "summary": output_ip_risk_result.summary,
+                    "signals": output_ip_risk_result.matched_signals,
+                    "hitl_escalation_required": output_ip_risk_result.hitl_escalation_required,
+                    "proposals": [proposal.model_dump(mode="json") for proposal in output_ip_risk_result.proposals],
                 },
             )
         )
@@ -1186,6 +1351,7 @@ async def run_bridge_eu_ai_act(
         ],
         runtime_topology=runtime_check.topology,
         privacy_violation=privacy_result,
+        output_ip_risk=output_ip_risk_result,
         regulatory_update=regulatory_update,
     )
 
@@ -1241,6 +1407,132 @@ async def get_bridge_eu_ai_act_alert(
     )
 
 
+@router.get("/runs", response_model=BridgeRunListResponse)
+async def list_bridge_runs(
+    limit: int = 50,
+    document_id: str | None = Query(default=None, min_length=1, max_length=64),
+    human_review_status: str | None = Query(default=None, pattern="^(pending|approved|rejected)$"),
+    cursor: str | None = Query(default=None, min_length=8, max_length=512),
+    sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
+    db: Session = Depends(get_db),
+    user: AuthenticatedUser = Depends(require_roles("qm_lead", "auditor", "riskmanager", "architect")),
+) -> BridgeRunListResponse:
+    """Return recent persisted bridge runs including pre-HITL pending review status."""
+    safe_limit = max(1, min(limit, 200))
+
+    events_query = (
+        db.query(AuditEventORM)
+        .filter(
+            AuditEventORM.tenant_id == DEFAULT_TENANT_ID,
+            AuditEventORM.event_type == "bridge.run.completed",
+        )
+        .order_by(AuditEventORM.event_time.desc())
+    )
+    if user.org:
+        events_query = events_query.filter(AuditEventORM.org_id == user.org)
+    if document_id:
+        events_query = events_query.filter(AuditEventORM.subject_id == document_id)
+
+    completed_events = events_query.all()
+    if not completed_events:
+        return BridgeRunListResponse(items=[], total=0, limit=safe_limit, next_cursor=None, sort_order=sort_order)
+
+    run_ids = {
+        str((event.payload or {}).get("run_id") or event.correlation_id or "").strip()
+        for event in completed_events
+    }
+    run_ids.discard("")
+
+    reviews_by_run: dict[str, BridgeHumanReviewORM] = {}
+    if run_ids:
+        latest_reviews = (
+            db.query(BridgeHumanReviewORM)
+            .filter(BridgeHumanReviewORM.run_id.in_(sorted(run_ids)))
+            .order_by(BridgeHumanReviewORM.reviewed_at.desc())
+            .all()
+        )
+        for review in latest_reviews:
+            if review.run_id not in reviews_by_run:
+                reviews_by_run[review.run_id] = review
+
+    document_ids = sorted({event.subject_id for event in completed_events if event.subject_id})
+    docs_by_id: dict[str, SkillDocumentORM] = {}
+    if document_ids:
+        documents = (
+            db.query(SkillDocumentORM)
+            .filter(SkillDocumentORM.document_id.in_(document_ids))
+            .all()
+        )
+        docs_by_id = {doc.document_id: doc for doc in documents}
+
+    items: list[BridgeRunListItemResponse] = []
+    for event in completed_events:
+        payload = event.payload or {}
+        run_id = str(payload.get("run_id") or event.correlation_id or "").strip()
+        if not run_id:
+            continue
+
+        doc = docs_by_id.get(event.subject_id)
+        review = reviews_by_run.get(run_id)
+        compliance_score = float(payload.get("compliance_score") or 0.0)
+        automatic_recommendation = str(payload.get("automatic_recommendation") or "rejected").strip().lower()
+        if automatic_recommendation not in {"approved", "rejected"}:
+            automatic_recommendation = "rejected"
+        checked_frameworks = [str(item) for item in payload.get("checked_frameworks") or []]
+
+        items.append(
+            BridgeRunListItemResponse(
+                run_id=run_id,
+                document_id=event.subject_id,
+                document_name=doc.filename if doc is not None else event.subject_id,
+                document_type=doc.document_type if doc is not None else "unknown",
+                project_id=doc.project_id if doc is not None else None,
+                started_at=_coerce_utc(event.event_time) or _now_utc(),
+                completed_at=_coerce_utc(event.event_time) or _now_utc(),
+                status="completed",
+                automatic_recommendation=automatic_recommendation,
+                human_review_required=True,
+                human_review_status=_derive_human_review_status(review),
+                compliance_score=compliance_score,
+                checked_frameworks=checked_frameworks,
+            )
+        )
+
+    filtered_items = [
+        item
+        for item in items
+        if human_review_status is None or item.human_review_status == human_review_status
+    ]
+
+    reverse = sort_order == "desc"
+    filtered_items.sort(key=lambda item: (item.completed_at, item.run_id), reverse=reverse)
+    total = len(filtered_items)
+
+    if cursor:
+        cursor_completed_at, cursor_run_id = _decode_runs_cursor(cursor)
+
+        def _is_after_cursor(item: BridgeRunListItemResponse) -> bool:
+            item_key = (item.completed_at, item.run_id)
+            cursor_key = (cursor_completed_at, cursor_run_id)
+            return item_key < cursor_key if reverse else item_key > cursor_key
+
+        filtered_items = [item for item in filtered_items if _is_after_cursor(item)]
+
+    paged_items = filtered_items[:safe_limit]
+    next_cursor = None
+    if len(filtered_items) > safe_limit and paged_items:
+        next_cursor = _encode_runs_cursor(paged_items[-1])
+
+    return BridgeRunListResponse(
+        items=paged_items,
+        total=total,
+        limit=safe_limit,
+        next_cursor=next_cursor,
+        sort_by="completed_at",
+        sort_order=sort_order,
+    )
+
+
 @router.get("/runs/{run_id}/human-review", response_model=BridgeHumanReviewResponse)
 async def get_bridge_human_review(
     run_id: str = Path(min_length=1, max_length=64),
@@ -1274,7 +1566,7 @@ async def reload_bridge_agents(
     db.add(
         AuditEventORM(
             event_id=str(uuid.uuid4()),
-            tenant_id="default",
+            tenant_id=DEFAULT_TENANT_ID,
             org_id=user.org,
             project_id=None,
             event_time=reloaded_at,
@@ -1354,7 +1646,7 @@ async def submit_bridge_human_review(
     db.add(
         AuditEventORM(
             event_id=str(uuid.uuid4()),
-            tenant_id="default",
+            tenant_id=DEFAULT_TENANT_ID,
             org_id=user.org,
             project_id=None,
             event_time=reviewed_at,
@@ -1387,7 +1679,7 @@ async def submit_bridge_human_review(
         db.add(
             AuditEventORM(
                 event_id=str(uuid.uuid4()),
-                tenant_id="default",
+                tenant_id=DEFAULT_TENANT_ID,
                 org_id=user.org,
                 project_id=None,
                 event_time=reviewed_at,

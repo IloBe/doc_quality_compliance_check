@@ -62,6 +62,17 @@ class PrivacyViolationAssessment:
     proposals: list[MitigationProposal]
 
 
+@dataclass(frozen=True)
+class OutputIpRiskAssessment:
+    """Bridge output IP-risk assessment payload."""
+
+    risk_level: str
+    summary: str
+    matched_signals: list[str]
+    hitl_escalation_required: bool
+    proposals: list[MitigationProposal]
+
+
 _VIOLATION_SIGNAL_PATTERNS: dict[str, tuple[str, ...]] = {
     "medical_context": ("patient", "x-ray", "chest", "hospital", "diagnostic"),
     "direct_identifier": ("address", "male", "age", "stockholm", "sweden"),
@@ -69,6 +80,15 @@ _VIOLATION_SIGNAL_PATTERNS: dict[str, tuple[str, ...]] = {
     "genai_processing_claim": ("llm", "genai", "model", "prompt", "output"),
     "failed_mitigation_repeat": ("no success", "happened again", "recurred", "follow-up"),
 }
+
+_IP_RISK_SIGNAL_PATTERNS: dict[str, tuple[str, ...]] = {
+    "copyright_reference": ("copyright", "all rights reserved", "licensed content"),
+    "verbatim_copy_intent": ("verbatim", "copy and paste", "exact copy", "word-for-word"),
+    "trademark_reference": ("trademark", "registered mark", "logo", "brand asset"),
+    "no_permission_language": ("without permission", "no permission", "without consent", "unauthorized"),
+}
+
+_HIGH_RISK_IP_SIGNALS = {"verbatim_copy_intent", "no_permission_language"}
 
 
 def build_local_sandbox_plan(*, model_provider: str, model_id: str) -> list[SandboxStepResult]:
@@ -207,5 +227,64 @@ def assess_privacy_violation(document_content: str) -> PrivacyViolationAssessmen
         violation_detected=True,
         violation_summary="Explicit GDPR and LLM/GenAI security-violation indicators detected in bridge document context.",
         matched_signals=matched_signals,
+        proposals=proposals,
+    )
+
+
+def assess_output_ip_risk(document_content: str) -> OutputIpRiskAssessment:
+    """Classify output IP-risk level and return HITL escalation guidance.
+
+    Deterministic heuristics provide an auditable first implementation for A007.
+    """
+    text = (document_content or "").lower()
+    matched_signals: list[str] = []
+
+    for signal_name, terms in _IP_RISK_SIGNAL_PATTERNS.items():
+        if any(term in text for term in terms):
+            matched_signals.append(signal_name)
+
+    has_high_signal = any(signal in _HIGH_RISK_IP_SIGNALS for signal in matched_signals)
+    signal_count = len(matched_signals)
+
+    if has_high_signal or signal_count >= 3:
+        risk_level = "high"
+    elif signal_count >= 1:
+        risk_level = "medium"
+    else:
+        risk_level = "low"
+
+    escalation_required = risk_level in {"medium", "high"}
+
+    if risk_level == "low":
+        return OutputIpRiskAssessment(
+            risk_level="low",
+            summary="No explicit output IP-risk indicators detected by bridge heuristics.",
+            matched_signals=matched_signals,
+            hitl_escalation_required=False,
+            proposals=[],
+        )
+
+    proposals = [
+        MitigationProposal(
+            proposal_id="ip-001",
+            title="Require source attribution and usage-rights confirmation",
+            details="Record ownership, citation, and allowed-use evidence for generated output artifacts before release.",
+            implementation_status="proposed",
+            implementation_note="Planned: enforce output-rights policy checks in export and response surfaces.",
+        ),
+        MitigationProposal(
+            proposal_id="ip-002",
+            title="Escalate medium/high IP-risk outputs to mandatory HITL approval",
+            details="Route outputs with detected copyright/trademark risk to reviewer approval before final publication.",
+            implementation_status="implemented",
+            implementation_note="Implemented: bridge run flags medium/high output IP-risk and requires HITL escalation metadata.",
+        ),
+    ]
+
+    return OutputIpRiskAssessment(
+        risk_level=risk_level,
+        summary="Potential output IP-risk indicators detected in bridge context. Human review escalation required.",
+        matched_signals=matched_signals,
+        hitl_escalation_required=escalation_required,
         proposals=proposals,
     )

@@ -159,6 +159,66 @@ tests/test_template_manager.py::test_get_template_with_file           PASSED
 
 **Latest coverage baseline (2026-4-5):** Full-suite execution with coverage reports **86.09% total coverage**, which currently passes the enforced **85%** threshold gate.
 
+### 2.1 AIUC-1 Data & Privacy Traceability (A001-A007)
+
+The QA process must keep explicit traceability between AIUC-1 privacy requirements and executable tests.
+
+| AIUC-1 ID | Requirement Focus | Verification Modules (current/target) |
+| --- | --- | --- |
+| A001 | Input data policy and policy metadata evidence | `tests/test_privacy_controls.py`, `tests/test_bridge_orchestrator_service.py`, `tests/test_bridge_run_api.py` |
+| A002 | Output rights policy and governed failure behavior | `tests/test_bridge_run_api.py`, `tests/test_error_envelope_api.py`, `frontend/tests/bridgeRunViewModel.test.ts` |
+| A003 | Contextual least-privilege data access controls | `tests/test_adapter_routing_policy.py`, `tests/test_bridge_orchestrator_service.py`, `tests/test_auth_authorization_api.py`, `tests/test_documents_read_api.py`, `tests/test_skills_api.py` |
+| A004 | IP/trade-secret leakage prevention controls | `tests/test_error_envelope_api.py` (deny-path cases), release checklist verification |
+| A005 | Cross-customer data exposure prevention | `tests/test_adapter_routing_policy.py`, `tests/test_bridge_run_api.py`, `tests/test_skills_api.py` (current single-tenant scope regression; multi-user support remains a future-to-do) |
+| A006 | PII leakage prevention in outputs and logs | `tests/test_privacy_controls.py`, `tests/test_error_envelope_api.py`, `tests/test_observability_api.py`, logging/redaction checks |
+| A007 | Output IP violation prevention and escalation | `tests/test_error_envelope_api.py`, `tests/test_bridge_run_api.py`, frontend error handling tests |
+
+Execution gate requirement:
+
+- AIUC-1 trace tests must run and pass in `py313_venv` for release readiness.
+
+### 2.2 OWASP Chapter A (Data & Privacy) Traceability
+
+OWASP Chapter A traceability is maintained through the documented AIUC-1 mapping and verified using the same conformance test surfaces.
+
+| OWASP Chapter A control theme | AIUC-1 mapping | Verification Modules (current/target) |
+| --- | --- | --- |
+| Input data handling and governance | A001 | `tests/test_privacy_controls.py`, `tests/test_bridge_orchestrator_service.py`, `tests/test_bridge_run_api.py` |
+| Output rights and usage controls | A002 | `tests/test_bridge_run_api.py`, `tests/test_error_envelope_api.py`, `frontend/tests/bridgeRunViewModel.test.ts` |
+| Context-aware access boundaries | A003 | `tests/test_adapter_routing_policy.py`, `tests/test_bridge_orchestrator_service.py`, `tests/test_auth_authorization_api.py`, `tests/test_documents_read_api.py`, `tests/test_skills_api.py` |
+| Trade-secret and confidential-data protection | A004 | `tests/test_error_envelope_api.py` deny-path cases, release checklist verification |
+| Tenant/customer isolation | A005 | `tests/test_adapter_routing_policy.py`, `tests/test_bridge_run_api.py`, `tests/test_skills_api.py` (single-tenant default scope; multi-user expansion deferred) |
+| PII leakage prevention in outputs/logs | A006 | `tests/test_privacy_controls.py`, `tests/test_error_envelope_api.py`, `tests/test_observability_api.py`, logging/redaction checks |
+| Output IP and copyright/trademark safeguards | A007 | `tests/test_error_envelope_api.py`, `tests/test_bridge_run_api.py`, frontend error handling tests |
+
+Execution gate requirement:
+
+- OWASP Chapter A trace tests must run and pass in `py313_venv` for release readiness.
+
+### 2.3 PRD/SAD Requirement-ID Coverage Matrix (Phase 1 Privacy)
+
+This matrix links PRD/SAD requirement IDs directly to QA evidence surfaces.
+
+| Requirement ID | Verification Evidence (current/target) |
+| --- | --- |
+| `AIUC-PRIV-01` | Policy metadata assertions in `tests/test_privacy_controls.py`, `tests/test_bridge_run_api.py` |
+| `AIUC-PRIV-02` | Output-policy/failure-contract checks in `tests/test_error_envelope_api.py`, frontend bridge view-model tests |
+| `AIUC-PRIV-03` | Contextual access/routing tests in `tests/test_adapter_routing_policy.py`, `tests/test_bridge_orchestrator_service.py`, plus purpose-tag deny/allow assertions in `tests/test_auth_authorization_api.py`, `tests/test_documents_read_api.py`, `tests/test_skills_api.py` |
+| `AIUC-PRIV-04` | IP/trade-secret deny-path tests in `tests/test_error_envelope_api.py`, `tests/test_documents_read_api.py`, `tests/test_skills_api.py` |
+| `AIUC-PRIV-05` | Cross-customer isolation checks in routing + bridge API tests |
+| `AIUC-PRIV-06` | Leakage and redaction checks in `tests/test_privacy_controls.py`, `tests/test_observability_api.py`, logging/error tests |
+| `AIUC-PRIV-07` | IP-risk/error mapping and escalation-path checks in API + frontend tests |
+| `OWASP-A-PRIV-01` | Chapter-A policy contract conformance tests across bridge/orchestrator paths |
+| `OWASP-A-PRIV-02` | Fail-closed personal-data routing tests |
+| `OWASP-A-PRIV-03` | Telemetry redaction/retention-class assertions (backend + QA evidence) |
+| `OWASP-A-PRIV-04` | Least-privilege trace/export/content-read behavior with purpose-tag deny/allow checks in `tests/test_observability_api.py`, `tests/test_audit_trail_api.py`, `tests/test_reports_download_api.py`, `tests/test_risk_templates_api.py`, `tests/test_documents_read_api.py`, `tests/test_skills_api.py`, and role+purpose matrix in `tests/test_auth_authorization_api.py` |
+| `OWASP-A-PRIV-05` | Split secret-config hardening checks for API auth, session, and recovery flows |
+| `OWASP-A-PRIV-06` | Tenant isolation deny tests and immutable violation evidence; current code remains single-tenant by design |
+| `OWASP-A-PRIV-07` | Stable error envelope + actionable action points + correlation linkage tests |
+| `OWASP-A-PRIV-08` | `py313_venv` conformance suite execution and gate records |
+| `AD-20` | AIUC policy enforcement plane traceability through policy metadata + audit evidence tests |
+| `AD-21` | OWASP Chapter-A enforcement plane traceability through Chapter-A conformance matrix and gate runs |
+
 ---
 
 ## Section 3 – Test Coverage by Module
@@ -259,6 +319,7 @@ Tests for `src/doc_quality/services/template_manager.py`
 |---|---|---|---|
 | Auth/session/recovery (`/api/v1/auth/*`) | ✅ Strong | `test_auth_session_api.py`, `test_auth_recovery_api.py`, `test_auth_rate_limit_api.py` | Add more negative/edge token lifecycle scenarios |
 | Authorization boundaries | ✅ Stronger | `test_auth_authorization_api.py`, `test_stakeholder_profiles_api.py` | Add optional future matrix expansions for newly introduced routes/roles |
+| Purpose-based sensitive-access controls (`X-Access-Purpose`) | ✅ Implemented (fail-closed) | `test_observability_api.py`, `test_audit_trail_api.py`, `test_reports_download_api.py`, `test_risk_templates_api.py`, `test_documents_read_api.py`, `test_skills_api.py`, `test_auth_authorization_api.py` | Expand to any future sensitive response surfaces by default-on policy |
 | Error envelope + global handlers | ✅ Strong | `test_error_envelope_api.py` | Add more route-specific error-shape checks |
 | Documents analyze/upload/list/lock (`/api/v1/documents/*`) | ✅ Stronger | `test_document_hub_live_api.py`, `test_document_lock_api.py`, `test_skills_api.py`, `test_integration_api_workflow.py`, `test_documents_read_api.py` | Add optional malformed-id validation assertions if route-level ID constraints are introduced |
 | Skills + audit event logging (`/api/v1/skills/*`) | ✅ Strong | `test_skills_api.py`, `test_integration_api_workflow.py`, `test_audit_trail_api.py` | Add contract-style validation for response schemas |
@@ -662,10 +723,11 @@ The original Phase-0 concern about test PDFs accumulating in `reports/` is now s
 ## Open Questions
 
 1. **Coverage target ratchet:** When should the active `--cov-fail-under=85` gate be increased, and what evidence should trigger the next threshold raise?
-2. **Test isolation:** Which remaining workflow paths still need stronger fixture-driven isolation beyond the current DB override + transaction rollback pattern?
-3. **CI integration:** Which CI system will run the test suite? GitHub Actions is the target; when should the workflow file be created?
-4. **Filesystem isolation:** Should all future browser/E2E download tests also use disposable artifact directories, or is a shared ephemeral test workspace acceptable in CI?
-5. **Accuracy benchmark:** When should the 50-document arc42 annotation benchmark be assembled? Who provides the ground truth annotations (QM staff, system architects)?
+2. **Single-tenant future scope:** The backend is intentionally single-tenant for now; which endpoints and fixtures should be upgraded first when multi-user or distributed support becomes a real phase-2 requirement?
+3. **Separated secrets:** Should `API_AUTH_SECRET_KEY`, `SESSION_SECRET_KEY`, and `RECOVERY_SECRET_KEY` be rotated and provisioned independently in all deployment environments before release?
+4. **CI integration:** Which CI system will run the test suite? GitHub Actions is the target; when should the workflow file be created?
+5. **Filesystem isolation:** Should all future browser/E2E download tests also use disposable artifact directories, or is a shared ephemeral test workspace acceptable in CI?
+6. **Accuracy benchmark:** When should the 50-document arc42 annotation benchmark be assembled? Who provides the ground truth annotations (QM staff, system architects)?
 
 ---
 

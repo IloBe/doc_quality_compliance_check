@@ -49,7 +49,7 @@ def require_api_auth(
     - `X-API-Key: <secret_key>`
     - `Authorization: Bearer <secret_key>`
     """
-    expected_secret = get_settings().secret_key
+    expected_secret = get_settings().api_auth_secret_key
     if not expected_secret:
         return
 

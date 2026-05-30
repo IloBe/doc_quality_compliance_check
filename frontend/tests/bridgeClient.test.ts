@@ -21,8 +21,8 @@ describe('bridgeClient executeBridgeEuAiActRun', () => {
     });
     vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
 
-    const previousSource = process.env.NEXT_PUBLIC_BRIDGE_SOURCE;
-    process.env.NEXT_PUBLIC_BRIDGE_SOURCE = 'backend';
+    const previousMode = process.env.NEXT_PUBLIC_APP_MODE;
+    process.env.NEXT_PUBLIC_APP_MODE = 'real';
 
     try {
       const { executeBridgeEuAiActRun } = await import('../lib/bridgeClient');
@@ -30,7 +30,7 @@ describe('bridgeClient executeBridgeEuAiActRun', () => {
         executeBridgeEuAiActRun('DOC-1', { domain: 'medical devices' }),
       ).rejects.toThrow(/domain_info\.description: Field required/i);
     } finally {
-      process.env.NEXT_PUBLIC_BRIDGE_SOURCE = previousSource;
+      process.env.NEXT_PUBLIC_APP_MODE = previousMode;
     }
   });
 
@@ -56,8 +56,8 @@ describe('bridgeClient executeBridgeEuAiActRun', () => {
     });
     vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
 
-    const previousSource = process.env.NEXT_PUBLIC_BRIDGE_SOURCE;
-    process.env.NEXT_PUBLIC_BRIDGE_SOURCE = 'backend';
+    const previousMode = process.env.NEXT_PUBLIC_APP_MODE;
+    process.env.NEXT_PUBLIC_APP_MODE = 'real';
 
     try {
       const { executeBridgeEuAiActRun, BridgeApiError } = await import('../lib/bridgeClient');
@@ -76,7 +76,7 @@ describe('bridgeClient executeBridgeEuAiActRun', () => {
         expect(typed.correlationId).toBe('corr-psc-42');
       }
     } finally {
-      process.env.NEXT_PUBLIC_BRIDGE_SOURCE = previousSource;
+      process.env.NEXT_PUBLIC_APP_MODE = previousMode;
     }
   });
 });
@@ -103,14 +103,76 @@ describe('bridgeClient fetchBridgeRuntimeTopology', () => {
     });
     vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
 
-    const previousSource = process.env.NEXT_PUBLIC_BRIDGE_SOURCE;
-    process.env.NEXT_PUBLIC_BRIDGE_SOURCE = 'backend';
+    const previousMode = process.env.NEXT_PUBLIC_APP_MODE;
+    process.env.NEXT_PUBLIC_APP_MODE = 'real';
 
     try {
       const { fetchBridgeRuntimeTopology } = await import('../lib/bridgeClient');
       await expect(fetchBridgeRuntimeTopology()).rejects.toThrow(/runtime self-check failed/i);
     } finally {
-      process.env.NEXT_PUBLIC_BRIDGE_SOURCE = previousSource;
+      process.env.NEXT_PUBLIC_APP_MODE = previousMode;
+    }
+  });
+});
+
+describe('bridgeClient fetchBridgeRunById', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  it('falls back to the latest run for a document id when exact run id is absent', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        {
+          run_id: 'RUN-001',
+          document_id: 'DOC-XRAY',
+          document_name: 'xray complaint',
+          document_type: 'risk_assessment',
+          project_id: 'AI-Diagnostics-Core',
+          started_at: '2026-05-10T10:00:00Z',
+          completed_at: '2026-05-10T10:05:00Z',
+          status: 'completed',
+          automatic_recommendation: 'rejected',
+          human_review_required: true,
+          human_review_status: 'pending',
+          compliance_score: 0.61,
+          checked_frameworks: ['eu_ai_act'],
+        },
+        {
+          run_id: 'RUN-002',
+          document_id: 'DOC-XRAY',
+          document_name: 'xray complaint',
+          document_type: 'risk_assessment',
+          project_id: 'AI-Diagnostics-Core',
+          started_at: '2026-05-11T10:00:00Z',
+          completed_at: '2026-05-11T10:05:00Z',
+          status: 'completed',
+          automatic_recommendation: 'approved',
+          human_review_required: true,
+          human_review_status: 'pending',
+          compliance_score: 0.77,
+          checked_frameworks: ['eu_ai_act', 'gdpr'],
+        },
+      ]),
+    });
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    const previousMode = process.env.NEXT_PUBLIC_APP_MODE;
+    process.env.NEXT_PUBLIC_APP_MODE = 'real';
+
+    try {
+      const { fetchBridgeRunById } = await import('../lib/bridgeClient');
+      const result = await fetchBridgeRunById('DOC-XRAY');
+
+      expect(result?.run_id).toBe('RUN-002');
+      expect(fetchMock).toHaveBeenCalledWith('/api/v1/bridge/runs', {
+        method: 'GET',
+        credentials: 'include',
+      });
+    } finally {
+      process.env.NEXT_PUBLIC_APP_MODE = previousMode;
     }
   });
 });

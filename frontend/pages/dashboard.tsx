@@ -7,6 +7,7 @@ import StandardsCoverageTable from '../components/dashboard/StandardsCoverageTab
 import TimeframeSelector from '../components/dashboard/TimeframeSelector';
 import FooterInfoCard from '../components/FooterInfoCard';
 import PageHeaderWithWhy from '../components/PageHeaderWithWhy';
+import { getAppMode } from '../lib/appMode';
 import { buildMockDashboardSummary, getRiskTotal } from '../lib/dashboardSummaryBuilder';
 import { useMockStore } from '../lib/mockStore';
 import { DashboardSummary, DashboardTimeframe, fetchDashboardSummary } from '../lib/dashboardClient';
@@ -27,9 +28,8 @@ const DashboardPage = () => {
   const exports = useMockStore((state) => state.exports);
   const bridgeRuns = useMockStore((state) => state.bridgeRuns);
 
-  // Default to demo mode (same mock source as Doc Hub).
-  // Set NEXT_PUBLIC_DASHBOARD_SOURCE=backend to use live aggregation endpoint.
-  const useBackendData = process.env.NEXT_PUBLIC_DASHBOARD_SOURCE === 'backend';
+  const appMode = getAppMode();
+  const useBackendData = appMode === 'real';
 
   const timeframe = useMemo(
     () => getTimeframeFromQuery(router.query.timeframe),
@@ -105,7 +105,7 @@ const DashboardPage = () => {
     if (!useBackendData) {
       return mockSummary;
     }
-    return summary ?? mockSummary;
+    return summary;
   }, [mockSummary, summary, useBackendData]);
 
   const riskTotal = useMemo(() => {
@@ -135,7 +135,7 @@ const DashboardPage = () => {
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-sm text-amber-800 flex items-start gap-2">
           <LuInfo className="w-4 h-4 mt-0.5" />
           <div>
-            <div className="font-semibold">Live analytics currently unavailable. Showing demo-consistent dataset.</div>
+            <div className="font-semibold">Live analytics currently unavailable.</div>
             <div className="mt-1">{error}</div>
           </div>
         </div>
@@ -143,7 +143,7 @@ const DashboardPage = () => {
 
       {!useBackendData && (
         <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 text-xs text-blue-700 font-semibold">
-          Demo mode: Dashboard uses the same mock dataset as Doc Hub. Set NEXT_PUBLIC_DASHBOARD_SOURCE=backend for live aggregation.
+          Demo mode: Dashboard uses the same mock dataset as Doc Hub. Set NEXT_PUBLIC_APP_MODE=real for live aggregation.
         </div>
       )}
 

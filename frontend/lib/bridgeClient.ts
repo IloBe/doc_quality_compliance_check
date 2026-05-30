@@ -1,3 +1,5 @@
+import { isRealMode } from './appMode';
+
 export interface ReloadBridgeAgentsResult {
   message: string;
   agents: Array<{ id: string; status: string; name?: string }>;
@@ -27,6 +29,39 @@ export interface BridgeRuntimeTopology {
   all_agents_healthy: boolean;
   agents: BridgeAgentRuntimeTopology[];
   issues: string[];
+}
+
+export interface BridgeRunListItem {
+  run_id: string;
+  document_id: string;
+  document_name: string;
+  document_type: string;
+  project_id?: string | null;
+  started_at: string;
+  completed_at: string;
+  status: 'completed';
+  automatic_recommendation: 'approved' | 'rejected';
+  human_review_required: boolean;
+  human_review_status: 'pending' | 'approved' | 'rejected';
+  compliance_score: number;
+  checked_frameworks: string[];
+}
+
+export interface FetchBridgeRunsParams {
+  limit?: number;
+  documentId?: string;
+  humanReviewStatus?: 'pending' | 'approved' | 'rejected';
+  cursor?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface BridgeRunListResponse {
+  items: BridgeRunListItem[];
+  total: number;
+  limit: number;
+  next_cursor?: string | null;
+  sort_by: 'completed_at';
+  sort_order: 'asc' | 'desc';
 }
 
 export interface BridgeApiErrorShape {
@@ -63,8 +98,7 @@ export class BridgeApiError extends Error implements BridgeApiErrorShape {
 }
 
 function isBackendMode(): boolean {
-  const mode = String(process.env.NEXT_PUBLIC_BRIDGE_SOURCE || 'backend').trim().toLowerCase();
-  return mode !== 'demo';
+  return isRealMode();
 }
 
 function getApiBase(): string {
@@ -191,12 +225,71 @@ export async function reloadBridgeAgents(): Promise<ReloadBridgeAgentsResult> {
   };
 }
 
-export async function fetchBridgeRuns(): Promise<any[]> {
+export async function fetchBridgeRuns(params?: FetchBridgeRunsParams): Promise<BridgeRunListItem[]> {
+  if (isBackendMode()) {
+    const query = new URLSearchParams();
+    if (params?.limit && Number.isFinite(params.limit)) {
+      query.set('limit', String(Math.max(1, Math.floor(params.limit))));
+    }
+    if (params?.documentId?.trim()) {
+      query.set('document_id', params.documentId.trim());
+    }
+    if (params?.humanReviewStatus) {
+      query.set('human_review_status', params.humanReviewStatus);
+    }
+    if (params?.cursor?.trim()) {
+      query.set('cursor', params.cursor.trim());
+    }
+    if (params?.sortOrder) {
+      query.set('sort_order', params.sortOrder);
+    }
+
+    const path = query.toString().length > 0
+      ? `/api/v1/bridge/runs?${query.toString()}`
+      : '/api/v1/bridge/runs';
+
+    const response = await fetch(buildApiUrl(path), {
+      method: 'GET',
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      const error = await parseBridgeError(response, 'Failed to load bridge runs.');
+      throw new BridgeApiError({
+        ...error,
+        message: `Failed to load bridge runs: ${error.message}`,
+      });
+    }
+    const payload = await response.json() as BridgeRunListItem[] | BridgeRunListResponse;
+    if (Array.isArray(payload)) {
+      return payload;
+    }
+    return Array.isArray(payload.items) ? payload.items : [];
+  }
+
   return [];
 }
 
-export async function fetchBridgeRunById(_id: string): Promise<any | null> {
-  return null;
+export async function fetchBridgeRunById(id: string): Promise<BridgeRunListItem | null> {
+  const normalizedId = id.trim();
+  if (!normalizedId) {
+    return null;
+  }
+
+  const runs = await fetchBridgeRuns();
+  const exactMatch = runs.find((item) => item.run_id === normalizedId);
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const documentMatches = runs
+    .filter((item) => item.document_id === normalizedId)
+    .sort((left, right) => {
+      const leftStamp = `${left.completed_at || left.started_at || ''}`;
+      const rightStamp = `${right.completed_at || right.started_at || ''}`;
+      return rightStamp.localeCompare(leftStamp);
+    });
+
+  return documentMatches[0] ?? null;
 }
 
 export async function fetchBridgeRuntimeTopology(): Promise<BridgeRuntimeTopology> {

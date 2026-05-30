@@ -104,6 +104,7 @@ def test_extract_text_allows_payload_below_size_limit(client) -> None:
 
     response = client.post(
         "/api/v1/skills/extract_text",
+        headers={"X-Access-Purpose": "quality_review"},
         json={
             "filename": "near-limit.txt",
             "content_base64": near_limit_base64,
@@ -124,6 +125,7 @@ def test_extract_text_allows_payload_at_exact_size_limit(client) -> None:
 
     response = client.post(
         "/api/v1/skills/extract_text",
+        headers={"X-Access-Purpose": "quality_review"},
         json={
             "filename": "exact-limit.txt",
             "content_base64": exact_limit_base64,

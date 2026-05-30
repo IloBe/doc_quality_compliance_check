@@ -3,8 +3,11 @@ from datetime import datetime, timezone
 import uuid
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import event
 
 from ..core.database import Base
+from ..core.privacy_payload_guard import guard_payload_for_persistence
+from ..core.tenant_scope import DEFAULT_TENANT_ID
 
 
 class ReviewRecordORM(Base):
@@ -45,6 +48,9 @@ class SkillDocumentORM(Base):
     __tablename__ = "skill_documents"
 
     document_id = Column(String(64), primary_key=True, index=True)
+    tenant_id = Column(String(100), nullable=False, default=lambda: DEFAULT_TENANT_ID, index=True)
+    org_id = Column(String(100), nullable=True, index=True)
+    project_id = Column(String(100), nullable=True, index=True)
     filename = Column(String(255), nullable=False, index=True)
     content_type = Column(String(100), nullable=False)
     document_type = Column(String(50), nullable=False, default="unknown", index=True)
@@ -72,6 +78,9 @@ class FindingORM(Base):
     __tablename__ = "skill_findings"
 
     finding_id = Column(String(64), primary_key=True, index=True)
+    tenant_id = Column(String(100), nullable=False, default=lambda: DEFAULT_TENANT_ID, index=True)
+    org_id = Column(String(100), nullable=True, index=True)
+    project_id = Column(String(100), nullable=True, index=True)
     document_id = Column(String(64), nullable=False, index=True)
     finding_type = Column(String(100), nullable=False, index=True)
     title = Column(String(255), nullable=False)
@@ -209,6 +218,9 @@ class QualityObservationORM(Base):
     __tablename__ = "quality_observations"
 
     observation_id = Column(String(64), primary_key=True, index=True)
+    tenant_id = Column(String(100), nullable=False, default=lambda: DEFAULT_TENANT_ID, index=True)
+    org_id = Column(String(100), nullable=True, index=True)
+    project_id = Column(String(100), nullable=True, index=True)
     event_time = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
     source_component = Column(String(100), nullable=False, index=True)
     aspect = Column(String(50), nullable=False, index=True)
@@ -306,6 +318,28 @@ class RiskTemplateRowORM(Base):
     row_order = Column(Integer, nullable=False, index=True)
     row_data = Column(JSON, nullable=False, default=dict)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
+@event.listens_for(AuditEventORM, "before_insert")
+def _apply_audit_event_payload_privacy_guard(_mapper, _connection, target: AuditEventORM) -> None:
+    """Apply retention tagging and redaction-at-write guardrails for audit payloads."""
+    result = guard_payload_for_persistence(
+        event_type=target.event_type,
+        payload=target.payload,
+        channel="audit",
+    )
+    target.payload = result.payload
+
+
+@event.listens_for(QualityObservationORM, "before_insert")
+def _apply_quality_payload_privacy_guard(_mapper, _connection, target: QualityObservationORM) -> None:
+    """Apply retention tagging and redaction-at-write guardrails for telemetry payloads."""
+    result = guard_payload_for_persistence(
+        event_type=target.aspect,
+        payload=target.payload,
+        channel="telemetry",
+    )
+    target.payload = result.payload
 
 
 class ModelPolicyConfigORM(Base):

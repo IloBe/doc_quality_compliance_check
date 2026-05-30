@@ -7,6 +7,9 @@ import io
 from src.doc_quality.models.orm import RiskTemplateORM, RiskTemplateRowORM
 
 
+_EXPORT_HEADERS = {"X-Access-Purpose": "quality_review"}
+
+
 def _create_risk_template(client, *, template_type: str = "RMF", rows: list[dict] | None = None) -> dict:
     payload = {
         "template_type": template_type,
@@ -152,7 +155,7 @@ def test_export_risk_template_csv_returns_file_with_recomputed_fmea_rpn(client) 
     )
     template_id = created["template_id"]
 
-    response = client.get(f"/api/v1/risk-templates/{template_id}/export/csv")
+    response = client.get(f"/api/v1/risk-templates/{template_id}/export/csv", headers=_EXPORT_HEADERS)
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
@@ -166,6 +169,16 @@ def test_export_risk_template_csv_returns_file_with_recomputed_fmea_rpn(client) 
     assert csv_rows[4][8] == "RPN (S×P)"
     assert csv_rows[5][8] == "8"
     assert csv_rows[5][13] == "6"
+
+
+def test_export_risk_template_csv_requires_access_purpose(client) -> None:
+    created = _create_risk_template(client, template_type="RMF")
+    template_id = created["template_id"]
+
+    response = client.get(f"/api/v1/risk-templates/{template_id}/export/csv")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["reason"] == "purpose_based_access_denied"
 
 
 def test_ai_suggest_risk_row_returns_rule_based_defaults_without_api_key(client, monkeypatch) -> None:

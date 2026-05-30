@@ -95,6 +95,7 @@ def test_audit_trail_event_detail_returns_selected_row_data(client) -> None:
     assert detail["event_id"] == event_id
     assert detail["subject_id"] == "wf-9001"
     assert detail["payload"].get("findings") == 3
+    assert detail["payload"]["__privacy_meta__"]["retention_class"] == "evidence"
 
 
 def test_audit_trail_schedule_returns_default_record(client) -> None:
@@ -260,7 +261,7 @@ def test_audit_trail_list_response_contract_no_payload_blob(client) -> None:
     assert "payload" not in item
     # keys-only enumeration must be present
     assert "payload_keys" in item
-    assert sorted(item["payload_keys"]) == ["internal_hint", "step"]
+    assert sorted(item["payload_keys"]) == ["__privacy_meta__", "internal_hint", "step"]
 
     # Verify the exact field set of a list item
     expected_keys = {
@@ -280,3 +281,66 @@ def test_audit_trail_list_response_contract_no_payload_blob(client) -> None:
         "created_at",
     }
     assert set(item.keys()) == expected_keys
+
+
+def test_audit_trail_applies_secret_and_trade_secret_redaction_with_retention_metadata(client) -> None:
+    response = client.post(
+        "/api/v1/skills/log_event",
+        json={
+            "event_type": "debug.trace.bridge_policy",
+            "actor_type": "system",
+            "actor_id": "orchestrator",
+            "subject_type": "workflow",
+            "subject_id": "wf-redaction-1",
+            "payload": {
+                "api_key": "sk-super-secret-token-123456789",
+                "prompt": "Contains proprietary trade secret architecture for model routing.",
+            },
+        },
+    )
+    assert response.status_code == 200
+    event_id = response.json()["event_id"]
+
+    detail = client.get(
+        f"/api/v1/audit-trail/events/{event_id}",
+        headers={"X-Access-Purpose": "incident_response"},
+    )
+    assert detail.status_code == 200
+    payload = detail.json()["payload"]
+
+    assert payload["api_key"] == "[REDACTED_SECRET]"
+    assert payload["prompt"] == "[REDACTED_TRADE_SECRET]"
+    assert payload["__privacy_meta__"]["retention_class"] == "debug_trace"
+    assert payload["__privacy_meta__"]["redaction_applied"] is True
+
+
+def test_audit_trail_debug_trace_detail_requires_access_purpose_header(client) -> None:
+    response = client.post(
+        "/api/v1/skills/log_event",
+        json={
+            "event_type": "debug.trace.access_check",
+            "actor_type": "system",
+            "actor_id": "orchestrator",
+            "subject_type": "workflow",
+            "subject_id": "wf-purpose-check",
+            "payload": {"debug": "event"},
+        },
+    )
+    assert response.status_code == 200
+    event_id = response.json()["event_id"]
+
+    detail = client.get(f"/api/v1/audit-trail/events/{event_id}")
+    assert detail.status_code == 403
+    assert detail.json()["error"]["reason"] == "purpose_based_access_denied"
+
+
+def test_audit_trail_debug_trace_list_requires_access_purpose_header(client) -> None:
+    response = client.get("/api/v1/audit-trail/events?window_hours=24&include_debug_trace=true")
+    assert response.status_code == 403
+    assert response.json()["error"]["reason"] == "purpose_based_access_denied"
+
+    allowed = client.get(
+        "/api/v1/audit-trail/events?window_hours=24&include_debug_trace=true",
+        headers={"X-Access-Purpose": "incident_response"},
+    )
+    assert allowed.status_code == 200

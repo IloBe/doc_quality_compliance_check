@@ -4,6 +4,7 @@ import { LuArchive, LuInfo, LuLoader, LuRefreshCw, LuShieldCheck } from 'react-i
 import AlertArchiveList from '../components/compliance/AlertArchiveList';
 import FooterInfoCard from '../components/FooterInfoCard';
 import PageHeaderWithWhy from '../components/PageHeaderWithWhy';
+import { getAppMode } from '../lib/appMode';
 import { getHeaderControlClass } from '../components/buttonStyles';
 import { fetchComplianceAlertArchive } from '../lib/complianceAlertClient';
 import { complianceAlertArchive } from '../lib/complianceStandards';
@@ -49,7 +50,8 @@ const AlertArchivePage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const useBackendData = process.env.NEXT_PUBLIC_COMPLIANCE_ALERT_SOURCE === 'backend';
+  const appMode = getAppMode();
+  const useBackendData = appMode === 'real';
 
   const activeFilters: ComplianceAlertFilters = useMemo(() => {
     const normalized = normalizeDateRange(startDate, endDate);
@@ -140,10 +142,10 @@ const AlertArchivePage = () => {
         startDate: filters.startDate,
         endDate: filters.endDate,
       });
-      setAlerts(items.length > 0 ? items : complianceAlertArchive);
+      setAlerts(items);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load compliance alerts');
-      setAlerts(complianceAlertArchive);
+      setAlerts([]);
     } finally {
       setIsLoading(false);
     }
@@ -205,7 +207,7 @@ const AlertArchivePage = () => {
           <p className="mt-3 text-3xl font-black text-neutral-900">{visibleAlerts.length} Alerts</p>
           <p className="mt-2 text-sm leading-6 text-neutral-600">
             {useBackendData
-              ? 'Persisted archive entries are read from append-only backend audit storage with demo fallback when no live backend is available.'
+              ? 'Persisted archive entries are read from append-only backend audit storage.'
               : 'Demo-only entries styled as realistic monitoring outcomes for the latest tracked frameworks.'}
           </p>
         </div>
@@ -229,7 +231,7 @@ const AlertArchivePage = () => {
           <p className="mt-3 text-3xl font-black text-neutral-900">{useBackendData ? 'Audit-Backed' : 'Mocked Feed'}</p>
           <p className="mt-2 text-sm leading-6 text-neutral-600">
             {useBackendData
-              ? 'Backend mode stores alert snapshots in append-only audit events for reproducibility while preserving a demo fallback when no live rows are available.'
+              ? 'Real mode stores alert snapshots in append-only audit events for reproducibility.'
               : 'Entries are intentionally synthetic to avoid external research cost while still showing how a realistic alert archive would look in production.'}
           </p>
         </div>
@@ -307,7 +309,7 @@ const AlertArchivePage = () => {
               Clear all filters
             </button>
           </div>
-          {error ? <p className="mt-3 text-sm font-medium text-amber-700">{error} Showing demo archive data.</p> : null}
+          {error ? <p className="mt-3 text-sm font-medium text-amber-700">{error}</p> : null}
         </div>
 
         <AlertArchiveList alerts={visibleAlerts} />

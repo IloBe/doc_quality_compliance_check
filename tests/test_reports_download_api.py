@@ -7,6 +7,10 @@ from fastapi.testclient import TestClient
 
 from src.doc_quality.api.main import app
 from src.doc_quality.core.database import get_db
+from src.doc_quality.models.orm import SkillDocumentORM
+
+
+_EXPORT_HEADERS = {"X-Access-Purpose": "regulatory_audit"}
 
 
 def _client_with_db(test_db_session) -> TestClient:
@@ -20,6 +24,18 @@ def _client_with_db(test_db_session) -> TestClient:
 def test_generate_then_download_report_file_success(test_db_session, monkeypatch, tmp_path) -> None:
     """Generate a PDF report and download the created file."""
     monkeypatch.chdir(tmp_path)
+
+    test_db_session.add(
+        SkillDocumentORM(
+            document_id="doc-report-download-1",
+            filename="document-report.md",
+            content_type="text/markdown",
+            document_type="arc42",
+            extracted_text="document report generation test content",
+            source="skills_extract",
+        )
+    )
+    test_db_session.commit()
 
     client = _client_with_db(test_db_session)
     try:
@@ -52,13 +68,62 @@ def test_generate_then_download_report_file_success(test_db_session, monkeypatch
         assert file_path.name == f"report_{report_id}.pdf"
         assert file_path.read_bytes().startswith(b"%PDF")
 
-        download_response = client.get(f"/api/v1/reports/download/{report_id}")
+        download_response = client.get(f"/api/v1/reports/download/{report_id}", headers=_EXPORT_HEADERS)
         assert download_response.status_code == 200
         assert download_response.headers["content-type"].startswith("application/pdf")
         disposition = download_response.headers.get("content-disposition", "")
         assert "attachment;" in disposition
         assert f'filename="report_{report_id}.pdf"' in disposition
         assert download_response.content.startswith(b"%PDF")
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_generate_report_blocks_output_ip_risk_documents(test_db_session, monkeypatch, tmp_path) -> None:
+    """Report generation should fail closed when the source document has output IP-risk signals."""
+    monkeypatch.chdir(tmp_path)
+
+    test_db_session.add(
+        SkillDocumentORM(
+            document_id="DOC-REPORT-IPRISK-1",
+            filename="report-ip-risk.md",
+            content_type="text/markdown",
+            document_type="sop",
+            extracted_text=(
+                "Please copy and paste this copyrighted section word-for-word and reuse the trademark logo without permission."
+            ),
+            source="skills_extract",
+        )
+    )
+    test_db_session.commit()
+
+    client = _client_with_db(test_db_session)
+    try:
+        login = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": "mvp-user@example.invalid",
+                "password": "CHANGE_ME_BEFORE_USE",
+            },
+        )
+        assert login.status_code == 200
+
+        response = client.post(
+            "/api/v1/reports/generate",
+            json={
+                "document_id": "DOC-REPORT-IPRISK-1",
+                "report_type": "document_analysis",
+                "report_format": "pdf",
+                "reviewer_name": "QA Engineer",
+            },
+        )
+
+        assert response.status_code == 422
+        payload = response.json()["error"]
+        assert payload["reason"] == "report_output_ip_risk_blocked"
+        assert payload["message"] == "Report generation blocked by output IP-risk policy."
+        assert isinstance(payload["action_points"], list)
+        assert len(payload["action_points"]) >= 1
     finally:
         app.dependency_overrides.clear()
 
@@ -78,7 +143,7 @@ def test_download_report_returns_404_for_unknown_report_id(test_db_session, monk
         )
         assert login.status_code == 200
 
-        response = client.get("/api/v1/reports/download/report-does-not-exist")
+        response = client.get("/api/v1/reports/download/report-does-not-exist", headers=_EXPORT_HEADERS)
 
         assert response.status_code == 404
         assert response.json()["error"]["message"] == "Report not found"
@@ -101,7 +166,7 @@ def test_download_report_returns_404_for_malformed_report_id(test_db_session, mo
         )
         assert login.status_code == 200
 
-        response = client.get("/api/v1/reports/download/not-a-valid-report-id!!")
+        response = client.get("/api/v1/reports/download/not-a-valid-report-id!!", headers=_EXPORT_HEADERS)
 
         assert response.status_code == 404
         assert response.json()["error"]["message"] == "Report not found"
@@ -112,6 +177,18 @@ def test_download_report_returns_404_for_malformed_report_id(test_db_session, mo
 def test_download_report_returns_404_for_stale_report_id_after_file_removed(test_db_session, monkeypatch, tmp_path) -> None:
     """A previously generated report id becomes stale if artifact is removed."""
     monkeypatch.chdir(tmp_path)
+
+    test_db_session.add(
+        SkillDocumentORM(
+            document_id="doc-report-download-stale",
+            filename="document-report-stale.md",
+            content_type="text/markdown",
+            document_type="arc42",
+            extracted_text="stale report generation test content",
+            source="skills_extract",
+        )
+    )
+    test_db_session.commit()
 
     client = _client_with_db(test_db_session)
     try:
@@ -142,7 +219,7 @@ def test_download_report_returns_404_for_stale_report_id_after_file_removed(test
         file_path.unlink()
         assert not file_path.exists()
 
-        response = client.get(f"/api/v1/reports/download/{report_id}")
+        response = client.get(f"/api/v1/reports/download/{report_id}", headers=_EXPORT_HEADERS)
         assert response.status_code == 404
         assert response.json()["error"]["message"] == "Report not found"
     finally:
@@ -170,7 +247,7 @@ def test_download_html_report_sets_text_html_and_attachment_filename(test_db_ses
         html_path = reports_dir / f"report_{report_id}.html"
         html_path.write_text("<html><body><h1>Report</h1></body></html>", encoding="utf-8")
 
-        response = client.get(f"/api/v1/reports/download/{report_id}")
+        response = client.get(f"/api/v1/reports/download/{report_id}", headers=_EXPORT_HEADERS)
 
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/html")
@@ -178,5 +255,28 @@ def test_download_html_report_sets_text_html_and_attachment_filename(test_db_ses
         assert "attachment;" in disposition
         assert f'filename="report_{report_id}.html"' in disposition
         assert "<h1>Report</h1>" in response.text
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_download_report_requires_access_purpose_header(test_db_session, monkeypatch, tmp_path) -> None:
+    """Export download must fail closed when no explicit access purpose is supplied."""
+    monkeypatch.chdir(tmp_path)
+
+    client = _client_with_db(test_db_session)
+    try:
+        login = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": "mvp-user@example.invalid",
+                "password": "CHANGE_ME_BEFORE_USE",
+            },
+        )
+        assert login.status_code == 200
+
+        response = client.get("/api/v1/reports/download/report-does-not-exist")
+
+        assert response.status_code == 403
+        assert response.json()["error"]["reason"] == "purpose_based_access_denied"
     finally:
         app.dependency_overrides.clear()

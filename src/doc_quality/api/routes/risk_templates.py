@@ -12,12 +12,13 @@ import uuid
 from datetime import datetime, timezone
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ...core.config import get_settings
 from ...core.database import get_db
+from ...core.purpose_access import ACCESS_PURPOSE_HEADER, EXPORT_ALLOWED_PURPOSES, enforce_sensitive_access_purpose
 from ...core.session_auth import require_roles
 from ...models.orm import RiskTemplateORM, RiskTemplateRowORM
 from ...models.risk_template import (
@@ -472,10 +473,16 @@ _FMEA_ROW_KEYS = [
 @router.get("/{template_id}/export/csv")
 async def export_risk_template_csv(
     template_id: str,
+    access_purpose: str | None = Header(default=None, alias=ACCESS_PURPOSE_HEADER),
     db: Session = Depends(get_db),
     _user=Depends(require_roles(*_ALLOWED_ROLES)),
 ) -> StreamingResponse:
     """Stream the template as a UTF-8 CSV file download."""
+    enforce_sensitive_access_purpose(
+        access_purpose=access_purpose,
+        allowed_purposes=EXPORT_ALLOWED_PURPOSES,
+        resource_label="risk_templates.export_csv",
+    )
     orm = db.query(RiskTemplateORM).filter(RiskTemplateORM.template_id == template_id).first()
     if orm is None:
         raise HTTPException(status_code=404, detail=f"Risk template not found: {template_id}")

@@ -832,6 +832,32 @@ uv sync --extra dev --frozen --active
 
 ---
 
+### 7.11 Phase 1 Privacy Conformance (PRD/SAD AIUC + OWASP Chapter A)
+
+Run this block to validate Phase 1 privacy controls mapped in PRD/SAD (`AIUC-PRIV-*`, `OWASP-A-PRIV-*`, `AD-20`, `AD-21`).
+
+**Windows (PowerShell):**
+
+```powershell
+.\py313_venv\Scripts\Activate.ps1
+
+# Backend privacy/policy contract + routing + error envelope
+.\py313_venv\Scripts\python.exe -m pytest tests/test_privacy_controls.py tests/test_adapter_routing_policy.py tests/test_bridge_orchestrator_service.py tests/test_bridge_run_api.py tests/test_error_envelope_api.py -q
+
+# Frontend privacy failure-contract behavior
+Set-Location frontend
+npm test -- bridgeClient.test.ts bridgeRunViewModel.test.ts
+npm run test:e2e -- tests/e2e/smoke.spec.ts
+```
+
+**Expected outcome:**
+
+- All privacy conformance tests pass.
+- Fail-closed routing, stable error envelope, correlation IDs, and actionable action points remain intact.
+- Release readiness evidence is captured in `project-context/2.build/qa.md`.
+
+---
+
 ## 8. Current Baseline Assets
 
 All test files are now in the root `tests/` directory (moved from service-local directories for consistency).

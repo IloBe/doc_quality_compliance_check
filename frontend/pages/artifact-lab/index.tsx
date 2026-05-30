@@ -1,19 +1,50 @@
 import Link from 'next/link';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { LuArrowRight, LuBookOpenText, LuClock3, LuFlaskConical, LuFolderOpen } from 'react-icons/lu';
 import { getButtonClass } from '../../components/buttonStyles';
 import FooterInfoCard from '../../components/FooterInfoCard';
 import PageHeaderWithWhy from '../../components/PageHeaderWithWhy';
-import { buildArtifactRunCards } from '../../lib/artifactLabViewModel';
+import { buildArtifactRunCards, buildArtifactRunCardsFromBridgeApi } from '../../lib/artifactLabViewModel';
+import { fetchBridgeRuns, type BridgeRunListItem } from '../../lib/bridgeClient';
 import { useMockStore } from '../../lib/mockStore';
 
 const ArtifactLabIndexPage = () => {
   const runs = useMockStore((state) => state.bridgeRuns);
   const docs = useMockStore((state) => state.documents);
+  const [backendRuns, setBackendRuns] = useState<BridgeRunListItem[]>([]);
+  const [backendError, setBackendError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadBridgeRuns = async () => {
+      try {
+        const items = await fetchBridgeRuns();
+        if (!mounted) {
+          return;
+        }
+        setBackendRuns(items);
+        setBackendError(null);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        setBackendError(error instanceof Error ? error.message : 'Failed to load backend bridge runs.');
+      }
+    };
+
+    void loadBridgeRuns();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const runCards = useMemo(() => {
+    if (backendRuns.length > 0) {
+      return buildArtifactRunCardsFromBridgeApi(backendRuns);
+    }
     return buildArtifactRunCards(runs, docs);
-  }, [docs, runs]);
+  }, [backendRuns, docs, runs]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500">
@@ -25,8 +56,14 @@ const ArtifactLabIndexPage = () => {
       />
 
       <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-xs text-blue-700 font-semibold">
-        Demo mode: run cards are derived from the existing Bridge runs and document data in the app.
+        Run cards are loaded from persisted backend bridge runs when available, with local fallback data in demo mode.
       </div>
+
+      {backendError && (
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-xs text-amber-700 font-semibold">
+          Backend bridge run list unavailable. Showing local fallback data. Details: {backendError}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 shadow-sm">
@@ -52,8 +89,8 @@ const ArtifactLabIndexPage = () => {
             <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">In Progress</span>
             <LuClock3 className="w-4 h-4 text-amber-500" />
           </div>
-          <div className="text-3xl font-black text-neutral-900">{runCards.filter((r) => r.status === 'Running').length}</div>
-          <div className="text-xs text-neutral-500 mt-1">Artifacts can still be drafted</div>
+          <div className="text-3xl font-black text-neutral-900">{runCards.filter((r) => r.status === 'Running' || r.status === 'In Review').length}</div>
+          <div className="text-xs text-neutral-500 mt-1">Includes pre-HITL runs in mandatory review</div>
         </div>
 
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 shadow-sm">

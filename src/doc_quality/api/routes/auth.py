@@ -25,6 +25,7 @@ from ...core.session_auth import (
     revoke_server_session,
     set_session_cookie,
 )
+from ...core.tenant_scope import DEFAULT_TENANT_ID
 from ...models.orm import AppUserORM, AuditEventORM, PasswordRecoveryTokenORM, UserSessionORM
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -139,7 +140,7 @@ def _log_audit_event(
 ) -> None:
     event = AuditEventORM(
         event_id=secrets.token_urlsafe(24),
-        tenant_id="default",
+        tenant_id=DEFAULT_TENANT_ID,
         org_id=None,
         project_id=None,
         event_time=_now_utc(),
@@ -217,7 +218,7 @@ def _is_recovery_rate_limited(db: Session, email: str, ip: str | None) -> bool:
 
 def _find_valid_recovery_token(db: Session, raw_token: str) -> PasswordRecoveryTokenORM | None:
     settings = get_settings()
-    token_hash = _hash_recovery_token(raw_token, settings.secret_key)
+    token_hash = _hash_recovery_token(raw_token, settings.recovery_secret_key)
     row = db.query(PasswordRecoveryTokenORM).filter(PasswordRecoveryTokenORM.token_hash == token_hash).first()
     if row is None:
         return None
@@ -437,7 +438,7 @@ async def recovery_request(
         return generic
 
     raw_token = secrets.token_urlsafe(48)
-    token_hash = _hash_recovery_token(raw_token, settings.secret_key)
+    token_hash = _hash_recovery_token(raw_token, settings.recovery_secret_key)
     expires_at = _now_utc() + timedelta(minutes=settings.auth_recovery_ttl_minutes)
 
     row = PasswordRecoveryTokenORM(

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from src.doc_quality.api.main import app
 from src.doc_quality.core.config import get_settings
 from src.doc_quality.core.database import get_db
+from src.doc_quality.core.security import require_api_auth
 from src.doc_quality.models.orm import UserSessionORM
 
 
@@ -228,6 +229,36 @@ def test_me_rejects_expired_session_cookie(test_db_session) -> None:
         me = client.get("/api/v1/auth/me")
         assert me.status_code == 401
         assert me.json()["error"]["message"] == "Authentication required"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_split_secret_domains_support_independent_api_and_session_auth(test_db_session, monkeypatch) -> None:
+    monkeypatch.setenv("SECRET_KEY", "legacy-secret")
+    monkeypatch.setenv("API_AUTH_SECRET_KEY", "api-secret")
+    monkeypatch.setenv("SESSION_SECRET_KEY", "session-secret")
+    monkeypatch.setenv("RECOVERY_SECRET_KEY", "recovery-secret")
+
+    settings = get_settings()
+    assert settings.api_auth_secret_key == "api-secret"
+    assert settings.session_secret_key == "session-secret"
+    assert settings.recovery_secret_key == "recovery-secret"
+
+    require_api_auth(x_api_key="api-secret", authorization=None)
+
+    client = _client_with_db(test_db_session)
+    try:
+        response = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": os.environ.get("AUTH_MVP_EMAIL", "mvp-user@example.invalid"),
+                "password": os.environ.get("AUTH_MVP_PASSWORD", "CHANGE_ME_BEFORE_USE"),
+            },
+        )
+        assert response.status_code == 200
+
+        me = client.get("/api/v1/auth/me")
+        assert me.status_code == 200
     finally:
         app.dependency_overrides.clear()
 

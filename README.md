@@ -32,6 +32,9 @@ As an additional feature, **data privacy** topics of this MVP are handled by a t
 
 Data privacy is a complex topic in its own right, and we are addressing it with inspiration and support from expert [Katharine Jarmul](https://probablyprivate.com/).
 
+Backend implementation tracking for AIUC-1 and OWASP Chapter A privacy controls is maintained in:
+- [Data Privacy Violation Mitigation Checklist](DATA_PRIVACY_VIOLATION_MITIGATION_README.md#backend-implementation-checklist-aiuc-1-and-owasp-chapter-a)
+
 ### Primary business value
 
 - **Faster readiness for audits and reviews** through standardized evidence quality.
@@ -49,7 +52,9 @@ The **Observability** admin module provides production-grade AI workflow tracing
 - **Recent GenAI prompt/output pairs** — full prompt, output, provider, model, and a rich trace payload (tokens used, temperature, latency, hallucination flag, and any additional metadata) for every LLM-backed flow.
 - **Prometheus snapshot** — HTTP request totals, hallucination report totals, and AI evaluation totals directly from the `/metrics` endpoint.
 
-The page operates in **demo mode by default** (representative mock telemetry, no DB writes required) and switches to live database-backed telemetry when `NEXT_PUBLIC_OBSERVABILITY_SOURCE=backend` is set — the same env-flag pattern used by the Dashboard, ensuring zero risk to the production audit trail during demonstrations.
+The page supports two explicit global modes via `NEXT_PUBLIC_APP_MODE`:
+- `demo`: representative mock telemetry for demonstrations
+- `real`: live database-backed telemetry without demo fallback
 
 ### Stakeholder governance and rights management (Admin — QM)
 

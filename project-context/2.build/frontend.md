@@ -532,6 +532,38 @@ This is the correct state to document for the current codebase.
 
 ---
 
+## Section 11 – Phase 1 Privacy Build Coverage (Frontend)
+
+This section confirms frontend Phase 1 coverage against PRD/SAD data-privacy requirements.
+
+### 11.1 Requirement linkage
+
+| Requirement Set | Frontend-Relevant IDs | Frontend Build Coverage |
+| --- | --- | --- |
+| AIUC-1 detailed requirements | `AIUC-PRIV-02`, `AIUC-PRIV-03`, `AIUC-PRIV-07` | Output-rights/user guidance surfaces, role/context-aware interaction gating, and stable actionable failure UX with correlation IDs in bridge flows. |
+| OWASP Chapter A detailed requirements | `OWASP-A-PRIV-04`, `OWASP-A-PRIV-07`, `OWASP-A-PRIV-08` | Least-privilege trace/export UX behavior, standardized deny messaging contract (`error_code`, `action_points`, `correlation_id`), and frontend conformance tests in `py313_venv` release path. |
+| SAD architecture decisions | `AD-20`, `AD-21` | UI is aligned to policy-deny transparency expectations and safe failure communication without exposing sensitive internals. |
+
+### 11.2 Phase 1 frontend implementation surfaces
+
+- `frontend/lib/bridgeClient.ts` (structured error parsing)
+- `frontend/lib/bridgeRunViewModel.ts` (code-to-guidance mapping)
+- `frontend/pages/bridge.tsx` (bridge deny/allow UX)
+- `frontend/pages/doc/[docId]/bridge.tsx` (document bridge deny/allow UX)
+- `frontend/lib/rbac.ts` + `authContext.tsx` (permission-aware interaction)
+
+### 11.3 Frontend test coverage targets
+
+- `frontend/tests/bridgeClient.test.ts`
+- `frontend/tests/bridgeRunViewModel.test.ts`
+- `frontend/tests/e2e/smoke.spec.ts` (failure-state smoke scenario)
+
+### 11.4 Release-gate requirement
+
+- Frontend privacy UX/error-contract tests for Phase 1 must pass in `py313_venv` workflow execution and remain aligned with backend error envelope semantics.
+
+---
+
 ## Audit Metadata
 
 - Reviewed against current code in `frontend/pages`, `frontend/components`, `frontend/lib`, and `frontend/next.config.js`.

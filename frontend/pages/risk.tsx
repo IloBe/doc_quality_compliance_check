@@ -139,6 +139,7 @@ const RiskPage = () => {
       }
 
       setActions(response.items);
+      setErrorMessage(response.message ?? null);
       setIsDemoMode(Boolean(response.degradedToDemo));
       setIsLoadingActions(false);
     };
@@ -167,7 +168,7 @@ const RiskPage = () => {
     });
 
     if (!response.ok || !response.item) {
-      setErrorMessage('Failed to persist risk action.');
+      setErrorMessage(response.message || 'Failed to persist risk action.');
       return null;
     }
 
