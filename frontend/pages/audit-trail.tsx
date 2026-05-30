@@ -10,6 +10,7 @@ import FooterInfoCard from '../components/FooterInfoCard';
 import PageHeaderWithWhy from '../components/PageHeaderWithWhy';
 import { getHeaderControlClass, getHeaderToggleGroupClass } from '../components/buttonStyles';
 import { AuditTrailEvent, fetchAuditTrailEventDetail, fetchAuditTrailEvents, fetchAuditTrailSchedule, upsertAuditTrailSchedule } from '../lib/auditTrailClient';
+import { getAppMode } from '../lib/appMode';
 import {
   AUDIT_WINDOWS,
   buildAuditKpis,
@@ -62,9 +63,8 @@ const AuditTrailPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Default to demo mode to keep the page useful in workshops without seeded audit rows.
-  // Set NEXT_PUBLIC_AUDIT_TRAIL_SOURCE=backend to load persisted events from PostgreSQL.
-  const useBackendData = process.env.NEXT_PUBLIC_AUDIT_TRAIL_SOURCE === 'backend';
+  const appMode = getAppMode();
+  const useBackendData = appMode === 'real';
 
   const mockEvents = useMemo<AuditTrailEvent[]>(() => createMockAuditTrailEvents(), []);
 
@@ -317,7 +317,7 @@ const AuditTrailPage = () => {
       {!useBackendData && (
         <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 text-xs text-blue-700 font-semibold">
           Demo mode · representative governance events. Set{' '}
-          <code className="font-mono bg-blue-100 px-1 rounded">NEXT_PUBLIC_AUDIT_TRAIL_SOURCE=backend</code>{' '}
+          <code className="font-mono bg-blue-100 px-1 rounded">NEXT_PUBLIC_APP_MODE=real</code>{' '}
           to load persisted audit events from PostgreSQL.
         </div>
       )}

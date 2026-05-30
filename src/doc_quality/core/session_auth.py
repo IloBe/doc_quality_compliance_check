@@ -78,7 +78,7 @@ def create_server_session(
     ttl_minutes = _session_ttl_minutes(remember_me)
     session_id = secrets.token_urlsafe(24)
     raw_token = secrets.token_urlsafe(48)
-    token_hash = _hash_session_token(raw_token, settings.secret_key)
+    token_hash = _hash_session_token(raw_token, settings.session_secret_key)
     expires_at = _now_utc() + timedelta(minutes=ttl_minutes)
 
     row = UserSessionORM(
@@ -107,7 +107,7 @@ def revoke_server_session(db: Session, raw_cookie_value: str | None) -> None:
         return
 
     settings = get_settings()
-    token_hash = _hash_session_token(raw_cookie_value, settings.secret_key)
+    token_hash = _hash_session_token(raw_cookie_value, settings.session_secret_key)
     row = db.query(UserSessionORM).filter(UserSessionORM.session_token_hash == token_hash).first()
     if row is None:
         return
@@ -122,7 +122,7 @@ def resolve_user_from_cookie(db: Session, raw_cookie_value: str | None) -> Authe
         return None
 
     settings = get_settings()
-    token_hash = _hash_session_token(raw_cookie_value, settings.secret_key)
+    token_hash = _hash_session_token(raw_cookie_value, settings.session_secret_key)
     row = db.query(UserSessionORM).filter(UserSessionORM.session_token_hash == token_hash).first()
     if row is None:
         return None

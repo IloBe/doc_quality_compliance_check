@@ -481,6 +481,86 @@ The following requirements are added as mandatory architecture-level requirement
 4. Release checks verify that env example files contain no real credentials and only neutral/demo placeholders.
 5. Telemetry and audit retention classes are documented and testable with role-scoped read access.
 
+#### 3.4.11 AIUC-1 Data & Privacy Fulfillment Review and Added Requirements (A001-A007)
+
+This PRD now treats AIUC-1 Data & Privacy controls from https://www.aiuc-1.com/data-and-privacy as mandatory product requirements.
+
+| AIUC-1 ID | Requirement Summary | Current Fulfillment Review | Added PRD Requirement |
+|-----------|---------------------|----------------------------|-----------------------|
+| A001 | Input data policy (training, inference, retention, rights) | Partially fulfilled by existing GDPR/privacy sections, but not yet consolidated as a single explicit policy artifact | Maintain a versioned "AI Input Data Policy" document, expose it in-app, and bind enforcement points to policy IDs in audit events |
+| A002 | Output ownership, usage, consent/opt-out, deletion policy | Partially fulfilled via retention/deletion controls, but output rights language is not explicit | Add "AI Output Rights Policy" with ownership, allowed use, deletion, and customer opt-out rules; enforce in export and API response flows |
+| A003 | Contextual and role-based data access limits for agents | Mostly fulfilled through RBAC + step contracts, still uneven across all workflows | Enforce task/role/context-based data minimization and tool allowlists for every model-using step |
+| A004 | Protect IP and trade secrets from leakage | Partially fulfilled by sanitization and privacy routing; no explicit IP leakage taxonomy/gates | Add IP/trade-secret detection and deny/redact policies for prompts, outputs, and logs |
+| A005 | Prevent cross-customer data exposure | Partially fulfilled by governance architecture, but tenant isolation is not stated as an AIUC requirement | Require tenant/project isolation guards for retrieval, prompting, caching, and persistence with automated tests |
+| A006 | Prevent PII leakage in outputs/logs | Largely fulfilled, with known closure items on retention/redaction-at-write | Require output leakage scans and log redaction-at-write before persistence; block on violation |
+| A007 | Prevent AI output IP violations (copyright/trademark) | Not explicitly covered end-to-end | Add output compliance checks for copyright/trademark risk with HITL gate for high-risk cases |
+
+**New mandatory product requirements (AIUC-PRIV-01..07)**
+
+| Requirement ID | Requirement | Priority |
+|----------------|-------------|----------|
+| AIUC-PRIV-01 | A001 policy must exist as a versioned artifact and be linked from audit evidence (`policy_rule_id`, `policy_version`). | P0 |
+| AIUC-PRIV-02 | A002 output-rights policy must be enforced in report/export APIs and user-visible guidance. | P0 |
+| AIUC-PRIV-03 | A003 contextual access control must be mandatory for all model-using steps (user role + agent role + task context). | P0 |
+| AIUC-PRIV-04 | A004 controls must detect and block trade-secret/IP leakage in prompts, generated outputs, and telemetry payloads. | P1 |
+| AIUC-PRIV-05 | A005 tenant and project isolation checks must prevent cross-customer data mixing in retrieval and model context assembly. | P0 |
+| AIUC-PRIV-06 | A006 PII leakage controls must run before API return and before any write to telemetry/audit stores. | P0 |
+| AIUC-PRIV-07 | A007 output IP-risk checks must classify low/medium/high risk and trigger HITL approval for medium/high. | P1 |
+
+**Acceptance criteria (AIUC-1 Data & Privacy)**
+
+1. Every model invocation stores the evaluated AIUC policy references and decision outcome in auditable metadata.
+2. Customer-facing failure responses are explicit, actionable, and aligned with the existing UX style (clear cause, next action points, correlation ID).
+3. Tests prove no cross-customer context assembly and no unauthorized external transfer for personal-data-possible steps.
+4. Output/log leakage checks block persistence and return governed failure codes for PII/IP violations.
+5. Release validation in `py313_venv` includes privacy-policy conformance, redaction, and traceability test suites.
+
+#### 3.4.12 OWASP Top 10 for Agentic Apps Chapter A (Data & Privacy) Fulfillment Review
+
+This PRD explicitly evaluates coverage for Chapter A (Data & Privacy) using the project privacy-audit corpus and current code/documentation state.
+
+**OWASP Chapter A to AIUC-1 mapping reference (implementation crosswalk)**
+
+| OWASP Chapter A control theme | AIUC-1 mapping | Trace intent |
+|-------------------------------|----------------|--------------|
+| Input data handling and governance | A001 | Policy-managed input usage, retention, and rights evidence |
+| Output rights and usage controls | A002 | Ownership, usage, and deletion/opt-out policy enforcement |
+| Context-aware access boundaries | A003 | Task/role/context least-privilege and constrained data access |
+| Trade-secret and confidential-data protection | A004 | IP/trade-secret leakage prevention at input/output/log surfaces |
+| Tenant/customer isolation | A005 | Cross-customer exposure prevention in context assembly and persistence |
+| PII leakage prevention in outputs and logs | A006 | Redaction-at-write, output leakage checks, and governed deny paths |
+| Output IP and copyright/trademark safeguards | A007 | Output IP-risk classification and HITL escalation controls |
+
+| OWASP-A Topic | Current Implementation Status | Gap Summary | Added PRD Requirement |
+|---------------|-------------------------------|-------------|-----------------------|
+| Model-provider boundary protection for personal data | Partial | On-prem-first routing and step contracts exist, but strict policy linkage and deny evidence are not complete across all model paths | Require mandatory policy checks and auditable deny/allow evidence for every model invocation |
+| RBAC and contextual least-privilege data access | Partial-to-strong | Role controls exist, but not all data surfaces have uniform contextual access constraints | Require context-aware least-privilege enforcement for model, trace, and export surfaces |
+| Telemetry minimization and retention governance | Partial | Retention-class design exists, but strict redaction-at-write and class-level enforcement are not complete everywhere | Require redaction-at-write and retention-by-class enforcement before persistence |
+| Secrets, tokens, and keys hygiene for privacy protection | Partial | Production fail-fast controls exist, but key-separation/rotation and service-key scoping are incomplete | Require split secret domains, rotation policy, and auditable secret governance controls |
+| Cross-customer isolation in context assembly and traces | Partial | Governance intent exists, but explicit no-mixing verification is not consistently enforced end-to-end | Require tenant/project isolation guardrails with conformance tests and deny-path evidence |
+| User-visible privacy failure handling and traceability | Partial-to-strong | Action-point failure envelopes exist in bridge paths, but not fully normalized across all privacy deny surfaces | Require consistent user-safe, actionable failures with correlation IDs and policy reason codes |
+
+**New mandatory product requirements (OWASP-A-PRIV-01..08)**
+
+| Requirement ID | Requirement | Priority |
+|----------------|-------------|----------|
+| OWASP-A-PRIV-01 | Every model-using step must pass Chapter-A policy checks before execution and before persistence. | P0 |
+| OWASP-A-PRIV-02 | Requests with personal-data-possible sensitivity must fail closed when compliant on-prem execution is unavailable. | P0 |
+| OWASP-A-PRIV-03 | Telemetry writes must enforce redaction-at-write and retention-class tagging (`audit_evidence`, `operational_metrics`, `debug_trace`). | P0 |
+| OWASP-A-PRIV-04 | Trace/export APIs must apply least-privilege RBAC plus contextual purpose checks for sensitive payload access. | P0 |
+| OWASP-A-PRIV-05 | Secret domains must be separated (session signing, recovery signing, service API auth) with rotation and audited change control. | P1 |
+| OWASP-A-PRIV-06 | Cross-customer data mixing in retrieval, context assembly, traces, and persistence must be blocked and audited. | P0 |
+| OWASP-A-PRIV-07 | Privacy-deny and security-deny API responses must provide stable error codes, user-safe messages, action points, and correlation IDs using the existing UX style. | P0 |
+| OWASP-A-PRIV-08 | Release conformance in `py313_venv` must include Chapter-A tests for routing, redaction, retention, RBAC, isolation, and secret-config hardening. | P0 |
+
+**Acceptance criteria (OWASP Chapter A)**
+
+1. Chapter-A controls are traceable from requirement ID to test evidence and audit payload fields.
+2. All deny paths are fail-closed, auditable, and produce actionable user guidance aligned with existing UI style.
+3. Redaction-at-write is enforced prior to telemetry/audit persistence for sensitive prompt/output classes.
+4. Cross-customer isolation tests fail on any context mixing and emit governance-grade evidence.
+5. `py313_venv` release gates fail when Chapter-A conformance tests or traceability checks fail.
+
 ### Security Requirements
 
 The application must:

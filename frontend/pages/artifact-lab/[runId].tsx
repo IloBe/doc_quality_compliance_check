@@ -20,6 +20,7 @@ import FooterInfoCard from '../../components/FooterInfoCard';
 import PageHeaderWithWhy from '../../components/PageHeaderWithWhy';
 import { getButtonClass } from '../../components/buttonStyles';
 import { exportArtifactMarkdown, exportArtifactPdf, pushArtifactToWiki } from '../../lib/artifactExportClient';
+import { fetchBridgeRunById, type BridgeRunListItem } from '../../lib/bridgeClient';
 import {
   applyLatestProposalToDrafts,
   ArtifactChatMsg,
@@ -34,6 +35,7 @@ import { useMockStore } from '../../lib/mockStore';
 import { syncQueryParam } from '../../lib/queryState';
 import { getSelectionStyles } from '../../lib/selectionStyles';
 import { formatDateTime } from '../../lib/dateTime';
+import type { BridgeRun } from '../../lib/mockStore';
 
 function readQueryValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) {
@@ -72,6 +74,8 @@ const ArtifactLabRunPage = () => {
   const [askDecisionRationale, setAskDecisionRationale] = useState('');
   const [askSessionError, setAskSessionError] = useState<string | null>(null);
   const [isProposalApplied, setIsProposalApplied] = useState(false);
+  const [backendRun, setBackendRun] = useState<BridgeRunListItem | null>(null);
+  const [backendRunError, setBackendRunError] = useState<string | null>(null);
   const [chat, setChat] = useState<ArtifactChatMsg[]>([
     {
       id: 'msg-1',
@@ -81,7 +85,62 @@ const ArtifactLabRunPage = () => {
     },
   ]);
 
-  const run = useMemo(() => bridgeRuns.find((item) => item.id === runId), [bridgeRuns, runId]);
+  useEffect(() => {
+    let mounted = true;
+
+    const loadRun = async () => {
+      if (!runId) {
+        setBackendRun(null);
+        setBackendRunError(null);
+        return;
+      }
+
+      try {
+        const item = await fetchBridgeRunById(runId);
+        if (!mounted) {
+          return;
+        }
+        setBackendRun(item);
+        setBackendRunError(null);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        setBackendRun(null);
+        setBackendRunError(error instanceof Error ? error.message : 'Failed to resolve backend bridge run.');
+      }
+    };
+
+    void loadRun();
+    return () => {
+      mounted = false;
+    };
+  }, [runId]);
+
+  const run = useMemo<BridgeRun | null>(() => {
+    const fromStore = bridgeRuns.find((item) => item.id === runId);
+    if (fromStore) {
+      return fromStore;
+    }
+    if (!backendRun) {
+      return null;
+    }
+
+    return {
+      id: backendRun.run_id,
+      documentId: backendRun.document_id,
+      documentTitle: backendRun.document_name,
+      product: backendRun.project_id || backendRun.document_type || 'Unknown',
+      status: backendRun.human_review_status === 'approved'
+        ? 'Done'
+        : backendRun.human_review_status === 'rejected'
+          ? 'Needs Rework'
+          : 'In Review',
+      startedAt: backendRun.completed_at || backendRun.started_at,
+      evidenceCount: Array.isArray(backendRun.checked_frameworks) ? backendRun.checked_frameworks.length : 0,
+    };
+  }, [backendRun, bridgeRuns, runId]);
+
   const resolvedRunId = run?.id ?? runId;
 
   const { linkedDocuments: runDocs, primaryDocument: primaryDoc } = useMemo(
@@ -186,7 +245,8 @@ const ArtifactLabRunPage = () => {
       });
 
       if (!result.ok) {
-        setErrorInfo(`PDF export failed: ${result.message}`);
+        const actionPoints = result.actionPoints?.length ? ` ${result.actionPoints.join(' ')}` : '';
+        setErrorInfo(`PDF export failed: ${result.message}${actionPoints}`);
         return;
       }
 
@@ -212,7 +272,8 @@ const ArtifactLabRunPage = () => {
       });
 
       if (!result.ok) {
-        setErrorInfo(`Markdown export failed: ${result.message}`);
+        const actionPoints = result.actionPoints?.length ? ` ${result.actionPoints.join(' ')}` : '';
+        setErrorInfo(`Markdown export failed: ${result.message}${actionPoints}`);
         return;
       }
 
@@ -238,7 +299,8 @@ const ArtifactLabRunPage = () => {
       });
 
       if (!result.ok) {
-        setErrorInfo(`Wiki push failed: ${result.message}`);
+        const actionPoints = result.actionPoints?.length ? ` ${result.actionPoints.join(' ')}` : '';
+        setErrorInfo(`Wiki push failed: ${result.message}${actionPoints}`);
         return;
       }
 
@@ -333,6 +395,9 @@ const ArtifactLabRunPage = () => {
         />
         <div className="bg-white border border-neutral-200 rounded-2xl p-6 shadow-sm">
           <p className="text-neutral-700 mb-4">No run found for ID: {runId}</p>
+          {backendRunError && (
+            <p className="text-xs text-rose-600 mb-4">Backend lookup failed: {backendRunError}</p>
+          )}
           <Link
             href="/artifact-lab"
             className={getButtonClass({ variant: 'primary', size: 'md', extra: 'text-sm normal-case tracking-normal font-semibold' })}

@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from src.doc_quality.api.main import app
 from src.doc_quality.core.database import get_db
+from src.doc_quality.models.orm import SkillDocumentORM
 
 
 def _client_with_db(test_db_session) -> TestClient:
@@ -112,6 +113,18 @@ def test_service_client_allowed_only_on_explicit_machine_endpoints(test_db_sessi
     ],
 )
 def test_reports_generate_role_matrix(test_db_session, monkeypatch, role: str, expected_status: int) -> None:
+    test_db_session.add(
+        SkillDocumentORM(
+            document_id="doc-role-matrix-report",
+            filename="role-matrix-report.md",
+            content_type="text/markdown",
+            document_type="arc42",
+            extracted_text="Role matrix report source document.",
+            source="analyze_text",
+        )
+    )
+    test_db_session.commit()
+
     client = _client_with_roles(test_db_session, monkeypatch, role)
     try:
         response = client.post(
@@ -207,5 +220,61 @@ def test_service_client_allowed_on_observability_but_denied_on_documents(test_db
 
         documents_denied = service_client.get("/api/v1/documents")
         assert documents_denied.status_code == 403
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize(
+    ("role", "expected_status"),
+    [
+        ("qm_lead", 200),
+        ("riskmanager", 200),
+        ("auditor", 200),
+        ("architect", 200),
+        ("viewer", 403),
+    ],
+)
+def test_documents_detail_role_and_purpose_matrix(test_db_session, monkeypatch, role: str, expected_status: int) -> None:
+    test_db_session.add(
+        SkillDocumentORM(
+            document_id="doc-role-purpose-1",
+            filename="role-purpose.md",
+            content_type="text/markdown",
+            document_type="arc42",
+            extracted_text="Role and purpose matrix content.",
+            source="analyze_text",
+        )
+    )
+    test_db_session.commit()
+
+    client = _client_with_roles(test_db_session, monkeypatch, role)
+    try:
+        response = client.get(
+            "/api/v1/documents/doc-role-purpose-1",
+            headers={"X-Access-Purpose": "quality_review"},
+        )
+        assert response.status_code == expected_status
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_documents_detail_denies_missing_access_purpose_for_authorized_role(test_db_session, monkeypatch) -> None:
+    test_db_session.add(
+        SkillDocumentORM(
+            document_id="doc-role-purpose-2",
+            filename="missing-purpose.md",
+            content_type="text/markdown",
+            document_type="arc42",
+            extracted_text="Content requiring explicit purpose declaration.",
+            source="analyze_text",
+        )
+    )
+    test_db_session.commit()
+
+    client = _client_with_roles(test_db_session, monkeypatch, "qm_lead")
+    try:
+        response = client.get("/api/v1/documents/doc-role-purpose-2")
+        assert response.status_code == 403
+        assert response.json()["error"]["reason"] == "purpose_based_access_denied"
     finally:
         app.dependency_overrides.clear()

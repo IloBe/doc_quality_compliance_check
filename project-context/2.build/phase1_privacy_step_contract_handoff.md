@@ -8,6 +8,27 @@ Related decisions:
 - AD-18 Retention-class observability split
 - AD-19 Security-safe configuration baseline
 
+AIUC-1 Data & Privacy trace set in scope:
+- A001 Input data policy
+- A002 Output data policy
+- A003 Agent data access limits
+- A004 Protect IP and trade secrets
+- A005 Prevent cross-customer data exposure
+- A006 Prevent PII leakage
+- A007 Prevent output IP violations
+
+OWASP Chapter A to AIUC-1 build crosswalk in scope:
+
+| OWASP Chapter A control theme | AIUC-1 mapping |
+| --- | --- |
+| Input data handling and governance | A001 |
+| Output rights and usage controls | A002 |
+| Context-aware access boundaries | A003 |
+| Trade-secret and confidential-data protection | A004 |
+| Tenant/customer isolation | A005 |
+| PII leakage prevention in outputs/logs | A006 |
+| Output IP and copyright/trademark safeguards | A007 |
+
 ## Scope and Constraints
 
 - Runtime and environment: Python 3.13 virtual environment (`py313_venv`), existing FastAPI backend, existing Next.js UI style/components.
@@ -16,18 +37,18 @@ Related decisions:
 
 ## Ticket Backlog
 
-| Ticket ID | Title | Owner | Priority | Depends On |
-| --- | --- | --- | --- | --- |
-| PSC-01 | Define step policy contract model and validators | Backend Eng | P0 | None |
-| PSC-02 | Enforce policy metadata in model invocation pipeline | Backend Eng | P0 | PSC-01 |
-| PSC-03 | Fail-closed routing for personal-data-possible steps | Backend Eng | P0 | PSC-01, PSC-02 |
-| PSC-04 | Persist policy/routing audit evidence for each model step | Backend Eng | P0 | PSC-02 |
-| PSC-05 | Standardize workflow exception taxonomy and API error mapping | Backend Eng | P0 | PSC-02 |
-| PSC-06 | Add bridge and model-step conformance tests | QA Eng + Backend Eng | P0 | PSC-01..PSC-05 |
-| PSC-07 | Add frontend failure UX for policy/routing errors (existing style) | Frontend Eng | P1 | PSC-05 |
-| PSC-08 | Implement observability retention-class split | Backend Eng | P1 | PSC-04 |
-| PSC-09 | Add env-example conformance check in CI | QA Eng + DevOps | P1 | PSC-04 |
-| PSC-10 | Release readiness checklist and operator runbook update | QA Eng + DevOps | P1 | PSC-06..PSC-09 |
+| Ticket ID | Title | Owner | Priority | Depends On | AIUC-1 Mapping |
+| --- | --- | --- | --- | --- | --- |
+| PSC-01 | Define step policy contract model and validators | Backend Eng | P0 | None | A001, A002, A003 |
+| PSC-02 | Enforce policy metadata in model invocation pipeline | Backend Eng | P0 | PSC-01 | A001, A002, A003, A006 |
+| PSC-03 | Fail-closed routing for personal-data-possible steps | Backend Eng | P0 | PSC-01, PSC-02 | A001, A003, A005, A006 |
+| PSC-04 | Persist policy/routing audit evidence for each model step | Backend Eng | P0 | PSC-02 | A001, A002, A003, A005, A006, A007 |
+| PSC-05 | Standardize workflow exception taxonomy and API error mapping | Backend Eng | P0 | PSC-02 | A002, A006, A007 |
+| PSC-06 | Add bridge and model-step conformance tests | QA Eng + Backend Eng | P0 | PSC-01..PSC-05 | A001, A002, A003, A004, A005, A006, A007 |
+| PSC-07 | Add frontend failure UX for policy/routing errors (existing style) | Frontend Eng | P1 | PSC-05 | A002, A006, A007 |
+| PSC-08 | Implement observability retention-class split | Backend Eng | P1 | PSC-04 | A001, A006 |
+| PSC-09 | Add env-example conformance check in CI | QA Eng + DevOps | P1 | PSC-04 | A001, A006 |
+| PSC-10 | Release readiness checklist and operator runbook update | QA Eng + DevOps | P1 | PSC-06..PSC-09 | A001, A002, A003, A004, A005, A006, A007 |
 
 ## Detailed Tickets
 
@@ -118,6 +139,30 @@ Related decisions:
   - Tests fail when fail-closed routing is not enforced.
   - Coverage threshold remains at or above current gate.
 
+### AIUC-1 Traceability Matrix (Execution Ownership)
+
+| AIUC-1 ID | Primary Ticket(s) | Verification Evidence |
+| --- | --- | --- |
+| A001 | PSC-01, PSC-02, PSC-04, PSC-08 | Policy contract validator tests, audit payload assertions, retention-class checks |
+| A002 | PSC-01, PSC-04, PSC-05, PSC-07 | Output-policy decision fields in events, API error envelope tests, UI failure guidance checks |
+| A003 | PSC-01, PSC-02, PSC-03 | Step-contract enforcement tests, denied unauthorized route tests |
+| A004 | PSC-06, PSC-10 | IP/trade-secret deny-path test cases in conformance suite and release checklist evidence |
+| A005 | PSC-03, PSC-04, PSC-06 | Cross-customer isolation tests and deny-event audit records |
+| A006 | PSC-02, PSC-03, PSC-05, PSC-06, PSC-08 | Leakage deny-path tests, redaction/logging tests, retention/redaction controls |
+| A007 | PSC-05, PSC-06, PSC-07, PSC-10 | IP-risk error mapping tests, HITL-trigger checks, operator runbook mappings |
+
+### OWASP Chapter A Execution Crosswalk
+
+| OWASP Chapter A control theme | Primary Ticket(s) | Verification Evidence |
+| --- | --- | --- |
+| Input data handling and governance | PSC-01, PSC-02, PSC-04, PSC-08 | Policy metadata contract tests, audit evidence assertions, retention-class checks |
+| Output rights and usage controls | PSC-04, PSC-05, PSC-07 | Output decision metadata checks, error-envelope tests, UX guidance checks |
+| Context-aware access boundaries | PSC-01, PSC-02, PSC-03 | Policy-guard and route-deny tests with role/context inputs |
+| Trade-secret and confidential-data protection | PSC-06, PSC-10 | Deny-path conformance tests and release checklist evidence |
+| Tenant/customer isolation | PSC-03, PSC-04, PSC-06 | Context-mixing deny tests and immutable violation evidence |
+| PII leakage prevention in outputs/logs | PSC-02, PSC-05, PSC-06, PSC-08 | Leakage/redaction tests and persistence guard checks |
+| Output IP and copyright/trademark safeguards | PSC-05, PSC-06, PSC-07, PSC-10 | IP-risk failure mapping tests and HITL escalation evidence |
+
 ### PSC-07 — Add frontend failure UX for policy/routing errors (existing style)
 
 - Objective: user-visible failures must be understandable and actionable.
@@ -175,6 +220,8 @@ Related decisions:
 - Tests cover positive and negative paths and pass in `py313_venv`.
 - Frontend failure messaging uses existing UI style and includes action points.
 - Build documentation is updated with deployment and troubleshooting guidance.
+- AIUC-1 A001-A007 mapping is present in tickets and validated by QA trace evidence.
+- OWASP Chapter A to AIUC-1 mapping is present in build tickets and validated by QA trace evidence.
 
 ## Execution Sequence Reference
 

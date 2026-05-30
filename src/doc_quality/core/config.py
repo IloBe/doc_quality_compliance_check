@@ -22,6 +22,9 @@ class Settings(BaseSettings):
 
     # Security
     secret_key: str = "change-me-in-production"
+    api_auth_secret_key: str = ""
+    session_secret_key: str = ""
+    recovery_secret_key: str = ""
     allowed_file_types: list[str] = [".pdf", ".docx", ".md", ".txt"]
     max_file_size_mb: int = 25
     session_cookie_name: str = "dq_session"
@@ -108,6 +111,13 @@ class Settings(BaseSettings):
 
         if self.environment == "production" and self.secret_key.strip() == "change-me-in-production":
             raise ValueError("SECRET_KEY must be explicitly configured in production")
+
+        if not self.api_auth_secret_key.strip():
+            self.api_auth_secret_key = self.secret_key
+        if not self.session_secret_key.strip():
+            self.session_secret_key = self.secret_key
+        if not self.recovery_secret_key.strip():
+            self.recovery_secret_key = self.secret_key
 
         return self
 

@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from ..core.logging_config import get_logger
 from ..core.security import sanitize_text, validate_filename, validate_file_size
+from ..core.tenant_scope import DEFAULT_TENANT_ID, apply_tenant_scope
 from ..models.document import DocumentType
 from ..models.orm import AuditEventORM, AuditScheduleORM, FindingORM, SkillDocumentORM
 from ..models.skills import (
@@ -59,6 +60,11 @@ _VALID_WORKFLOW_STATUSES = {
 }
 
 _EXTRACTED_TEXT_PREVIEW_CHARS = 280
+_RETENTION_CLASS_DEBUG_TRACE = "debug_trace"
+
+
+def _tenant_scoped_query(query, model):
+    return apply_tenant_scope(query, model, tenant_id=DEFAULT_TENANT_ID)
 
 
 def _make_text_preview(value: str, max_chars: int = _EXTRACTED_TEXT_PREVIEW_CHARS) -> str:
@@ -91,11 +97,8 @@ def _persist_privacy_violation_artifacts(
         return
 
     existing_finding = (
-        db.query(FindingORM)
-        .filter(
-            FindingORM.document_id == document_id,
-            FindingORM.finding_type == "data_privacy_violation",
-        )
+        _tenant_scoped_query(db.query(FindingORM), FindingORM)
+        .filter(FindingORM.document_id == document_id, FindingORM.finding_type == "data_privacy_violation")
         .first()
     )
 
@@ -119,6 +122,7 @@ def _persist_privacy_violation_artifacts(
         db.add(
             FindingORM(
                 finding_id=str(uuid.uuid4()),
+                tenant_id=DEFAULT_TENANT_ID,
                 document_id=document_id,
                 finding_type="data_privacy_violation",
                 title="Data privacy violation risk detected",
@@ -131,7 +135,7 @@ def _persist_privacy_violation_artifacts(
     db.add(
         AuditEventORM(
             event_id=str(uuid.uuid4()),
-            tenant_id="default",
+            tenant_id=DEFAULT_TENANT_ID,
             org_id=None,
             project_id=None,
             event_time=datetime.now(timezone.utc),
@@ -210,6 +214,22 @@ def _to_search_record(record: SkillDocumentORM) -> SkillDocumentSearchRecord:
     )
 
 
+def _payload_retention_class(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    meta = payload.get("__privacy_meta__")
+    if not isinstance(meta, dict):
+        return None
+    value = meta.get("retention_class")
+    if isinstance(value, str) and value.strip():
+        return value.strip().lower()
+    return None
+
+
+def _is_debug_trace_payload(payload: object) -> bool:
+    return _payload_retention_class(payload) == _RETENTION_CLASS_DEBUG_TRACE
+
+
 def persist_document(
     db: Session,
     *,
@@ -225,11 +245,11 @@ def persist_document(
     sanitized_text = sanitize_text(extracted_text)
     resolved_document_id = document_id or str(uuid.uuid4())
 
-    existing = db.query(SkillDocumentORM).filter(SkillDocumentORM.document_id == resolved_document_id).first()
+    existing = _tenant_scoped_query(db.query(SkillDocumentORM), SkillDocumentORM).filter(SkillDocumentORM.document_id == resolved_document_id).first()
     if existing is None:
         # Canonicalize by filename to avoid duplicate cards for repeated work on the same file.
         existing = (
-            db.query(SkillDocumentORM)
+            _tenant_scoped_query(db.query(SkillDocumentORM), SkillDocumentORM)
             .filter(SkillDocumentORM.filename == sanitized_filename)
             .order_by(desc(SkillDocumentORM.updated_at), desc(SkillDocumentORM.created_at))
             .first()
@@ -240,6 +260,7 @@ def persist_document(
     if existing is None:
         existing = SkillDocumentORM(
             document_id=resolved_document_id,
+            tenant_id=DEFAULT_TENANT_ID,
             filename=sanitized_filename,
             content_type=content_type,
             document_type=document_type.value,
@@ -275,7 +296,7 @@ def set_document_workflow_status(db: Session, document_id: str, workflow_status:
     if normalized not in _VALID_WORKFLOW_STATUSES:
         raise ValueError(f"Unsupported workflow status: {workflow_status}")
 
-    record = db.query(SkillDocumentORM).filter(SkillDocumentORM.document_id == document_id).first()
+    record = _tenant_scoped_query(db.query(SkillDocumentORM), SkillDocumentORM).filter(SkillDocumentORM.document_id == document_id).first()
     if record is None:
         raise ValueError(f"Document not found: {document_id}")
 
@@ -288,7 +309,7 @@ def set_document_workflow_status(db: Session, document_id: str, workflow_status:
 
 def get_document(db: Session, document_id: str, *, include_extracted_text: bool = False) -> SkillDocumentRecord | None:
     """Retrieve a stored document by id."""
-    record = db.query(SkillDocumentORM).filter(SkillDocumentORM.document_id == document_id).first()
+    record = _tenant_scoped_query(db.query(SkillDocumentORM), SkillDocumentORM).filter(SkillDocumentORM.document_id == document_id).first()
     if record is None:
         return None
     return _to_document_record(record, include_extracted_text=include_extracted_text)
@@ -296,7 +317,7 @@ def get_document(db: Session, document_id: str, *, include_extracted_text: bool 
 
 def search_documents(db: Session, request: SearchDocumentsRequest) -> SearchDocumentsResponse:
     """Search stored documents by filename or extracted text."""
-    query = db.query(SkillDocumentORM)
+    query = _tenant_scoped_query(db.query(SkillDocumentORM), SkillDocumentORM)
     if request.document_type is not None:
         query = query.filter(SkillDocumentORM.document_type == request.document_type.value)
     if request.query.strip():
@@ -361,6 +382,7 @@ def write_finding(db: Session, request: WriteFindingRequest) -> FindingRecord:
 
     record = FindingORM(
         finding_id=str(uuid.uuid4()),
+        tenant_id=DEFAULT_TENANT_ID,
         document_id=request.document_id,
         finding_type=sanitize_text(request.finding_type),
         title=sanitize_text(request.title),
@@ -435,6 +457,7 @@ def list_audit_events(
     actor_id: str | None = None,
     subject_type: str | None = None,
     subject_id: str | None = None,
+    include_debug_trace: bool = True,
 ) -> AuditEventSummaryListResponse:
     """Return recent audit events for governance and compliance review pages.
 
@@ -456,7 +479,11 @@ def list_audit_events(
     if subject_id:
         query = query.filter(AuditEventORM.subject_id.ilike(f"%{sanitize_text(subject_id)}%"))
 
-    rows = query.order_by(desc(AuditEventORM.event_time)).limit(limit).all()
+    fetch_limit = limit if include_debug_trace else min(5000, max(limit * 5, limit + 20))
+    rows = query.order_by(desc(AuditEventORM.event_time)).limit(fetch_limit).all()
+    if not include_debug_trace:
+        rows = [row for row in rows if not _is_debug_trace_payload(row.payload)]
+    rows = rows[:limit]
 
     return AuditEventSummaryListResponse(
         items=[
@@ -503,6 +530,14 @@ def get_audit_event_by_id(db: Session, event_id: str) -> AuditEventRecord | None
         payload=row.payload,
         created_at=row.created_at,
     )
+
+
+def is_audit_event_debug_trace(db: Session, event_id: str) -> bool:
+    """Return True when an audit event payload is tagged as debug_trace retention class."""
+    row = db.query(AuditEventORM).filter(AuditEventORM.event_id == sanitize_text(event_id)).first()
+    if row is None:
+        return False
+    return _is_debug_trace_payload(row.payload)
 
 
 def get_audit_schedule(

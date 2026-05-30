@@ -14,6 +14,7 @@ import {
   fetchBridgeHumanReview,
   submitBridgeHumanReview,
 } from '../lib/bridgeClient';
+import { getAppMode } from '../lib/appMode';
 import { useAuth, useCan } from '../lib/authContext';
 import {
   AUDITOR_WINDOWS,
@@ -64,7 +65,8 @@ const AuditorWorkstationPage = () => {
   const scorePopoverRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState(createInitialDecisionDraft());
 
-  const useBackendData = process.env.NEXT_PUBLIC_AUDIT_TRAIL_SOURCE === 'backend';
+  const appMode = getAppMode();
+  const useBackendData = appMode === 'real';
   const mockEvents = useMemo<AuditTrailEvent[]>(() => createMockAuditorEvents(), []);
 
   const load = useCallback(async () => {

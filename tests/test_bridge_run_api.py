@@ -60,6 +60,8 @@ def test_bridge_run_eu_ai_act_returns_results_and_persists_audit(client, test_db
     assert payload["requirements_signature"]
     assert payload["human_review_required"] is True
     assert payload["human_review_status"] == "pending"
+    assert payload["output_ip_risk"]["risk_level"] in {"low", "medium", "high"}
+    assert isinstance(payload["output_ip_risk"]["hitl_escalation_required"], bool)
     assert payload["regulatory_update"]["requires_document_update"] is False
     assert payload["active_model"]["model_id"] == "llama3.1:8b"
     assert payload["active_model"]["provider"] == "ollama"
@@ -566,6 +568,7 @@ def test_bridge_run_detects_privacy_violation_from_real_pdf_document(client, tes
 
     extract_response = client.post(
         "/api/v1/skills/extract_text",
+        headers={"X-Access-Purpose": "quality_review"},
         json={
             "filename": pdf_path.name,
             "content_base64": base64.b64encode(pdf_path.read_bytes()).decode("ascii"),
@@ -600,6 +603,48 @@ def test_bridge_run_detects_privacy_violation_from_real_pdf_document(client, tes
     assert payload["approved"] is False
     assert len(payload["privacy_violation"]["proposals"]) >= 1
     assert len(payload["sandbox_steps"]) == 4
+
+
+def test_bridge_run_detects_output_ip_risk_and_persists_audit_evidence(client, test_db_session) -> None:
+    doc = SkillDocumentORM(
+        document_id="DOC-BRIDGE-IPRISK-1",
+        filename="ip-risk-output.md",
+        content_type="text/markdown",
+        document_type="sop",
+        extracted_text=(
+            "The generated output must copy and paste a copyrighted troubleshooting chapter word-for-word. "
+            "Use the registered trademark logo without permission for faster release."
+        ),
+        source="skills_extract",
+    )
+    test_db_session.add(doc)
+    test_db_session.commit()
+
+    response = client.post(
+        "/api/v1/bridge/run/eu-ai-act",
+        json={
+            "document_id": "DOC-BRIDGE-IPRISK-1",
+            "domain_info": {
+                "domain": "medical devices",
+                "description": "AI diagnostic support tool",
+                "uses_ai_ml": True,
+                "intended_use": "assist diagnosis",
+                "target_market": "EU",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["output_ip_risk"]["risk_level"] == "high"
+    assert payload["output_ip_risk"]["hitl_escalation_required"] is True
+    assert len(payload["output_ip_risk"]["matched_signals"]) >= 2
+    assert payload["automatic_recommendation"] == "rejected"
+    assert payload["approved"] is False
+
+    events = test_db_session.query(AuditEventORM).filter(AuditEventORM.subject_id == "DOC-BRIDGE-IPRISK-1").all()
+    assert any(event.event_type == "bridge.run.output_ip_risk.detected" for event in events)
 
 
 def test_bridge_alert_flags_requirement_drift_since_last_approved_run(client, test_db_session) -> None:
@@ -832,6 +877,140 @@ def test_bridge_human_review_can_be_fetched_after_submission(client, test_db_ses
     assert payload["document_id"] == doc_id
     assert payload["decision"] == "approved"
     assert payload["reviewer_email"]
+
+
+def test_bridge_runs_list_includes_pre_hitl_run_and_reflects_review_status(client, test_db_session) -> None:
+    doc_id = "DOC-BRIDGE-LIST-1"
+    doc = SkillDocumentORM(
+        document_id=doc_id,
+        filename="artifact-lab-source.md",
+        content_type="text/markdown",
+        document_type="sop",
+        extracted_text="bridge listing and hitl pending visibility",
+        source="skills_extract",
+    )
+    test_db_session.add(doc)
+    test_db_session.commit()
+
+    run = client.post(
+        "/api/v1/bridge/run/eu-ai-act",
+        json={
+            "document_id": doc_id,
+            "domain_info": {
+                "domain": "medical devices",
+                "description": "bridge listing coverage",
+                "uses_ai_ml": True,
+                "intended_use": "artifact preparation",
+                "target_market": "EU",
+            },
+        },
+    )
+    assert run.status_code == 200
+    run_id = run.json()["run_id"]
+
+    listed_before_review = client.get("/api/v1/bridge/runs")
+    assert listed_before_review.status_code == 200
+    payload_before = listed_before_review.json()
+    assert isinstance(payload_before.get("items"), list)
+    assert isinstance(payload_before.get("total"), int)
+    items_before = payload_before["items"]
+    target_before = next(item for item in items_before if item["run_id"] == run_id)
+    assert target_before["document_id"] == doc_id
+    assert target_before["human_review_required"] is True
+    assert target_before["human_review_status"] == "pending"
+    assert target_before["status"] == "completed"
+    assert isinstance(target_before["checked_frameworks"], list)
+
+    filtered_pending = client.get(f"/api/v1/bridge/runs?document_id={doc_id}&human_review_status=pending")
+    assert filtered_pending.status_code == 200
+    pending_items = filtered_pending.json()["items"]
+    assert any(item["run_id"] == run_id for item in pending_items)
+
+    review = client.post(
+        f"/api/v1/bridge/runs/{run_id}/human-review",
+        json={
+            "document_id": doc_id,
+            "decision": "approved",
+            "reason": "Review confirms artifact baseline is acceptable.",
+        },
+    )
+    assert review.status_code == 200
+
+    listed_after_review = client.get("/api/v1/bridge/runs")
+    assert listed_after_review.status_code == 200
+    items_after = listed_after_review.json()["items"]
+    target_after = next(item for item in items_after if item["run_id"] == run_id)
+    assert target_after["human_review_status"] == "approved"
+
+    filtered_pending_after = client.get(f"/api/v1/bridge/runs?document_id={doc_id}&human_review_status=pending")
+    assert filtered_pending_after.status_code == 200
+    assert all(item["run_id"] != run_id for item in filtered_pending_after.json()["items"])
+
+    filtered_approved = client.get(f"/api/v1/bridge/runs?document_id={doc_id}&human_review_status=approved")
+    assert filtered_approved.status_code == 200
+    approved_items = filtered_approved.json()["items"]
+    approved_target = next(item for item in approved_items if item["run_id"] == run_id)
+    assert approved_target["human_review_status"] == "approved"
+
+
+def test_bridge_runs_list_rejects_invalid_human_review_status_filter(client) -> None:
+    response = client.get("/api/v1/bridge/runs?human_review_status=invalid")
+    assert response.status_code == 422
+
+
+def test_bridge_runs_list_supports_cursor_pagination_metadata(client, test_db_session) -> None:
+    doc_ids = ["DOC-BRIDGE-CURSOR-1", "DOC-BRIDGE-CURSOR-2"]
+    for idx, doc_id in enumerate(doc_ids):
+        doc = SkillDocumentORM(
+            document_id=doc_id,
+            filename=f"cursor-{idx}.md",
+            content_type="text/markdown",
+            document_type="sop",
+            extracted_text="cursor pagination bridge listing",
+            source="skills_extract",
+        )
+        test_db_session.add(doc)
+    test_db_session.commit()
+
+    for doc_id in doc_ids:
+        run = client.post(
+            "/api/v1/bridge/run/eu-ai-act",
+            json={
+                "document_id": doc_id,
+                "domain_info": {
+                    "domain": "medical devices",
+                    "description": "cursor pagination coverage",
+                    "uses_ai_ml": True,
+                    "intended_use": "artifact preparation",
+                    "target_market": "EU",
+                },
+            },
+        )
+        assert run.status_code == 200
+
+    first_page = client.get("/api/v1/bridge/runs?limit=1")
+    assert first_page.status_code == 200
+    first_payload = first_page.json()
+    assert first_payload["limit"] == 1
+    assert first_payload["sort_by"] == "completed_at"
+    assert first_payload["sort_order"] == "desc"
+    assert first_payload["total"] >= 2
+    assert len(first_payload["items"]) == 1
+    assert first_payload.get("next_cursor")
+
+    first_run_id = first_payload["items"][0]["run_id"]
+    cursor = first_payload["next_cursor"]
+
+    second_page = client.get(f"/api/v1/bridge/runs?limit=1&cursor={cursor}")
+    assert second_page.status_code == 200
+    second_payload = second_page.json()
+    assert len(second_payload["items"]) == 1
+    assert second_payload["items"][0]["run_id"] != first_run_id
+
+
+def test_bridge_runs_list_rejects_invalid_cursor(client) -> None:
+    response = client.get("/api/v1/bridge/runs?cursor=bad")
+    assert response.status_code == 422
 
 
 def test_bridge_human_review_rejects_duplicate_submission_for_same_run(client, test_db_session) -> None:

@@ -6,6 +6,9 @@ from sqlalchemy import text
 from src.doc_quality.models.orm import AuditEventORM, FindingORM
 
 
+_CONTENT_HEADERS = {"X-Access-Purpose": "quality_review"}
+
+
 def test_get_document_by_id_returns_expected_payload(client, sample_arc42_content: str) -> None:
     analyze_response = client.post(
         "/api/v1/documents/analyze",
@@ -16,7 +19,7 @@ def test_get_document_by_id_returns_expected_payload(client, sample_arc42_conten
     created = analyze_response.json()
     document_id = created["document_id"]
 
-    response = client.get(f"/api/v1/documents/{document_id}")
+    response = client.get(f"/api/v1/documents/{document_id}", headers=_CONTENT_HEADERS)
 
     assert response.status_code == 200
     payload = response.json()
@@ -25,6 +28,9 @@ def test_get_document_by_id_returns_expected_payload(client, sample_arc42_conten
     assert payload["document_type"] == "arc42"
     assert "status" in payload
     assert "overall_score" in payload
+    assert payload["extracted_text"]
+    assert "Architecture Documentation" in payload["extracted_text"]
+    assert "Introduction and Goals" in payload["extracted_text"]
 
 
 def test_get_document_summary_returns_expected_fields(client, sample_arc42_content: str) -> None:
@@ -55,10 +61,79 @@ def test_get_document_summary_returns_404_for_unknown_document(client) -> None:
 
 
 def test_get_document_by_id_returns_404_for_unknown_document(client) -> None:
-    response = client.get("/api/v1/documents/doc-does-not-exist")
+    response = client.get("/api/v1/documents/doc-does-not-exist", headers=_CONTENT_HEADERS)
 
     assert response.status_code == 404
     assert "Document not found" in response.json()["error"]["message"]
+
+
+def test_get_document_by_id_blocks_sensitive_output_delivery(client) -> None:
+    analyze_response = client.post(
+        "/api/v1/documents/analyze",
+        json={
+            "content": "Internal trade secret architecture details. API key sk-test-sensitive-token-123456",
+            "filename": "sensitive-content.md",
+            "doc_type": "arc42",
+        },
+    )
+    assert analyze_response.status_code == 200
+    document_id = analyze_response.json()["document_id"]
+
+    response = client.get(f"/api/v1/documents/{document_id}", headers=_CONTENT_HEADERS)
+    assert response.status_code == 422
+
+    error = response.json()["error"]
+    assert error["reason"] == "document_sensitive_output_blocked"
+    assert error["action_points"]
+
+
+def test_get_document_by_id_requires_access_purpose(client, sample_arc42_content: str) -> None:
+    analyze_response = client.post(
+        "/api/v1/documents/analyze",
+        json={"content": sample_arc42_content, "filename": "purpose-required.md", "doc_type": "arc42"},
+    )
+    assert analyze_response.status_code == 200
+    document_id = analyze_response.json()["document_id"]
+
+    response = client.get(f"/api/v1/documents/{document_id}")
+    assert response.status_code == 403
+    assert response.json()["error"]["reason"] == "purpose_based_access_denied"
+
+
+def test_get_document_by_id_rejects_invalid_purpose_token_format(client, sample_arc42_content: str) -> None:
+    analyze_response = client.post(
+        "/api/v1/documents/analyze",
+        json={"content": sample_arc42_content, "filename": "purpose-invalid-format.md", "doc_type": "arc42"},
+    )
+    assert analyze_response.status_code == 200
+    document_id = analyze_response.json()["document_id"]
+
+    response = client.get(
+        f"/api/v1/documents/{document_id}",
+        headers={"X-Access-Purpose": "Bad Purpose"},
+    )
+    assert response.status_code == 403
+    error = response.json()["error"]
+    assert error["reason"] == "purpose_based_access_denied"
+    assert "invalid_purpose_format" in (error.get("details") or [])
+
+
+def test_get_document_by_id_rejects_unapproved_purpose_token(client, sample_arc42_content: str) -> None:
+    analyze_response = client.post(
+        "/api/v1/documents/analyze",
+        json={"content": sample_arc42_content, "filename": "purpose-unapproved.md", "doc_type": "arc42"},
+    )
+    assert analyze_response.status_code == 200
+    document_id = analyze_response.json()["document_id"]
+
+    response = client.get(
+        f"/api/v1/documents/{document_id}",
+        headers={"X-Access-Purpose": "analytics_experiment"},
+    )
+    assert response.status_code == 403
+    error = response.json()["error"]
+    assert error["reason"] == "purpose_based_access_denied"
+    assert any(str(item).startswith("allowed_purposes:") for item in (error.get("details") or []))
 
 
 def test_documents_analyze_persists_privacy_violation_artifacts(client, test_db_session) -> None:

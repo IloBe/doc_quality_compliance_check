@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import base64
 
-from src.doc_quality.models.orm import AuditEventORM, FindingORM
+from src.doc_quality.models.orm import AuditEventORM, FindingORM, SkillDocumentORM
+
+
+_CONTENT_HEADERS = {"X-Access-Purpose": "quality_review"}
 
 
 def test_analyze_persists_document_and_get_document(client, sample_arc42_content: str) -> None:
@@ -27,10 +30,34 @@ def test_analyze_persists_document_and_get_document(client, sample_arc42_content
     full_get_response = client.post(
         "/api/v1/skills/get_document",
         json={"document_id": document_id, "include_extracted_text": True},
+        headers=_CONTENT_HEADERS,
     )
     assert full_get_response.status_code == 200
     full_payload = full_get_response.json()
     assert "Introduction and Goals" in (full_payload.get("extracted_text") or "")
+
+
+def test_get_document_blocks_risky_extracted_text(client) -> None:
+    content = (
+        "This copyrighted trademark manual should be copied verbatim and redistributed without permission. "
+        "Do not modify the source text.")
+    analyze_response = client.post(
+        "/api/v1/documents/analyze",
+        json={"content": content, "filename": "risky-brief.md", "doc_type": "arc42"},
+    )
+    assert analyze_response.status_code == 200
+    document_id = analyze_response.json()["document_id"]
+
+    blocked_response = client.post(
+        "/api/v1/skills/get_document",
+        json={"document_id": document_id, "include_extracted_text": True},
+        headers=_CONTENT_HEADERS,
+    )
+    assert blocked_response.status_code == 422
+    error = blocked_response.json()["error"]
+    assert error["reason"] == "skills_output_ip_risk_blocked"
+    assert error["output_ip_risk"]["risk_level"] == "high"
+    assert error["action_points"]
 
 
 def test_search_documents_returns_persisted_documents(client, sample_arc42_content: str) -> None:
@@ -58,7 +85,7 @@ def test_extract_text_can_store_and_return_document(client) -> None:
         "content_type": "text/markdown",
         "store_document": True,
     }
-    extract_response = client.post("/api/v1/skills/extract_text", json=payload)
+    extract_response = client.post("/api/v1/skills/extract_text", json=payload, headers=_CONTENT_HEADERS)
     assert extract_response.status_code == 200
     data = extract_response.json()
     assert data["filename"] == "notes.md"
@@ -68,6 +95,25 @@ def test_extract_text_can_store_and_return_document(client) -> None:
     get_response = client.post("/api/v1/skills/get_document", json={"document_id": data["document_id"]})
     assert get_response.status_code == 200
     assert get_response.json()["filename"] == "notes.md"
+
+
+def test_extract_text_blocks_risky_output_ip_content(client) -> None:
+    content = (
+        "This copyrighted trademark section should be copied verbatim and reused without permission in the final export. "
+        "The source text must remain unchanged.")
+    payload = {
+        "filename": "risky-export.md",
+        "content_base64": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+        "content_type": "text/markdown",
+        "store_document": False,
+    }
+
+    extract_response = client.post("/api/v1/skills/extract_text", json=payload, headers=_CONTENT_HEADERS)
+    assert extract_response.status_code == 422
+    error = extract_response.json()["error"]
+    assert error["reason"] == "skills_output_ip_risk_blocked"
+    assert error["output_ip_risk"]["risk_level"] == "high"
+    assert error["action_points"]
 
 
 def test_write_finding_requires_persisted_document(client, sample_arc42_content: str) -> None:
@@ -129,7 +175,7 @@ def test_extract_text_stored_document_persists_privacy_violation_artifacts(clien
         "document_type": "risk_assessment",
     }
 
-    extract_response = client.post("/api/v1/skills/extract_text", json=payload)
+    extract_response = client.post("/api/v1/skills/extract_text", json=payload, headers=_CONTENT_HEADERS)
     assert extract_response.status_code == 200
     document_id = extract_response.json()["document_id"]
     assert document_id is not None
@@ -154,3 +200,105 @@ def test_extract_text_stored_document_persists_privacy_violation_artifacts(clien
         .all()
     )
     assert len(events) >= 1
+
+
+def test_document_queries_are_scoped_to_default_tenant(client, sample_arc42_content: str, test_db_session) -> None:
+    analyze_response = client.post(
+        "/api/v1/documents/analyze",
+        json={"content": sample_arc42_content, "filename": "tenant-scope.md", "doc_type": "arc42"},
+    )
+    assert analyze_response.status_code == 200
+    document_id = analyze_response.json()["document_id"]
+
+    record = test_db_session.query(SkillDocumentORM).filter(SkillDocumentORM.document_id == document_id).one()
+    record.tenant_id = "foreign_tenant"
+    test_db_session.commit()
+
+    search_response = client.post(
+        "/api/v1/skills/search_documents",
+        json={"query": "tenant-scope", "limit": 5},
+    )
+    assert search_response.status_code == 200
+    assert all(item["document_id"] != document_id for item in search_response.json()["results"])
+
+    get_response = client.post("/api/v1/skills/get_document", json={"document_id": document_id})
+    assert get_response.status_code == 404
+
+
+def test_extract_text_blocks_sensitive_secret_or_trade_secret_output(client) -> None:
+    content = "Contains proprietary trade secret process and token sk-sensitive-1234567890."
+    payload = {
+        "filename": "sensitive-output.md",
+        "content_base64": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+        "content_type": "text/markdown",
+        "store_document": False,
+    }
+
+    response = client.post("/api/v1/skills/extract_text", json=payload, headers=_CONTENT_HEADERS)
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["reason"] == "skills_sensitive_output_blocked"
+    assert error["action_points"]
+
+
+def test_get_document_blocks_sensitive_secret_or_trade_secret_output(client) -> None:
+    content = "Do not share: internal trade secret routing and credential sk-sensitive-abcdef123456."
+    extract_response = client.post(
+        "/api/v1/skills/extract_text",
+        json={
+            "filename": "sensitive-document.md",
+            "content_base64": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+            "content_type": "text/markdown",
+            "store_document": True,
+            "document_type": "arc42",
+        },
+        headers=_CONTENT_HEADERS,
+    )
+    # Extract response is expected to be blocked, but document can still be stored in persistence path.
+    assert extract_response.status_code == 422
+
+    search_response = client.post(
+        "/api/v1/skills/search_documents",
+        json={"query": "sensitive-document", "limit": 5},
+    )
+    assert search_response.status_code == 200
+    document_ids = [item["document_id"] for item in search_response.json()["results"]]
+    assert document_ids
+
+    get_response = client.post(
+        "/api/v1/skills/get_document",
+        json={"document_id": document_ids[0], "include_extracted_text": True},
+        headers=_CONTENT_HEADERS,
+    )
+    assert get_response.status_code == 422
+    error = get_response.json()["error"]
+    assert error["reason"] == "skills_sensitive_output_blocked"
+
+
+def test_get_document_include_text_requires_access_purpose(client, sample_arc42_content: str) -> None:
+    analyze_response = client.post(
+        "/api/v1/documents/analyze",
+        json={"content": sample_arc42_content, "filename": "skills-purpose-required.md", "doc_type": "arc42"},
+    )
+    assert analyze_response.status_code == 200
+    document_id = analyze_response.json()["document_id"]
+
+    response = client.post(
+        "/api/v1/skills/get_document",
+        json={"document_id": document_id, "include_extracted_text": True},
+    )
+    assert response.status_code == 403
+    assert response.json()["error"]["reason"] == "purpose_based_access_denied"
+
+
+def test_extract_text_requires_access_purpose(client) -> None:
+    payload = {
+        "filename": "skills-purpose-extract.md",
+        "content_base64": base64.b64encode(b"Plain extraction content").decode("ascii"),
+        "content_type": "text/markdown",
+        "store_document": False,
+    }
+
+    response = client.post("/api/v1/skills/extract_text", json=payload)
+    assert response.status_code == 403
+    assert response.json()["error"]["reason"] == "purpose_based_access_denied"

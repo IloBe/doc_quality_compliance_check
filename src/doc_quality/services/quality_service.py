@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..core.observability import observe_quality_observation
 from ..core.security import sanitize_text
+from ..core.tenant_scope import DEFAULT_TENANT_ID, apply_tenant_scope
 from ..models.orm import QualityObservationORM
 from ..models.quality import (
     LlmPromptOutputListResponse,
@@ -24,10 +25,11 @@ from ..models.quality import (
 
 
 _TRACE_PREVIEW_CHARS = 280
+_RETENTION_CLASS_DEBUG_TRACE = "debug_trace"
 _SECRET_PATTERNS = [
-    re.compile(r"(api[_-]?key\s*[=:]\s*)([^\s,;]+)", re.IGNORECASE),
+    re.compile(r"(api[_-]?key\s*(?:[=:]\s*|\s+))([^\s,;]+)", re.IGNORECASE),
     re.compile(r"(authorization\s*:\s*bearer\s+)([^\s,;]+)", re.IGNORECASE),
-    re.compile(r"(token\s*[=:]\s*)([^\s,;]+)", re.IGNORECASE),
+    re.compile(r"(token\s*(?:[=:]\s*|\s+))([^\s,;]+)", re.IGNORECASE),
 ]
 
 
@@ -35,6 +37,15 @@ def _redact_secrets(value: str) -> str:
     redacted = value
     for pattern in _SECRET_PATTERNS:
         redacted = pattern.sub(r"\1[REDACTED]", redacted)
+
+    lowered = redacted.lower()
+    for label in ("api key", "api-key", "api_key", "token", "authorization: bearer"):
+        index = lowered.find(label)
+        if index < 0:
+            continue
+        label_end = index + len(label)
+        redacted = f"{redacted[:label_end]} [REDACTED]"
+        lowered = redacted.lower()
     return redacted
 
 
@@ -43,6 +54,23 @@ def _compact_preview(value: str, max_chars: int = _TRACE_PREVIEW_CHARS) -> tuple
     if len(compact) <= max_chars:
         return compact, False
     return f"{compact[:max_chars].rstrip()}...", True
+
+
+def _redact_observation_payload(payload: dict) -> dict:
+    redacted_payload = dict(payload)
+    for key in ("llm_prompt", "llm_output", "prompt", "output", "answer"):
+        value = redacted_payload.get(key)
+        if not isinstance(value, str):
+            continue
+
+        sanitized_value = _redact_secrets(sanitize_text(value))
+        preview, truncated = _compact_preview(sanitized_value)
+        redacted_payload[key] = preview
+        redacted_payload[f"{key}_chars"] = len(sanitized_value)
+        redacted_payload[f"{key}_truncated"] = truncated
+
+    redacted_payload["redacted_at_write"] = True
+    return redacted_payload
 
 
 def _to_record(record: QualityObservationORM) -> QualityObservationRecord:
@@ -67,10 +95,28 @@ def _to_record(record: QualityObservationORM) -> QualityObservationRecord:
     )
 
 
+def _payload_retention_class(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    meta = payload.get("__privacy_meta__")
+    if not isinstance(meta, dict):
+        return None
+    value = meta.get("retention_class")
+    if isinstance(value, str) and value.strip():
+        return value.strip().lower()
+    return None
+
+
+def _is_debug_trace_payload(payload: object) -> bool:
+    return _payload_retention_class(payload) == _RETENTION_CLASS_DEBUG_TRACE
+
+
 def create_quality_observation(db: Session, request: QualityObservationRequest) -> QualityObservationRecord:
     """Persist and emit metrics for one quality observation."""
+    payload = _redact_observation_payload(request.payload)
     record = QualityObservationORM(
         observation_id=str(uuid.uuid4()),
+        tenant_id=DEFAULT_TENANT_ID,
         source_component=sanitize_text(request.source_component),
         aspect=request.aspect,
         outcome=request.outcome,
@@ -84,7 +130,7 @@ def create_quality_observation(db: Session, request: QualityObservationRequest) 
         subject_id=sanitize_text(request.subject_id) if request.subject_id else None,
         trace_id=sanitize_text(request.trace_id) if request.trace_id else None,
         correlation_id=sanitize_text(request.correlation_id) if request.correlation_id else None,
-        payload=request.payload,
+        payload=payload,
     )
     db.add(record)
     db.commit()
@@ -114,6 +160,7 @@ def get_quality_summary(
     window_start = window_end - timedelta(hours=window_hours)
 
     query = db.query(QualityObservationORM).filter(
+        QualityObservationORM.tenant_id == DEFAULT_TENANT_ID,
         QualityObservationORM.event_time >= window_start,
         QualityObservationORM.event_time <= window_end,
     )
@@ -198,6 +245,7 @@ def get_recent_llm_prompt_output_pairs(
     window_hours: int = 24,
     source_component: str | None = None,
     include_content: bool = False,
+    include_debug_trace: bool = False,
 ) -> LlmPromptOutputListResponse:
     """Return recent prompt/output pairs captured in quality telemetry payloads."""
     lookup_limit = max(100, limit * 10)
@@ -206,6 +254,7 @@ def get_recent_llm_prompt_output_pairs(
     window_start = window_end - timedelta(hours=window_hours)
 
     query = db.query(QualityObservationORM).filter(
+        QualityObservationORM.tenant_id == DEFAULT_TENANT_ID,
         QualityObservationORM.event_time >= window_start,
         QualityObservationORM.event_time <= window_end,
     ).order_by(QualityObservationORM.event_time.desc())
@@ -218,6 +267,8 @@ def get_recent_llm_prompt_output_pairs(
     for row in candidates:
         payload = row.payload or {}
         if not isinstance(payload, dict):
+            continue
+        if not include_debug_trace and _is_debug_trace_payload(payload):
             continue
 
         prompt = payload.get("llm_prompt") or payload.get("prompt")
@@ -276,6 +327,7 @@ def get_workflow_component_breakdown(
     rows = (
         db.query(QualityObservationORM)
         .filter(
+            QualityObservationORM.tenant_id == DEFAULT_TENANT_ID,
             QualityObservationORM.event_time >= window_start,
             QualityObservationORM.event_time <= window_end,
         )

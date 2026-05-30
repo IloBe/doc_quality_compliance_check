@@ -7,6 +7,18 @@ backend enforcement and frontend failure UX alignment.
 Primary architecture anchor:
 - SAD AD-16 with supporting AD-17, AD-18, AD-19.
 
+AIUC-1 trace anchor:
+- A001, A002, A003, A004, A005, A006, A007 from Data & Privacy requirements.
+
+OWASP Chapter A trace anchor:
+- Input data handling and governance -> A001
+- Output rights and usage controls -> A002
+- Context-aware access boundaries -> A003
+- Trade-secret and confidential-data protection -> A004
+- Tenant/customer isolation -> A005
+- PII leakage prevention in outputs/logs -> A006
+- Output IP and copyright/trademark safeguards -> A007
+
 Companion planning document:
 - project-context/2.build/phase1_privacy_step_contract_handoff.md
 
@@ -38,6 +50,18 @@ Companion planning document:
 5. PSC-05: Standardize exception taxonomy and API error mapping
 6. PSC-06: Regression and conformance test pass in py313_venv
 7. PSC-07: Frontend failure-state wiring aligned to existing UI style
+
+AIUC-1 coverage in this order:
+- PSC-01/PSC-02/PSC-03 establish A001-A003/A005/A006 runtime enforcement.
+- PSC-04/PSC-05 establish A002/A006/A007 audit and failure-contract traceability.
+- PSC-06 validates A001-A007 end-to-end conformance.
+- PSC-07 ensures A002/A006/A007 user-visible failure guidance.
+
+OWASP Chapter A coverage in this order:
+- PSC-01/PSC-02/PSC-03 enforce Chapter A policy boundaries at runtime.
+- PSC-04/PSC-05 ensure auditable evidence and safe failure handling.
+- PSC-06 validates Chapter A conformance tests.
+- PSC-07 aligns user-visible Chapter A deny guidance with existing UI style.
 
 ## 2. Quality Requirements (Mandatory)
 
@@ -145,6 +169,30 @@ Example failure classes and action points:
 
 ## 6. Test Plan (Ready to Execute)
 
+AIUC-1 requirement-to-test mapping:
+
+| AIUC-1 ID | Primary Tests |
+| --- | --- |
+| A001 | `tests/test_privacy_controls.py`, `tests/test_bridge_orchestrator_service.py`, `tests/test_bridge_run_api.py` |
+| A002 | `tests/test_bridge_run_api.py`, `tests/test_error_envelope_api.py`, `frontend/tests/bridgeRunViewModel.test.ts` |
+| A003 | `tests/test_adapter_routing_policy.py`, `tests/test_bridge_orchestrator_service.py` |
+| A004 | `tests/test_error_envelope_api.py` (IP/trade-secret deny-path cases), release checklist checks |
+| A005 | `tests/test_adapter_routing_policy.py`, `tests/test_bridge_run_api.py` (cross-customer isolation deny-path) |
+| A006 | `tests/test_privacy_controls.py`, `tests/test_error_envelope_api.py`, log/redaction assertions |
+| A007 | `tests/test_error_envelope_api.py`, `tests/test_bridge_run_api.py`, `frontend/tests/bridgeClient.test.ts` |
+
+OWASP Chapter A requirement-to-test crosswalk:
+
+| OWASP Chapter A control theme | Primary Tests |
+| --- | --- |
+| Input data handling and governance | `tests/test_privacy_controls.py`, `tests/test_bridge_orchestrator_service.py`, `tests/test_bridge_run_api.py` |
+| Output rights and usage controls | `tests/test_bridge_run_api.py`, `tests/test_error_envelope_api.py`, `frontend/tests/bridgeRunViewModel.test.ts` |
+| Context-aware access boundaries | `tests/test_adapter_routing_policy.py`, `tests/test_bridge_orchestrator_service.py` |
+| Trade-secret and confidential-data protection | `tests/test_error_envelope_api.py` deny-path cases, release checklist checks |
+| Tenant/customer isolation | `tests/test_adapter_routing_policy.py`, `tests/test_bridge_run_api.py` cross-customer isolation cases |
+| PII leakage prevention in outputs/logs | `tests/test_privacy_controls.py`, `tests/test_error_envelope_api.py`, logging/redaction checks |
+| Output IP and copyright/trademark safeguards | `tests/test_error_envelope_api.py`, `tests/test_bridge_run_api.py`, `frontend/tests/bridgeClient.test.ts` |
+
 ### 6.1 Backend unit tests
 
 - tests/test_adapter_routing_policy.py
@@ -196,3 +244,5 @@ Run from repository root.
 - [x] Audit payloads persist explicit fallback_reason_code where applicable.
 - [x] Frontend displays clear action points using existing page/component style.
 - [x] All targeted tests pass in py313_venv and no diagnostics regressions are introduced.
+- [x] AIUC-1 A001-A007 are traceable from implementation tickets to executed test evidence.
+- [x] OWASP Chapter A controls are traceable from build sequence to executed test evidence.

@@ -47,6 +47,7 @@ _SAFE_ERROR_DETAIL_KEYS = {
     "reason",
     "retry_after",
     "correlation_id",
+    "output_ip_risk",
 }
 
 

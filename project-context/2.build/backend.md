@@ -1197,6 +1197,38 @@ return result
 
 **Phase 2:** GitHub Actions CI/CD pipeline will be added with automated pytest, ruff, and mypy checks on every push, plus integration test execution.
 
+### 7.3 Phase 1 Data Privacy Requirement Coverage (PRD/SAD)
+
+This section maps the active privacy requirements from PRD/SAD to backend implementation scope for Phase 1 delivery.
+
+| Requirement Set | IDs | Backend Build Coverage |
+| --- | --- | --- |
+| AIUC-1 detailed requirements | `AIUC-PRIV-01..07` | Policy metadata contracts, fail-closed routing, redaction/retention governance, trace/audit evidence, and denial taxonomy are covered in bridge/privacy orchestration surfaces and tracked in Phase 1 handoff/sequence docs. |
+| OWASP Chapter A detailed requirements | `OWASP-A-PRIV-01..08` | Chapter-A policy checks, least-privilege trace controls, redaction-at-write expectations, tenant isolation, and secret governance guardrails are captured in architecture and implemented as backend enforcement/test targets. |
+| SAD architecture decisions | `AD-20`, `AD-21` | Dedicated policy enforcement plane and Chapter-A enforcement plane are represented through typed policy contracts, audit persistence fields, and conformance test gates. |
+
+**Primary backend artifacts for Phase 1 privacy controls**
+
+- `src/doc_quality/services/bridge_orchestrator_service.py`
+- `src/doc_quality/services/model_policy_service.py`
+- `src/doc_quality/services/bridge_privacy_service.py`
+- `src/doc_quality/api/routes/bridge.py`
+- `src/doc_quality/models/orm.py` (`audit_events`, `quality_observations` provenance and retention-related fields)
+- `project-context/2.build/phase1_privacy_step_contract_handoff.md`
+- `project-context/2.build/phase1_privacy_step_contract_execution_sequence.md`
+
+**Backend Phase 1 verification surfaces**
+
+- `tests/test_privacy_controls.py`
+- `tests/test_adapter_routing_policy.py`
+- `tests/test_bridge_orchestrator_service.py`
+- `tests/test_bridge_run_api.py`
+- `tests/test_error_envelope_api.py`
+
+**Release-gate rule**
+
+- Phase 1 privacy conformance for backend must pass in `py313_venv` and remain traceable to AIUC/Owasp mapping tables in build + QA documentation.
+
 ---
 
 ## Sources

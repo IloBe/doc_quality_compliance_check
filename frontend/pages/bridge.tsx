@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import FooterInfoCard from '../components/FooterInfoCard';
 import PageHeaderWithWhy from '../components/PageHeaderWithWhy';
+import { getAppMode } from '../lib/appMode';
 import BridgeOverviewStatCard from '../components/bridge/BridgeOverviewStatCard';
 import BridgeSystemStatusCard from '../components/bridge/BridgeSystemStatusCard';
 import { useCan } from '../lib/authContext';
@@ -39,7 +40,8 @@ const BridgePage = () => {
    const [runtimeTopologyError, setRuntimeTopologyError] = useState<string | null>(null);
    const [runtimeFailureGuidance, setRuntimeFailureGuidance] = useState<BridgeFailureGuidance | null>(null);
 
-   const useBackendBridge = String(process.env.NEXT_PUBLIC_BRIDGE_SOURCE || 'backend').trim().toLowerCase() !== 'demo';
+   const appMode = getAppMode();
+   const useBackendBridge = appMode === 'real';
    const canRunBridge = useCan('bridge.run');
 
    useEffect(() => {
@@ -54,7 +56,7 @@ const BridgePage = () => {
          }
 
          if (!result.ok) {
-            setDocumentsError('Failed to load documents for bridge orchestration.');
+            setDocumentsError(result.message || 'Failed to load documents for bridge orchestration.');
             setIsLoadingDocuments(false);
             return;
          }

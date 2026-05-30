@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { Document } from '../lib/mockStore';
 import { useMockStore } from '../lib/mockStore';
 import { useCan } from '../lib/authContext';
+import { getAppMode } from '../lib/appMode';
 import { getDocumentSummaryById } from '../lib/documentRetrievalClient';
 import WhyThisPageMatters from './WhyThisPageMatters';
 import {
@@ -81,7 +82,8 @@ const DocBridgePage = () => {
   const [runStartedAtLeastOnce, setRunStartedAtLeastOnce] = useState(false);
   const autoRunStarted = useRef(false);
 
-  const useBackendBridge = String(process.env.NEXT_PUBLIC_BRIDGE_SOURCE || 'backend').trim().toLowerCase() !== 'demo';
+  const appMode = getAppMode();
+  const useBackendBridge = appMode === 'real';
   const isRuntimeSelfCheckBlocked = bridgeFailureGuidance?.reasonCode === 'bridge_runtime_not_ready';
 
   useEffect(() => {

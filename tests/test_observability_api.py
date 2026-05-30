@@ -1,6 +1,8 @@
 """Tests for observability and quality telemetry endpoints."""
 from __future__ import annotations
 
+from src.doc_quality.models.orm import QualityObservationORM
+
 
 def test_quality_observation_persists_and_summarizes(client) -> None:
     create_response = client.post(
@@ -45,7 +47,8 @@ def test_metrics_endpoint_exposes_observability_metrics(client) -> None:
     )
 
 
-def test_llm_traces_returns_prompt_output_pairs(client) -> None:
+def test_llm_traces_returns_prompt_output_pairs(client, test_db_session) -> None:
+    secret_value = "sk-test-12345"
     create_response = client.post(
         "/api/v1/observability/quality-observations",
         json={
@@ -53,15 +56,27 @@ def test_llm_traces_returns_prompt_output_pairs(client) -> None:
             "aspect": "evaluation",
             "outcome": "info",
             "payload": {
-                "llm_prompt": "Which EU regulations apply to this medical AI use case?",
-                "llm_output": "EU AI Act and MDR are applicable with specific obligations.",
+                "llm_prompt": f"Which EU regulations apply to this medical AI use case? API key {secret_value}",
+                "llm_output": f"EU AI Act and MDR are applicable with specific obligations. Token {secret_value}",
                 "provider": "perplexity",
                 "model_used": "sonar-pro",
                 "request_id": "req-123",
+                "trace_id": "trace-redaction-check",
             },
         },
     )
     assert create_response.status_code == 200
+
+    stored = (
+        test_db_session.query(QualityObservationORM)
+        .filter(QualityObservationORM.source_component == "research_agent")
+        .order_by(QualityObservationORM.created_at.desc())
+        .first()
+    )
+    assert stored is not None
+    assert stored.payload.get("redacted_at_write") is True
+    assert secret_value not in str(stored.payload)
+    assert stored.payload.get("__privacy_meta__", {}).get("retention_class") == "operational"
 
     traces_response = client.get("/api/v1/observability/llm-traces?limit=10&window_hours=24")
     assert traces_response.status_code == 200
@@ -88,6 +103,8 @@ def test_llm_traces_returns_prompt_output_pairs(client) -> None:
         and item.get("output_chars", 0) >= len(item.get("output", ""))
         for item in full_payload["items"]
     )
+    assert all(secret_value not in item.get("prompt", "") for item in full_payload["items"])
+    assert all(secret_value not in item.get("output", "") for item in full_payload["items"])
 
 
 def test_workflow_component_breakdown_returns_component_rows(client) -> None:
@@ -110,3 +127,40 @@ def test_workflow_component_breakdown_returns_component_rows(client) -> None:
     assert breakdown["total_observations"] >= 2
     assert any(item["source_component"] == "research_agent" for item in breakdown["components"])
     assert any(item["source_component"] == "document_analyzer" for item in breakdown["components"])
+
+
+def test_llm_traces_include_debug_trace_requires_access_purpose(client) -> None:
+    response = client.get("/api/v1/observability/llm-traces?limit=10&window_hours=24&include_debug_trace=true")
+    assert response.status_code == 403
+    payload = response.json()["error"]
+    assert payload["reason"] == "purpose_based_access_denied"
+
+
+def test_llm_traces_include_debug_trace_allows_approved_access_purpose(client) -> None:
+    response = client.get(
+        "/api/v1/observability/llm-traces?limit=10&window_hours=24&include_debug_trace=true",
+        headers={"X-Access-Purpose": "incident_response"},
+    )
+    assert response.status_code == 200
+
+
+def test_llm_traces_include_debug_trace_rejects_invalid_purpose_format(client) -> None:
+    response = client.get(
+        "/api/v1/observability/llm-traces?limit=10&window_hours=24&include_debug_trace=true",
+        headers={"X-Access-Purpose": "Invalid Purpose"},
+    )
+    assert response.status_code == 403
+    error = response.json()["error"]
+    assert error["reason"] == "purpose_based_access_denied"
+    assert "invalid_purpose_format" in (error.get("details") or [])
+
+
+def test_llm_traces_include_debug_trace_rejects_unapproved_purpose(client) -> None:
+    response = client.get(
+        "/api/v1/observability/llm-traces?limit=10&window_hours=24&include_debug_trace=true",
+        headers={"X-Access-Purpose": "quality_review"},
+    )
+    assert response.status_code == 403
+    error = response.json()["error"]
+    assert error["reason"] == "purpose_based_access_denied"
+    assert any(str(item).startswith("allowed_purposes:") for item in (error.get("details") or []))

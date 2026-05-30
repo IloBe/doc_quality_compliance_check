@@ -358,6 +358,141 @@ This section reviews SAD/PRD alignment against the current implementation and re
 - Add bridge runtime tests that verify strict failure behavior when topology proof cannot be established and fallback is disabled.
 - Add configuration/documentation checks that compare env examples to `src/doc_quality/core/config.py` and reject non-placeholder secrets.
 
+#### 1.9.5 AIUC-1 Data & Privacy Review (A001-A007) + Concrete Implementation Plan
+
+This SAD formally evaluates fulfillment of AIUC-1 Data & Privacy requirements (https://www.aiuc-1.com/data-and-privacy) and defines implementation work needed for production-grade compliance.
+
+| AIUC-1 ID | Fulfillment Status | Architecture Closure Decision |
+|-----------|--------------------|-------------------------------|
+| A001 Input data policy | Partial | Add explicit versioned input-data policy artifact and enforce policy linkage in runtime decisions |
+| A002 Output data policy | Partial | Add explicit output-rights policy and enforce ownership/usage/deletion controls in APIs and exports |
+| A003 Agent data access limits | Partial-to-strong | Require contextual least-privilege controls in every step contract and tool boundary |
+| A004 Protect IP/trade secrets | Partial | Add IP/trade-secret classifiers and deny/redact controls at input/output/log boundaries |
+| A005 Prevent cross-customer exposure | Partial | Enforce tenant/project isolation in retrieval, context assembly, cache keys, and persistence partitions |
+| A006 Prevent PII leakage | Strong but incomplete | Complete redaction-at-write and output leakage gate on all response paths |
+| A007 Prevent output IP violations | Gap | Add output IP-risk checks with HITL gate for medium/high risk |
+
+**New architecture decision**
+
+- **AD-20: AIUC-1 policy enforcement plane**
+  - All model-using workflows must resolve A001-A007 policy checks through a dedicated enforcement plane before execution and before persistence.
+
+**Concrete implementation plan (SOLID + production quality controls)**
+
+1. **Policy domain and interfaces (Dependency Inversion + Interface Segregation)**
+  - Define typed interfaces: `InputPolicyEvaluator`, `OutputPolicyEvaluator`, `DataAccessPolicyEvaluator`, `LeakageGuard`, `TenantIsolationGuard`.
+  - Keep orchestration dependent on abstractions only; adapters implement provider/runtime specifics.
+
+2. **Step-level contract hardening (Single Responsibility + Open/Closed)**
+  - Extend step contract schema with: `aiuc_policy_refs`, `tenant_id`, `project_id`, `sensitivity_class`, `purpose_tag`, `decision_reason`.
+  - Add non-breaking extensibility for new policy checks without changing orchestrator core flow.
+
+3. **Type hints, docstrings, and validation quality gates**
+  - Require full type hints for all new policy and guard modules.
+  - Add docstrings on public services and policy evaluators describing legal/compliance intent and failure semantics.
+  - Enforce strict request/response schemas (Pydantic) for policy decision payloads.
+
+4. **Structured logging, tracing, and exception handling**
+  - Use structured logs with mandatory fields: `trace_id`, `correlation_id`, `policy_rule_id`, `policy_version`, `tenant_id`, `decision_outcome`.
+  - Centralize exceptions with stable error codes (`policy_denied`, `pii_leakage_blocked`, `ip_risk_blocked`, `tenant_isolation_violation`).
+  - Ensure logs never contain raw sensitive payloads; store only redacted summaries and evidence references.
+
+5. **Governance, compliance, and audit evidence model**
+  - Persist policy decisions as immutable audit events with actor, reason, legal basis, control set, and outcome.
+  - Add governance dashboards/reports for policy pass/deny rates, exception reasons, and unresolved review items.
+  - Require dual-control approval for policy changes that alter transfer boundaries or fallback permissions.
+
+6. **User-facing failure messages aligned with existing UX style**
+  - Return an actionable error envelope with a clear cause, action points, and correlation ID.
+  - Keep language concise, trust-oriented, and consistent with existing white/blue/green UX principles and bridge failure guidance patterns.
+
+7. **Testing strategy and release gates (py313_venv mandatory)**
+  - Add unit tests for each policy evaluator and guard (A001-A007).
+  - Add integration tests for end-to-end deny/allow behavior across bridge and model adapter routes.
+  - Add audit trace tests proving every deny/allow decision is reconstructable.
+  - Run privacy conformance suite in `py313_venv` as release gate, including regression tests for leakage, tenant isolation, and policy metadata completeness.
+
+**Verification criteria (AD-20)**
+
+1. A workflow run cannot start unless all required AIUC policy checks produce a typed decision record.
+2. Denied runs produce stable failure codes, user action points, and correlation IDs.
+3. Cross-customer data mixing tests fail closed and produce auditable violation evidence.
+4. Redaction-at-write is enforced for telemetry and audit payload paths.
+5. CI release checks in `py313_venv` fail on missing type hints, missing docstrings on policy services, incomplete tracing fields, or policy-test failures.
+
+#### 1.9.6 OWASP Top 10 for Agentic Apps Chapter A (Data & Privacy) Review + Architecture Plan
+
+This SAD formally evaluates Chapter A (Data & Privacy) coverage from the OWASP Top 10 for Agentic Applications and defines architecture closure work where implementation is partial.
+
+**OWASP Chapter A to AIUC-1 architecture crosswalk**
+
+| OWASP Chapter A control theme | AIUC-1 mapping | Architecture implication |
+|-------------------------------|----------------|--------------------------|
+| Input data policy and processing boundary | A001 | Enforce policy-evaluated data ingress, minimization, and retention metadata |
+| Output ownership/usage/deletion controls | A002 | Enforce output policy checks before response/export and evidence persistence |
+| Contextual data-access limiting | A003 | Enforce role+purpose checks in step contracts and tool access boundaries |
+| Confidential/IP leakage protection | A004 | Add pre-persist and pre-response IP/trade-secret detection and deny/redact flow |
+| Cross-customer isolation safeguards | A005 | Enforce tenant/project isolation in retrieval, cache, traces, and storage layers |
+| PII leakage prevention in outputs/logs | A006 | Enforce redaction-at-write and output leakage validation across telemetry/audit paths |
+| Output IP-violation prevention | A007 | Add output IP-risk classification plus HITL gate for medium/high risk cases |
+
+| OWASP-A Control Area | Fulfillment Status | Architecture Closure Decision |
+|----------------------|--------------------|-------------------------------|
+| Model boundary controls for personal data | Partial | Enforce mandatory pre-execution and pre-persistence policy checks on every model path |
+| Contextual least-privilege access | Partial-to-strong | Standardize role+purpose checks for trace, export, and observability payload access |
+| Telemetry minimization and retention | Partial | Enforce redaction-at-write and retention-class policy at storage boundary |
+| Secret/token/key hygiene | Partial | Split key domains, add rotation policy, and require auditable secret-governance events |
+| Cross-customer isolation | Partial | Enforce tenant/project isolation in retrieval/context/cache/persistence with deny-by-default behavior |
+| Privacy-safe failure handling | Partial-to-strong | Normalize stable error taxonomy, user-safe messages, action points, and correlation linkage |
+
+**New architecture decision**
+
+- **AD-21: OWASP Chapter-A enforcement plane**
+  - All Chapter-A controls must be evaluated through a dedicated enforcement plane with typed decision records and immutable audit evidence.
+
+**Concrete implementation plan (production-grade, SOLID-aligned)**
+
+1. **Policy interfaces and separation of concerns**
+  - Define typed interfaces: `ChapterAPolicyEvaluator`, `TelemetryRedactionGuard`, `RetentionClassGuard`, `SecretsGovernanceGuard`, `TenantIsolationGuard`.
+  - Keep orchestration dependent on these interfaces only (Dependency Inversion); provider adapters remain swappable.
+
+2. **Step-contract and evidence model hardening**
+  - Extend step contracts with Chapter-A fields: `owasp_chapter_a_refs`, `privacy_control_set`, `purpose_tag`, `tenant_id`, `project_id`, `decision_outcome`.
+  - Persist decision evidence for allow and deny paths with `trace_id`/`correlation_id` and policy reason codes.
+
+3. **Type hints, docstrings, validation discipline**
+  - Require full type hints for all new policy/evidence modules.
+  - Add docstrings to all public policy services, guards, and exception classes describing governance intent and failure semantics.
+  - Enforce strict Pydantic schemas for policy decisions and audit payloads.
+
+4. **Logging, tracing, and exception handling**
+  - Emit structured log events for policy pass/fail, isolation denials, redaction actions, and retention decisions.
+  - Standardize exception taxonomy: `chapter_a_policy_denied`, `telemetry_redaction_required`, `tenant_isolation_denied`, `secret_governance_violation`.
+  - Keep client payloads safe and actionable; keep deep diagnostics in internal logs only.
+
+5. **Governance, compliance, and audit controls**
+  - Enforce dual-control approval for control changes affecting data transfer boundaries or secret domains.
+  - Persist immutable governance events for policy changes, exception approvals, and release gate overrides.
+  - Add audit queries/reports for Chapter-A control effectiveness and unresolved high-risk exceptions.
+
+6. **Failure UX alignment**
+  - Reuse existing white/blue/green UX language style with concise, trust-oriented user messages.
+  - Every deny response must include clear cause, action points, and `correlation_id`.
+
+7. **Testing and release gates (`py313_venv`)**
+  - Add unit tests for each Chapter-A guard and evaluator.
+  - Add integration/API tests for fail-closed routing, redaction-at-write, retention enforcement, RBAC purpose checks, and tenant isolation.
+  - Add secret-config conformance checks for key-domain separation and unsafe-default rejection.
+  - Run Chapter-A conformance suite in `py313_venv` as mandatory release gate.
+
+**Verification criteria (AD-21)**
+
+1. Workflow execution is denied when required Chapter-A control decisions are missing.
+2. Redaction-at-write and retention-class tagging are enforced before telemetry persistence.
+3. Cross-customer isolation violations are denied and produce immutable, traceable evidence.
+4. Secret-governance violations fail startup/release checks in non-development environments.
+5. Client-facing deny responses are actionable and correlation-linked without exposing sensitive internals.
+
 #### 1.8.6 Bridge Startup Runtime Self-Check Gate (Implemented)
 
 To prevent bridge execution on schema-drifted or policy-inconsistent runtimes, a mandatory startup/runtime gate is implemented.

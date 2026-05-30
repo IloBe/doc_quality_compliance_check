@@ -1,6 +1,7 @@
 // Artifact Lab ViewModel - Full implementation
 
 import type { BridgeRun, Document } from './mockStore';
+import type { BridgeRunListItem } from './bridgeClient';
 
 export type ArtifactKind = 'arc42' | 'risk' | 'sop' | 'generic';
 
@@ -59,6 +60,25 @@ export function resolveRunLinkedDocuments(
     ? sortDocsByDate(documents.filter((doc) => doc.product === run.product))
     : sortDocsByDate(documents);
 
+  if (run.documentId) {
+    const exact = documents.find((doc) => doc.id === run.documentId) || null;
+    if (exact) {
+      return { linkedDocuments: [exact], primaryDocument: exact };
+    }
+
+    // Keep the run-associated document selectable even when the local store has not loaded that document yet.
+    const fallback: Document = {
+      id: run.documentId,
+      title: run.documentTitle || run.documentId,
+      status: 'In Review',
+      product: run.product,
+      updatedAt: run.startedAt || run.createdAt,
+    };
+
+    const dedupedProductDocs = productDocs.filter((doc) => doc.id !== run.documentId);
+    return { linkedDocuments: [fallback, ...dedupedProductDocs], primaryDocument: fallback };
+  }
+
   const primary = productDocs[0] ?? null;
   return { linkedDocuments: productDocs, primaryDocument: primary };
 }
@@ -98,6 +118,27 @@ export function buildArtifactRunCards(runs: BridgeRun[], documents: Document[]):
       latestDocId: latest?.id ?? '-',
       latestDocTitle: latest?.title ?? 'No document linked',
       evidenceCount: run.evidenceCount ?? 0,
+    };
+  });
+}
+
+export function buildArtifactRunCardsFromBridgeApi(runs: BridgeRunListItem[]): ArtifactRunCard[] {
+  return runs.map((run) => {
+    let status = 'In Review';
+    if (run.human_review_status === 'approved') {
+      status = 'Done';
+    } else if (run.human_review_status === 'rejected') {
+      status = 'Needs Rework';
+    }
+
+    return {
+      runId: run.run_id,
+      product: run.project_id || run.document_type || 'Unknown',
+      status,
+      startedAt: run.completed_at || run.started_at || '-',
+      latestDocId: run.document_id,
+      latestDocTitle: run.document_name || run.document_id,
+      evidenceCount: Array.isArray(run.checked_frameworks) ? run.checked_frameworks.length : 0,
     };
   });
 }
