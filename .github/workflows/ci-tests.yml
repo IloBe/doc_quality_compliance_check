@@ -22,6 +22,9 @@ on:
       - 'pyproject.toml'
       - '.github/workflows/ci-tests.yml'
 
+permissions:
+  contents: read
+
 jobs:
   test-suite:
     runs-on: ubuntu-latest
